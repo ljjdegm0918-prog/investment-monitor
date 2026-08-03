@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Investment Monitor company-list information workspace">
+  <title>Investment Monitor</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-view="{{VIEW}}" data-path="{{PATH}}">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="/today" aria-label="Investment Monitor home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Investment Monitor</span>
+      </a>
+      <nav id="sidebar-nav"></nav>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+        <div class="topbar-title" id="topbar-title">Today</div>
+        <form class="global-search" id="global-search" role="search">
+          <label class="sr-only" for="global-search-input">Search stored information</label>
+          <span aria-hidden="true">⌕</span>
+          <input id="global-search-input" name="q" placeholder="Search companies and stored metadata" autocomplete="off">
+        </form>
+        <div class="topbar-meta">
+          <span id="current-date"></span>
+          <span class="divider" aria-hidden="true"></span>
+          <span id="top-source-status" class="status-line">Checking sources…</span>
+        </div>
+      </header>
+      <main id="main-content" tabindex="-1">
+        <div id="page" aria-live="polite">
+          <div class="loading-state" role="status"><span class="spinner"></span> Loading workspace…</div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

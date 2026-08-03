@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "investment-monitor"
+version = "0.1.0"
+description = "A modular foundation for collecting investment information."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+investment-monitor = "investment_monitor.cli:main"
+investment-monitor-web = "investment_monitor.web:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+investment_monitor = ["migrations/*.sql", "web_static/*.html", "web_static/*.css", "web_static/*.js"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true

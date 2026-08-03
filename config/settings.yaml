@@ -1,0 +1,3 @@
+enabled_sources:
+  - sec
+database_path: ../data/investment_monitor.sqlite3

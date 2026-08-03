@@ -1,0 +1,270 @@
+# Investment Monitor
+
+Investment Monitor is a local, list-centered workspace for monitoring financial
+information. The first web MVP uses the SEC EDGAR connector already in this
+project and leaves clear source boundaries for future News and Community
+connectors.
+
+The web interface is in English. It has three fixed lists:
+
+- Holdings
+- Planned Purchases
+- Watchlist
+
+One company may belong to any combination of these lists. One SEC filing is
+stored once and shown with every applicable list badge, so belonging to several
+lists does not duplicate the filing.
+
+## What is connected
+
+| Information type | Provider | Production status |
+| --- | --- | --- |
+| Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
+| News | None | Not connected |
+| Community | None | Not connected |
+
+The repository still contains mock connectors for automated extensibility
+tests. They are not enabled in `config/settings.yaml`, and generated mock data
+is excluded from the production web feed. A future real community connector
+would use its own `source` name and `source_type="community"`; it would not be
+labelled as SEC.
+
+## Beginner setup
+
+Open Terminal and enter the project:
+
+```bash
+cd "/Users/jiajunliu/Documents/New project/investment-monitor"
+```
+
+Check Python (3.9 or newer is required):
+
+```bash
+python3 --version
+```
+
+The project has no third-party runtime dependencies. SEC requires automated
+clients to declare an application name and a real contact address. Create the
+local environment file once:
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and replace `your-email@example.com` with a real contact address.
+The web service automatically loads this file without overwriting environment
+variables supplied by a hosting platform. The SEC connector keeps its timeout,
+retry, cache, and maximum-five-requests-per-second controls. If a mapping-cache
+refresh temporarily fails, the last valid local copy is used.
+
+## 1. Configure the starting universe
+
+Edit `config/universe.csv`:
+
+```csv
+ticker,list_type
+AAPL,holdings
+```
+
+The CSV is an initial import only. It accepts 1–10 unique tickers, and
+`list_type` must be `holdings`, `planned`, or `watchlist`. After the first web
+startup, active memberships in SQLite are the collection source of truth. A
+company such as NVDA added in the web interface does not need to be added to
+the CSV.
+
+`config/settings.yaml` enables production sources and selects the local SQLite
+file:
+
+```yaml
+enabled_sources:
+  - sec
+database_path: ../data/investment_monitor.sqlite3
+```
+
+## 2. Optional manual SEC collection
+
+Choose an inclusive filing-date range:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m investment_monitor.cli \
+  --start-date 2025-07-27 \
+  --end-date 2026-08-02
+```
+
+This command remains useful for an explicit initial range. It reads the initial
+CSV, runs the SEC connector, stores standardized `InformationItem` records,
+records truthful collection activity, and also
+updates the legacy standalone report at `output/announcements.html`.
+
+Typical successful collection output includes lines like:
+
+```text
+INFO collection source=sec ticker=AAPL status=success items=... inserted=... updated=...
+collected=... failures=0 stored_total=... report=output/announcements.html
+```
+
+Re-running the same range updates records with the same `(source,
+external_id)` identity instead of inserting duplicates.
+
+## 3. Start the web interface
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m investment_monitor.web \
+  --host 127.0.0.1 \
+  --port 8765
+```
+
+Successful startup prints:
+
+```text
+Investment Monitor running at http://127.0.0.1:8765
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765) in a browser. Keep the
+Terminal window open while using the site. Press `Control-C` to stop it.
+
+While the service is running it performs one incremental collection per
+Eastern calendar day. On startup it catches up if the current ET day has not
+yet been attempted, then checks daily at 6:00 AM ET. The default seven-day
+overlap safely catches delayed or missed filings; accession-number
+deduplication prevents duplicate records.
+
+Adding a company through a list page immediately performs a one-year SEC
+metadata backfill. The company remains in the selected lists even if SEC is
+temporarily unavailable, and the page reports the backfill failure separately.
+These defaults can be adjusted in `.env`.
+
+## Main web behavior
+
+- **Today** uses filing acceptance time when available, groups by
+  `America/New_York`, shows `ET`, and deduplicates across lists.
+- **All Information** provides historical server-side filters and stable
+  pagination.
+- **Holdings, Planned Purchases, Watchlist** manage many-to-many company-list
+  memberships. Removing memberships never deletes stored filings.
+- **Search** searches stored metadata only: ticker, company name, title, form,
+  and accession number. Filing bodies are not downloaded or indexed.
+- **Read/Unread** persists in SQLite. Opening an official filing marks it read;
+  explicit individual and scoped bulk actions are also available.
+- **Activity & Logs** shows only collection operations recorded after this web
+  migration was introduced. It does not invent metrics for earlier CLI runs.
+- **Data Sources** reports the latest real SEC attempt and success, marks SEC
+  data stale after 36 hours, and marks News and Community as not connected.
+- Official filing links open in a new tab with `noopener` and `noreferrer`.
+
+## Data model and safe migration
+
+The existing standardized filing tables remain unchanged:
+
+```text
+information_items -- unique (source, external_id)
+information_item_tickers
+```
+
+The idempotent web migration adds:
+
+```text
+companies
+system_lists
+company_list_memberships      Company <-> List
+information_read_state
+ingestion_runs
+ingestion_logs
+app_settings
+```
+
+The migration uses `CREATE TABLE IF NOT EXISTS` and inserts the three fixed
+lists idempotently. It does not drop or rewrite existing SEC records. SQL lives
+at `src/investment_monitor/migrations/001_web_mvp.sql` and is packaged with the
+application.
+
+SEC-specific HTTP and mapping code remains under:
+
+```text
+src/investment_monitor/sources/sec/
+```
+
+The generic collection pipeline still depends only on `SourceConnector` and
+`InformationRepository`. The web query layer reads standardized records from
+SQLite and does not call the SEC connector to render pages.
+
+## Run automated tests
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m unittest discover -s tests -v
+```
+
+The normal suite uses saved SEC fixtures and does not require internet. A
+successful run ends with:
+
+```text
+Ran ... tests in ...s
+
+OK (skipped=1)
+```
+
+The skipped test is the optional live SEC integration test. The suite covers
+fixed-list idempotency, cross-list deduplication, partial ticker resolution,
+membership removal without history deletion, Eastern Time boundaries,
+persistent read state, scoped bulk updates, search, stable pagination,
+production exclusion of mocks, source states, and core HTTP/static routes.
+
+## Run without keeping your computer on
+
+The production pattern is to run this same service on an always-on Linux server
+or a container hosting platform with a persistent disk. The included
+`Dockerfile` packages the web service and its daily collector together.
+
+For a quick local container check:
+
+```bash
+docker build -t investment-monitor .
+docker run -d \
+  --name investment-monitor \
+  --restart unless-stopped \
+  --env-file .env \
+  -p 8765:8765 \
+  -v investment-monitor-data:/app/data \
+  investment-monitor
+```
+
+Running this command on your own computer still requires that computer to stay
+on. To make the site continuously available to other people, deploy the image
+to a VPS or a container host, attach a persistent volume at `/app/data`, set
+`SEC_USER_AGENT` there, and place HTTPS/access control in front of it. SQLite is
+appropriate for one small application instance; do not run several replicas
+against the same SQLite file.
+
+## Suggested manual acceptance test
+
+1. Start the server and open Today.
+2. Open Holdings and add `AAPL, MSFT BADTICKER` to Holdings and Watchlist.
+3. Confirm valid mapped tickers succeed and the unresolved ticker has its own
+   error without rolling back successful additions.
+4. Confirm a company in both lists has both badges but each filing appears
+   once.
+5. Mark one filing read, refresh, and confirm it remains read everywhere.
+6. Use filtered **Mark all in scope as read** and verify unrelated list items
+   remain unread.
+7. Remove a company from Holdings and confirm it remains in Watchlist.
+8. Remove it from all lists and confirm the action says historical information
+   is preserved.
+9. Open Data Sources and confirm SEC is the only configured provider; News and
+   Community say Not connected.
+
+## Known first-MVP limitations
+
+- No authentication or multi-user read state (single-user local persistence).
+- No News or real Community connector yet.
+- Daily scheduling runs inside the single web-service process; production still
+  requires an always-on host and a persistent `/app/data` volume.
+- No full filing-text download, full-text search, XBRL analysis, or AI features.
+- Exchange is shown as **Unavailable** when the official SEC ticker mapping does
+  not provide it.
+- Older activity from before operational-log persistence is unavailable.
+- Amendment records are identified and labelled independently by accession
+  number; an original/amendment relationship is shown only if future stored
+  metadata provides that relationship explicitly.
