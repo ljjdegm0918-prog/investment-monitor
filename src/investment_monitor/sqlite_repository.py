@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date, datetime
 import json
 from pathlib import Path
 import sqlite3
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterator, Iterable, List, Optional, Tuple
 
 from .models import InformationItem
 from .repository import SaveResult
@@ -205,11 +206,19 @@ class SQLiteInformationRepository:
                 """
             )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(str(self._database_path))
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     @staticmethod
     def _row_to_item(

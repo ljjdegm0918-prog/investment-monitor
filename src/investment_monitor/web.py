@@ -21,6 +21,7 @@ from .config import load_environment_file, load_settings, load_universe
 from .pipeline import CollectionEvent
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
+from .sqlite_repository import SQLiteInformationRepository
 from .web_repository import FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
@@ -53,6 +54,8 @@ class WebApplication:
             source for source in configured_sources if not source.startswith("mock")
         )
         self.enabled_sources = allowed_sources
+        # Base filing tables must exist before the web migration and universe import.
+        SQLiteInformationRepository(settings.database_path)
         self.repository = WebRepository(
             settings.database_path,
             allowed_sources=allowed_sources,
@@ -284,7 +287,7 @@ class WebApplication:
             list_record["unread_count"] = counts["list_unread"].get(slug, 0)
         return {
             "selected_date": selected_date.isoformat(),
-            "display_date": selected_date.strftime("%b %-d, %Y"),
+            "display_date": f"{selected_date.strftime('%b')} {selected_date.day}, {selected_date.year}",
             "timezone": "America/New_York",
             "timezone_label": "ET",
             "lists": lists,
