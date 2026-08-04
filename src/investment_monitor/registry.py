@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
-from .connectors.base import ConnectorUnavailableError, SourceConnector
+from .connectors.base import (
+    ConnectorUnavailableError,
+    SecretField,
+    SourceConnector,
+)
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
 from .sources.news import FinnhubNewsConnector
@@ -18,14 +22,25 @@ class SourceRegistry:
 
     def __init__(self) -> None:
         self._factories: Dict[str, ConnectorFactory] = {}
+        self._secret_fields: Dict[str, Tuple[SecretField, ...]] = {}
+        self._configuration_errors: Dict[str, Callable[[], Optional[str]]] = {}
 
-    def register(self, name: str, factory: ConnectorFactory) -> None:
-        """Register a connector factory under a unique configuration name."""
+    def register(
+        self,
+        name: str,
+        factory: ConnectorFactory,
+        secret_fields: Iterable[SecretField] = (),
+        configuration_error: Optional[Callable[[], Optional[str]]] = None,
+    ) -> None:
+        """Register a connector factory and its credential declarations."""
         if not name:
             raise ValueError("Connector name must not be empty.")
         if name in self._factories:
             raise ValueError(f"Connector already registered: {name}")
         self._factories[name] = factory
+        self._secret_fields[name] = tuple(secret_fields)
+        if configuration_error is not None:
+            self._configuration_errors[name] = configuration_error
 
     @property
     def registered_names(self) -> Tuple[str, ...]:
@@ -65,12 +80,33 @@ class SourceRegistry:
         """Return the factory registered under ``name``, if any."""
         return self._factories.get(name)
 
+    def secret_fields_for(self, name: str) -> Tuple[SecretField, ...]:
+        """Return the credential fields declared by a registered source."""
+        return self._secret_fields.get(name, ())
+
+    def configuration_error_for(self, name: str) -> Optional[str]:
+        """Return the declared configuration problem for a source, if any."""
+        probe = self._configuration_errors.get(name)
+        if probe is None:
+            return None
+        return probe()
+
 
 def create_default_registry() -> SourceRegistry:
     """Build the application's registry of connector implementations."""
     registry = SourceRegistry()
     registry.register(MockConnector.name, MockConnector)
     registry.register(MockCommunityConnector.name, MockCommunityConnector)
-    registry.register(FinnhubNewsConnector.name, FinnhubNewsConnector)
-    registry.register(SECConnector.name, SECConnector.from_environment)
+    registry.register(
+        FinnhubNewsConnector.name,
+        FinnhubNewsConnector,
+        secret_fields=FinnhubNewsConnector.secret_fields,
+        configuration_error=FinnhubNewsConnector.configuration_error,
+    )
+    registry.register(
+        SECConnector.name,
+        SECConnector.from_environment,
+        secret_fields=SECConnector.secret_fields,
+        configuration_error=SECConnector.configuration_error,
+    )
     return registry

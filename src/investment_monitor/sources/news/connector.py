@@ -20,7 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from ...connectors.base import ConnectorUnavailableError
+from ...connectors.base import ConnectorUnavailableError, SecretField
 from ...models import (
     CollectionRequest,
     InformationItem,
@@ -180,6 +180,17 @@ class FinnhubNewsConnector:
     name = "news"
     provider = "Finnhub News"
     max_lookback_days = MAX_LOOKBACK_DAYS
+    secret_fields = (
+        SecretField(
+            env="FINNHUB_API_KEY",
+            label="Finnhub API Key",
+            kind="password",
+            help=(
+                "Finnhub company-news API key. Leave blank to keep the "
+                "current value; Clear removes it."
+            ),
+        ),
+    )
 
     def __init__(self, client: Optional[FinnhubClient] = None) -> None:
         self._client = client or FinnhubClient.from_environment()

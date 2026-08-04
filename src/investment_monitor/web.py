@@ -17,18 +17,54 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .application import ConfiguredCollectionResult, run_ticker_collection
-from .config import load_environment_file, load_settings, load_universe
+from .config import (
+    SourceConfig,
+    load_environment_file,
+    load_settings,
+    load_universe,
+)
 from .models import MARKET_US
 from .pipeline import CollectionEvent
-from .registry import create_default_registry
+from .registry import SourceRegistry, create_default_registry
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
-from .web_repository import FeedFilters, SECRET_SETTING_KEYS, WebRepository
+from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
+
+
+def build_provider_catalog(
+    registry: SourceRegistry,
+    sources: Sequence[SourceConfig],
+) -> Sequence[Mapping[str, Any]]:
+    """Describe implemented sources and their declared credential fields."""
+    providers = []
+    for source in sources:
+        if source.name.startswith("mock"):
+            continue
+        factory = registry.factory_for(source.name)
+        providers.append(
+            {
+                "name": source.name,
+                "label": source.label,
+                "source_type": source.source_type,
+                "enabled": source.enabled,
+                "implemented": factory is not None,
+                "fields": [
+                    {
+                        "env": field.env,
+                        "label": field.label,
+                        "kind": field.kind,
+                        "help": field.help,
+                    }
+                    for field in registry.secret_fields_for(source.name)
+                ],
+            }
+        )
+    return tuple(providers)
 
 
 @dataclass(frozen=True)
@@ -64,6 +100,19 @@ class WebApplication:
             for source in settings.sources
             if not source.name.startswith("mock")
         )
+        self.provider_catalog = build_provider_catalog(
+            registry,
+            self.source_catalog,
+        )
+        self.writable_env_keys = tuple(
+            sorted(
+                {
+                    field["env"]
+                    for provider in self.provider_catalog
+                    for field in provider["fields"]
+                }
+            )
+        )
         # Base filing tables must exist before the web migration and universe import.
         SQLiteInformationRepository(settings.database_path)
         self.repository = WebRepository(
@@ -71,9 +120,10 @@ class WebApplication:
             allowed_sources=allowed_sources,
             known_sources=self.source_catalog,
             implemented_sources=self.implemented_sources,
+            allowed_secret_keys=self.writable_env_keys,
         )
         # DB/UI-stored secrets take priority over .env for this process.
-        self._load_secret_settings_to_environment()
+        self._load_credentials_to_environment()
         self.unavailable_sources = self._detect_unavailable_sources(
             registry,
             settings.sources,
@@ -177,10 +227,19 @@ class WebApplication:
                 key = str(payload["key"])
                 value = str(payload.get("value") or "")
                 self.repository.set_setting(key, value)
-                if key in SECRET_SETTING_KEYS:
-                    self._sync_secret_to_environment(key, value)
+                is_credential = (
+                    key in self.writable_env_keys
+                    or key.startswith(EXTRA_ENV_PREFIX)
+                )
+                if is_credential:
+                    env_name = (
+                        key[len(EXTRA_ENV_PREFIX):]
+                        if key.startswith(EXTRA_ENV_PREFIX)
+                        else key
+                    )
+                    self._sync_environment_value(env_name, value)
                     self._refresh_unavailable_sources()
-                    status = self.repository.secret_setting_status()[key]
+                    status = self.repository.setting_status([key])[key]
                     return self._json(
                         {
                             "updated": True,
@@ -340,33 +399,32 @@ class WebApplication:
         for source in catalog:
             if not source.enabled:
                 continue
-            factory = registry.factory_for(source.name)
-            if factory is None:
-                continue
-            configuration_error = getattr(factory, "configuration_error", None)
-            if not callable(configuration_error):
-                continue
-            reason = configuration_error()
+            reason = registry.configuration_error_for(source.name)
             if reason:
                 unavailable[source.name] = str(reason)
         return unavailable
 
-    def _load_secret_settings_to_environment(self) -> None:
-        """Apply whitelisted secrets from app_settings to os.environ.
+    def _load_credentials_to_environment(self) -> None:
+        """Apply stored provider credentials and extra env vars to os.environ.
 
         Runs after load_environment_file(.env), so a value saved through the
         Settings page (database) intentionally wins over the .env default.
         """
-        for key, value in self.repository.load_secret_settings().items():
+        for key, value in self.repository.load_setting_values(
+            self.writable_env_keys
+        ).items():
             os.environ[key] = value
+        for name, value in self.repository.load_extra_env():
+            os.environ[name] = value
 
-    def _sync_secret_to_environment(self, key: str, value: str) -> None:
-        """Sync one whitelisted secret to the running process environment."""
+    @staticmethod
+    def _sync_environment_value(name: str, value: str) -> None:
+        """Sync one credential/custom env value to the running process."""
         normalized = value.strip()
         if normalized:
-            os.environ[key] = normalized
+            os.environ[name] = normalized
         else:
-            os.environ.pop(key, None)
+            os.environ.pop(name, None)
 
     def _refresh_unavailable_sources(self) -> None:
         """Recompute connector availability after a secret setting changed."""
@@ -378,9 +436,47 @@ class WebApplication:
         self.repository.set_unavailable_sources(self.unavailable_sources)
 
     def _settings_payload(self) -> Mapping[str, Any]:
+        provider_field_keys = [
+            field["env"]
+            for provider in self.provider_catalog
+            for field in provider["fields"]
+        ]
+        field_statuses = self.repository.setting_status(provider_field_keys)
+        providers = []
+        for provider in self.provider_catalog:
+            fields = []
+            for field in provider["fields"]:
+                status = field_statuses.get(
+                    field["env"],
+                    {"configured": False, "hint": ""},
+                )
+                fields.append(
+                    {
+                        **field,
+                        "configured": status["configured"],
+                        "hint": status["hint"],
+                    }
+                )
+            providers.append({**provider, "fields": fields})
+        stored_extra = self.repository.load_extra_env()
+        extra_keys = [
+            EXTRA_ENV_PREFIX + name for name, _ in stored_extra
+        ]
+        extra_statuses = self.repository.setting_status(extra_keys)
+        extra_env = [
+            {
+                "name": name,
+                "configured": extra_statuses[EXTRA_ENV_PREFIX + name][
+                    "configured"
+                ],
+                "hint": extra_statuses[EXTRA_ENV_PREFIX + name]["hint"],
+            }
+            for name, _ in stored_extra
+        ]
         return {
             "page_size": int(self.repository.setting("page_size", "25")),
-            "secrets": self.repository.secret_setting_status(),
+            "providers": providers,
+            "extra_env": extra_env,
         }
 
     def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:

@@ -105,10 +105,13 @@ and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
 symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
 A-share or HK resolution.
 
-The web Settings page can also store whitelisted API keys (`FINNHUB_API_KEY`,
-`SEC_USER_AGENT`) in the workspace database. Values saved there take priority
-over `.env` for the running process and are never returned in full by any API
-response.
+The web Settings page shows Provider credentials for every implemented source
+(each connector declares its own fields, currently `FINNHUB_API_KEY` and
+`SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
+cannot be configured. An advanced section allows extra environment variables
+for connectors that explicitly read them. Values saved in the workspace
+database take priority over `.env` for the running process and are never
+returned in full by any API response.
 
 ## 2. Optional manual SEC collection
 

@@ -1,12 +1,15 @@
 from datetime import date, timezone
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Dict
 import unittest
+from unittest.mock import patch
 
 from investment_monitor import (
     CollectionRequest,
+    ConnectorUnavailableError,
     SECConnector,
     SECError,
     SECRequestError,
@@ -147,6 +150,32 @@ class SECConnectorTests(unittest.TestCase):
                 connector.collect(request)
 
         self.assertEqual(client.requested_urls, [])
+
+    def test_missing_user_agent_is_reported_as_unavailable(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SEC_USER_AGENT", None)
+
+            self.assertIsNotNone(SECConnector.configuration_error())
+            with self.assertRaises(ConnectorUnavailableError):
+                SECConnector.from_environment()
+
+    def test_registry_skips_sec_when_user_agent_is_missing(self) -> None:
+        from investment_monitor import SourceRegistry, create_default_registry
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("SEC_USER_AGENT", None)
+            os.environ.pop("FINNHUB_API_KEY", None)
+            registry = create_default_registry()
+
+            unavailable: list = []
+            connectors = registry.load_enabled(
+                ["sec"],
+                unavailable=unavailable,
+            )
+
+            self.assertEqual(connectors, [])
+            self.assertEqual(unavailable, ["sec"])
+            self.assertIsInstance(registry, SourceRegistry)
 
     def test_ticker_mapping_is_reused_from_the_local_cache(self) -> None:
         with TemporaryDirectory() as temporary_directory:

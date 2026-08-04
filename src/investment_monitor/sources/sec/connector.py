@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
+from ...connectors.base import ConnectorUnavailableError, SecretField
 from ...models import CollectionRequest, InformationItem, MARKET_US
 from .client import SECClient, SECDataError, SECError
 
@@ -148,6 +149,18 @@ class SECConnector:
     """Collect SEC submission metadata and standardize it."""
 
     name = "sec"
+    secret_fields = (
+        SecretField(
+            env="SEC_USER_AGENT",
+            label="SEC User-Agent",
+            kind="text",
+            help=(
+                "SEC asks automated clients to identify the application and "
+                "provide a contact address (for example "
+                "InvestmentMonitor/0.1 name@example.com)."
+            ),
+        ),
+    )
 
     def __init__(
         self,
@@ -161,6 +174,9 @@ class SECConnector:
     @classmethod
     def from_environment(cls) -> "SECConnector":
         """Build a production connector from environment configuration."""
+        configuration_error = cls.configuration_error()
+        if configuration_error is not None:
+            raise ConnectorUnavailableError(configuration_error)
         client = SECClient.from_environment()
         cache_path = Path(
             os.environ.get(
@@ -175,6 +191,15 @@ class SECConnector:
             cache_ttl_seconds=cache_ttl_seconds,
         )
         return cls(client=client, resolver=resolver)
+
+    @classmethod
+    def configuration_error(cls) -> Optional[str]:
+        """Return a reason when the source cannot be enabled."""
+        if not os.environ.get("SEC_USER_AGENT", "").strip():
+            return (
+                "SEC_USER_AGENT is not configured; SEC is not connected."
+            )
+        return None
 
     @property
     def last_errors(self) -> Tuple[TickerCollectionFailure, ...]:

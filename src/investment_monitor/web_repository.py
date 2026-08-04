@@ -43,7 +43,26 @@ SOURCE_LABELS = {
 PROVIDER_LABELS = {
     "news": "Finnhub News",
 }
-SECRET_SETTING_KEYS = frozenset({"FINNHUB_API_KEY", "SEC_USER_AGENT"})
+EXTRA_ENV_PREFIX = "extra_env:"
+EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+EXTRA_ENV_BLOCKED_EXACT = frozenset(
+    {
+        "PATH",
+        "PYTHONPATH",
+        "HOME",
+        "USERPROFILE",
+        "TEMP",
+        "TMP",
+        "SYSTEMDRIVE",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "APPDATA",
+        "LOCALAPPDATA",
+    }
+)
+EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("news", "News", "news"),
@@ -123,6 +142,7 @@ class WebRepository:
         known_sources: Optional[Sequence[SourceConfig]] = None,
         implemented_sources: Optional[Sequence[str]] = None,
         unavailable_sources: Optional[Mapping[str, str]] = None,
+        allowed_secret_keys: Sequence[str] = (),
     ) -> None:
         self._database_path = database_path
         self._allowed_sources = tuple(allowed_sources)
@@ -131,6 +151,7 @@ class WebRepository:
             implemented_sources if implemented_sources is not None else self._allowed_sources
         )
         self._unavailable_sources = dict(unavailable_sources or {})
+        self._allowed_secret_keys = frozenset(allowed_secret_keys)
         self._migration_path = migration_path or (
             Path(__file__).parent / "migrations" / "001_web_mvp.sql"
         )
@@ -991,7 +1012,11 @@ class WebRepository:
                     (key, value),
                 )
             return
-        if key not in SECRET_SETTING_KEYS:
+        if key.startswith(EXTRA_ENV_PREFIX):
+            extra_name = key[len(EXTRA_ENV_PREFIX):]
+            if not self._valid_extra_env_name(extra_name):
+                raise ValueError("Unsupported setting value")
+        elif key not in self._allowed_secret_keys:
             raise ValueError("Unsupported setting value")
         with self._connect() as connection:
             normalized = value.strip()
@@ -1013,31 +1038,59 @@ class WebRepository:
         """Replace the connector-unavailable reasons surfaced by statuses."""
         self._unavailable_sources = dict(sources)
 
-    def load_secret_settings(self) -> Mapping[str, str]:
-        """Return stored whitelisted secret values (used at startup)."""
-        if not SECRET_SETTING_KEYS:
+    def load_setting_values(self, keys: Sequence[str]) -> Mapping[str, str]:
+        """Return stored values for an explicit list of setting keys."""
+        unique_keys = tuple(dict.fromkeys(keys))
+        if not unique_keys:
             return {}
-        placeholders = ",".join("?" for _ in SECRET_SETTING_KEYS)
+        placeholders = ",".join("?" for _ in unique_keys)
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
                 SELECT key, value FROM app_settings
                 WHERE key IN ({placeholders})
                 """,
-                tuple(SECRET_SETTING_KEYS),
+                unique_keys,
             ).fetchall()
         return {str(row["key"]): str(row["value"]) for row in rows}
 
-    def secret_setting_status(self) -> Mapping[str, Mapping[str, Any]]:
-        """Return configured/hint metadata for whitelisted secret keys."""
-        stored = self.load_secret_settings()
+    def load_extra_env(self) -> Tuple[Tuple[str, str], ...]:
+        """Return stored custom environment variables as (name, value)."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT key, value FROM app_settings
+                WHERE key LIKE ?
+                ORDER BY key
+                """,
+                (EXTRA_ENV_PREFIX + "%",),
+            ).fetchall()
+        return tuple(
+            (
+                str(row["key"])[len(EXTRA_ENV_PREFIX):],
+                str(row["value"]),
+            )
+            for row in rows
+        )
+
+    def setting_status(self, keys: Sequence[str]) -> Mapping[str, Mapping[str, Any]]:
+        """Return configured/hint metadata for an explicit list of keys."""
+        stored = self.load_setting_values(keys)
         return {
             key: {
                 "configured": bool(stored.get(key)),
                 "hint": _mask_secret(stored.get(key)),
             }
-            for key in sorted(SECRET_SETTING_KEYS)
+            for key in dict.fromkeys(keys)
         }
+
+    @staticmethod
+    def _valid_extra_env_name(name: str) -> bool:
+        if not EXTRA_ENV_NAME_PATTERN.fullmatch(name):
+            return False
+        if name in EXTRA_ENV_BLOCKED_EXACT:
+            return False
+        return not name.startswith(EXTRA_ENV_BLOCKED_PREFIXES)
 
     def _feed_where(self, filters: FeedFilters) -> Tuple[str, List[Any]]:
         conditions: List[str] = []

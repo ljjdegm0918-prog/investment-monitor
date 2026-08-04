@@ -274,42 +274,79 @@ function activityContent(data) {
 function renderSettings() {
   api("/api/settings").then(data => {
     const size = data.page_size;
-    const secretKeys = [
-      { key:"FINNHUB_API_KEY", label:"Finnhub API Key", placeholder:"finnhub_api_key", description:"Used by the News source. Leave blank to keep the current value; use Clear to remove it." },
-      { key:"SEC_USER_AGENT", label:"SEC User-Agent", placeholder:"InvestmentMonitor/0.1 your-email@example.com", description:"Used by SEC EDGAR requests. Leave blank to keep the current value; use Clear to remove it." },
-    ];
-    const secretFields = secretKeys.map(entry => {
-      const status = (data.secrets && data.secrets[entry.key]) || { configured:false, hint:"" };
-      return `<div class="filter-field"><label for="secret-${entry.key}">${entry.label}</label><input id="secret-${entry.key}" type="password" autocomplete="new-password" placeholder="${esc(entry.placeholder)}"><span class="timestamp" id="status-${entry.key}">${status.configured ? `Configured (${esc(status.hint)})` : "Not configured"}</span><button class="button link" type="button" data-clear-secret="${entry.key}" ${status.configured ? "" : "disabled"}>Clear</button><p class="timestamp">${entry.description}</p></div>`;
+    const providerSections = (data.providers || []).map(provider => {
+      const fields = (provider.fields || []).map(field => {
+        const statusText = field.configured ? `Configured (${esc(field.hint)})` : "Not configured";
+        const inputType = field.kind === "password" ? "password" : "text";
+        return `<div class="filter-field"><label for="cred-${field.env}">${esc(field.label)}</label><input id="cred-${field.env}" type="${inputType}" autocomplete="new-password" placeholder="Leave blank to keep current"><span class="timestamp">${statusText}</span><button class="button link" type="button" data-clear-credential="${field.env}" ${field.configured ? "" : "disabled"}>Clear</button><p class="timestamp">${esc(field.help || "")}</p></div>`;
+      }).join("");
+      const body = provider.implemented
+        ? fields || `<p class="timestamp">This source declares no credentials.</p>`
+        : `<div class="source-provider">Not implemented / Not connected</div>`;
+      return `<article class="provider-credential"><h3>${esc(provider.label)}${provider.enabled ? "" : " (disabled in settings)"}</h3>${body}</article>`;
     }).join("");
-    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>API Keys</h2><p class="timestamp">Stored locally in the workspace database (plain text for this internal MVP) and never shown in full after saving.</p>${secretFields}<button class="button primary" id="save-api-keys">Save API keys</button></section>`;
+    const extraRows = (data.extra_env || []).map(entry => extraEnvRow(entry.name, "", entry.hint)).join("");
+    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>Provider credentials</h2><p class="timestamp">Credential fields are declared by each implemented source; unimplemented sources cannot be configured here.</p>${providerSections}<button class="button primary" id="save-provider-credentials">Save provider credentials</button></section><section class="panel settings-card"><h2>Extra environment variables</h2><details id="advanced-env"><summary>Advanced: extra environment variables</summary><p class="timestamp">These variables are only used if a connector explicitly reads them; setting one does not connect any new source. Names must match <code>[A-Za-z_][A-Za-z0-9_]*</code>. Dangerous names (PATH, PYTHONPATH, LD_*, SSL*, HOME, USERPROFILE, ...) are rejected.</p><div id="extra-env-rows">${extraRows}</div><button class="button link" id="add-extra-env" type="button">+ Add variable</button><button class="button primary" id="save-extra-env" type="button">Save extra variables</button></details></section>`;
     document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
-    document.getElementById("save-api-keys").addEventListener("click", saveApiKeys);
-    document.querySelectorAll("[data-clear-secret]").forEach(button => button.addEventListener("click", () => clearSecretKey(button.dataset.clearSecret)));
+    document.getElementById("save-provider-credentials").addEventListener("click", saveProviderCredentials);
+    document.querySelectorAll("[data-clear-credential]").forEach(button => button.addEventListener("click", () => clearCredential(button.dataset.clearCredential)));
+    document.getElementById("add-extra-env").addEventListener("click", () => { document.getElementById("extra-env-rows").insertAdjacentHTML("beforeend", extraEnvRow("", "")); bindExtraEnvRows(); });
+    document.getElementById("save-extra-env").addEventListener("click", saveExtraEnv);
+    bindExtraEnvRows();
   }).catch(error => { document.getElementById("page").innerHTML = `<div class="error-state"><div><strong>Settings request failed</strong><p>${esc(error.message)}</p></div></div>`; });
 }
 
-async function saveApiKeys() {
+function extraEnvRow(name, value, hint = "") {
+  return `<div class="extra-env-row"><input class="extra-env-name" type="text" value="${esc(name)}" placeholder="VARIABLE_NAME" spellcheck="false"><input class="extra-env-value" type="password" autocomplete="new-password" value="${esc(value)}" placeholder="value (leave blank to keep)"><span class="timestamp">${hint ? `Configured (${esc(hint)})` : ""}</span><button class="button link" type="button" data-remove-extra-env>Remove</button></div>`;
+}
+
+function bindExtraEnvRows() {
+  document.querySelectorAll("[data-remove-extra-env]").forEach(button => button.addEventListener("click", async () => {
+    const row = button.closest(".extra-env-row");
+    const name = row.querySelector(".extra-env-name").value.trim();
+    if (name) {
+      try { await api("/api/settings", { method:"POST", body: JSON.stringify({ key:`extra_env:${name}`, value:"" }) }); } catch (error) { toast(error.message, true); return; }
+    }
+    await reloadWorkspaceCounts();
+    await renderSettings();
+  }));
+}
+
+async function saveProviderCredentials() {
   const updates = [];
-  for (const key of ["FINNHUB_API_KEY","SEC_USER_AGENT"]) {
-    const input = document.getElementById(`secret-${key}`);
-    const value = input && input.value.trim();
-    if (value) updates.push({ key, value });
-  }
+  document.querySelectorAll("[id^='cred-']").forEach(input => {
+    const value = input.value.trim();
+    if (value) updates.push({ key: input.id.slice("cred-".length), value });
+  });
   try {
     for (const update of updates) await api("/api/settings", { method:"POST", body: JSON.stringify(update) });
     await reloadWorkspaceCounts();
     await renderSettings();
-    toast(updates.length ? "API keys saved." : "No API key changed.");
+    toast(updates.length ? "Provider credentials saved." : "No credential changed.");
   } catch (error) { toast(error.message, true); }
 }
 
-async function clearSecretKey(key) {
+async function clearCredential(env) {
   try {
-    await api("/api/settings", { method:"POST", body: JSON.stringify({ key, value:"" }) });
+    await api("/api/settings", { method:"POST", body: JSON.stringify({ key: env, value:"" }) });
     await reloadWorkspaceCounts();
     await renderSettings();
-    toast(`${key} cleared.`);
+    toast(`${env} cleared.`);
+  } catch (error) { toast(error.message, true); }
+}
+
+async function saveExtraEnv() {
+  const updates = [];
+  document.querySelectorAll(".extra-env-row").forEach(row => {
+    const name = row.querySelector(".extra-env-name").value.trim();
+    const inputValue = row.querySelector(".extra-env-value").value.trim();
+    if (name && inputValue) updates.push({ key: `extra_env:${name}`, value: inputValue });
+  });
+  try {
+    for (const update of updates) await api("/api/settings", { method:"POST", body: JSON.stringify(update) });
+    await reloadWorkspaceCounts();
+    await renderSettings();
+    toast(updates.length ? "Extra environment variables saved." : "No extra variable changed.");
   } catch (error) { toast(error.message, true); }
 }
 

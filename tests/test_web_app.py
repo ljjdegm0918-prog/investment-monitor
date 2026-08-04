@@ -230,7 +230,17 @@ class WebApplicationTests(unittest.TestCase):
             self.assertTrue(saved["configured"])
             self.assertNotIn("sk-live-1234567890", saved["hint"])
             self.assertEqual(os.environ["FINNHUB_API_KEY"], "sk-live-1234567890")
-            self.assertTrue(settings["secrets"]["FINNHUB_API_KEY"]["configured"])
+            news_provider = next(
+                provider
+                for provider in settings["providers"]
+                if provider["name"] == "news"
+            )
+            news_field = next(
+                field
+                for field in news_provider["fields"]
+                if field["env"] == "FINNHUB_API_KEY"
+            )
+            self.assertTrue(news_field["configured"])
             self.assertNotIn(
                 "sk-live-1234567890",
                 json.dumps(settings),
@@ -263,6 +273,7 @@ class WebApplicationTests(unittest.TestCase):
         WebRepository(
             self.project_root / "data" / "web.sqlite3",
             allowed_sources=("sec", "news"),
+            allowed_secret_keys=("FINNHUB_API_KEY",),
         ).set_setting("FINNHUB_API_KEY", "db-key-value")
         with patch.dict(
             os.environ,
@@ -292,6 +303,117 @@ class WebApplicationTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status, 400)
+
+    def test_settings_providers_are_dynamic(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n  - community\n  - research\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        settings = self.payload(
+            application.handle("GET", "/api/settings")
+        )
+        providers = {provider["name"]: provider for provider in settings["providers"]}
+
+        self.assertEqual(
+            [field["env"] for field in providers["sec"]["fields"]],
+            ["SEC_USER_AGENT"],
+        )
+        self.assertEqual(
+            [field["env"] for field in providers["news"]["fields"]],
+            ["FINNHUB_API_KEY"],
+        )
+        self.assertTrue(providers["sec"]["implemented"])
+        self.assertTrue(providers["news"]["implemented"])
+        self.assertFalse(providers["community"]["implemented"])
+        self.assertFalse(providers["research"]["implemented"])
+        self.assertEqual(providers["community"]["fields"], [])
+        self.assertTrue(all(
+            not field["configured"]
+            for provider in providers.values()
+            for field in provider["fields"]
+        ))
+
+    def test_extra_env_can_be_saved_cleared_and_validated(self) -> None:
+        saved = self.payload(self.application.handle(
+            "POST",
+            "/api/settings",
+            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": "abc123"}).encode(),
+        ))
+        settings = self.payload(
+            self.application.handle("GET", "/api/settings")
+        )
+
+        self.assertTrue(saved["configured"])
+        self.assertEqual(saved["hint"], "••••c123")
+        self.assertEqual(os.environ["MY_APP_TOKEN"], "abc123")
+        self.assertEqual(
+            settings["extra_env"],
+            [{"name": "MY_APP_TOKEN", "configured": True, "hint": "••••c123"}],
+        )
+        self.assertNotIn("abc123", json.dumps(settings))
+
+        cleared = self.payload(self.application.handle(
+            "POST",
+            "/api/settings",
+            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": ""}).encode(),
+        ))
+        settings = self.payload(
+            self.application.handle("GET", "/api/settings")
+        )
+        self.assertFalse(cleared["configured"])
+        self.assertNotIn("MY_APP_TOKEN", os.environ)
+        self.assertEqual(settings["extra_env"], [])
+
+        for bad_key in ("extra_env:PATH", "extra_env:LD_LIBRARY_PATH", "extra_env:1BAD"):
+            response = self.application.handle(
+                "POST",
+                "/api/settings",
+                json.dumps({"key": bad_key, "value": "x"}).encode(),
+            )
+            self.assertEqual(response.status, 400, bad_key)
+
+    def test_new_source_with_secret_fields_appears_in_provider_catalog(self) -> None:
+        from investment_monitor.config import SourceConfig
+        from investment_monitor.connectors.base import SecretField
+        from investment_monitor.registry import SourceRegistry
+        from investment_monitor.web import build_provider_catalog
+
+        class FakeResearchConnector:
+            name = "research"
+            secret_fields = (
+                SecretField(
+                    env="RESEARCH_API_KEY",
+                    label="Research API Key",
+                    help="Research source key.",
+                ),
+            )
+
+        registry = SourceRegistry()
+        registry.register(
+            FakeResearchConnector.name,
+            FakeResearchConnector,
+            secret_fields=FakeResearchConnector.secret_fields,
+        )
+        catalog = build_provider_catalog(
+            registry,
+            (
+                SourceConfig(
+                    name="research",
+                    label="Research",
+                    source_type="research",
+                    enabled=True,
+                ),
+            ),
+        )
+
+        self.assertTrue(catalog[0]["implemented"])
+        self.assertEqual(catalog[0]["fields"][0]["env"], "RESEARCH_API_KEY")
+        self.assertEqual(catalog[0]["fields"][0]["kind"], "password")
 
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
