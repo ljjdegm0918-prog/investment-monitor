@@ -11,6 +11,7 @@ from investment_monitor.web import DailyCollectionScheduler, WebApplication
 from investment_monitor.models import InformationItem
 from investment_monitor.repository import SaveResult
 from investment_monitor.sqlite_repository import SQLiteInformationRepository
+from investment_monitor.web_repository import WebRepository
 
 
 class WebApplicationTests(unittest.TestCase):
@@ -196,6 +197,114 @@ class WebApplicationTests(unittest.TestCase):
 
         self.assertEqual(news["status"], "unavailable")
         self.assertIsNone(news["last_failure"])
+
+    def test_settings_can_save_and_clear_finnhub_key(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("FINNHUB_API_KEY", None)
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            saved = self.payload(application.handle(
+                "POST",
+                "/api/settings",
+                json.dumps(
+                    {"key": "FINNHUB_API_KEY", "value": "sk-live-1234567890"}
+                ).encode(),
+            ))
+            settings = self.payload(
+                application.handle("GET", "/api/settings")
+            )
+            news = next(
+                record
+                for record in application.repository.source_statuses()
+                if record["type"] == "News"
+            )
+
+            self.assertTrue(saved["updated"])
+            self.assertTrue(saved["configured"])
+            self.assertNotIn("sk-live-1234567890", saved["hint"])
+            self.assertEqual(os.environ["FINNHUB_API_KEY"], "sk-live-1234567890")
+            self.assertTrue(settings["secrets"]["FINNHUB_API_KEY"]["configured"])
+            self.assertNotIn(
+                "sk-live-1234567890",
+                json.dumps(settings),
+            )
+            self.assertEqual(news["status"], "unavailable")
+            self.assertIsNone(news["last_failure"])
+
+            cleared = self.payload(application.handle(
+                "POST",
+                "/api/settings",
+                json.dumps({"key": "FINNHUB_API_KEY", "value": ""}).encode(),
+            ))
+            news = next(
+                record
+                for record in application.repository.source_statuses()
+                if record["type"] == "News"
+            )
+
+            self.assertFalse(cleared["configured"])
+            self.assertNotIn("FINNHUB_API_KEY", os.environ)
+            self.assertEqual(news["status"], "not_connected")
+            self.assertIn("FINNHUB_API_KEY", news["last_failure"])
+
+    def test_database_secret_overrides_env_on_startup(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        WebRepository(
+            self.project_root / "data" / "web.sqlite3",
+            allowed_sources=("sec", "news"),
+        ).set_setting("FINNHUB_API_KEY", "db-key-value")
+        with patch.dict(
+            os.environ,
+            {"FINNHUB_API_KEY": "env-key-value"},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+
+            self.assertEqual(os.environ["FINNHUB_API_KEY"], "db-key-value")
+            news = next(
+                record
+                for record in application.repository.source_statuses()
+                if record["type"] == "News"
+            )
+            self.assertEqual(news["status"], "unavailable")
+
+    def test_settings_rejects_non_whitelisted_secret_key(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/settings",
+            json.dumps(
+                {"key": "AWS_SECRET_ACCESS_KEY", "value": "x"}
+            ).encode(),
+        )
+
+        self.assertEqual(response.status, 400)
+
+    def test_page_size_setting_still_works(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/settings",
+            json.dumps({"key": "page_size", "value": "50"}).encode(),
+        )
+        settings = self.payload(
+            self.application.handle("GET", "/api/settings")
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(settings["page_size"], 50)
 
     def test_http_workflow_covers_batch_memberships_feed_read_and_search(self) -> None:
         self.items.save([InformationItem(

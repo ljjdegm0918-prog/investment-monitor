@@ -349,6 +349,38 @@ class WebRepositoryTests(unittest.TestCase):
             [],
         )
 
+    def test_secret_settings_are_whitelisted_and_masked(self) -> None:
+        self.repository.set_setting(
+            "FINNHUB_API_KEY",
+            "  sk-finnhub-12345678  ",
+        )
+
+        status = self.repository.secret_setting_status()["FINNHUB_API_KEY"]
+        loaded = self.repository.load_secret_settings()
+
+        self.assertTrue(status["configured"])
+        self.assertNotIn("sk-finnhub-12345678", status["hint"])
+        self.assertEqual(status["hint"], "••••5678")
+        self.assertEqual(loaded["FINNHUB_API_KEY"], "sk-finnhub-12345678")
+        self.assertEqual(
+            self.repository.secret_setting_status()["SEC_USER_AGENT"],
+            {"configured": False, "hint": ""},
+        )
+
+    def test_clearing_secret_setting_removes_it(self) -> None:
+        self.repository.set_setting("FINNHUB_API_KEY", "secret-value")
+        self.repository.set_setting("FINNHUB_API_KEY", "   ")
+
+        status = self.repository.secret_setting_status()["FINNHUB_API_KEY"]
+
+        self.assertFalse(status["configured"])
+        self.assertEqual(status["hint"], "")
+        self.assertNotIn("FINNHUB_API_KEY", self.repository.load_secret_settings())
+
+    def test_arbitrary_setting_key_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.repository.set_setting("AWS_SECRET_ACCESS_KEY", "x")
+
 
 if __name__ == "__main__":
     unittest.main()

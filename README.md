@@ -105,6 +105,11 @@ and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
 symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
 A-share or HK resolution.
 
+The web Settings page can also store whitelisted API keys (`FINNHUB_API_KEY`,
+`SEC_USER_AGENT`) in the workspace database. Values saved there take priority
+over `.env` for the running process and are never returned in full by any API
+response.
+
 ## 2. Optional manual SEC collection
 
 Choose an inclusive filing-date range:

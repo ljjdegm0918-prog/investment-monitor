@@ -24,7 +24,7 @@ from .registry import create_default_registry
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
-from .web_repository import FeedFilters, WebRepository
+from .web_repository import FeedFilters, SECRET_SETTING_KEYS, WebRepository
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
@@ -57,11 +57,8 @@ class WebApplication:
         )
         self.enabled_sources = allowed_sources
         registry = create_default_registry()
+        self._registry = registry
         self.implemented_sources = tuple(registry.registered_names)
-        self.unavailable_sources = self._detect_unavailable_sources(
-            registry,
-            settings.sources,
-        )
         self.source_catalog = tuple(
             source
             for source in settings.sources
@@ -74,8 +71,14 @@ class WebApplication:
             allowed_sources=allowed_sources,
             known_sources=self.source_catalog,
             implemented_sources=self.implemented_sources,
-            unavailable_sources=self.unavailable_sources,
         )
+        # DB/UI-stored secrets take priority over .env for this process.
+        self._load_secret_settings_to_environment()
+        self.unavailable_sources = self._detect_unavailable_sources(
+            registry,
+            settings.sources,
+        )
+        self.repository.set_unavailable_sources(self.unavailable_sources)
         self.repository.import_universe(load_universe(project_root / "config" / "universe.csv"))
         cache_path = project_root / ".cache" / "investment_monitor" / "company_tickers.json"
         try:
@@ -167,9 +170,24 @@ class WebApplication:
                 filters = _filters_from_mapping(payload.get("filters") or {})
                 updated = self.repository.bulk_set_read(filters, _required_bool(payload, "is_read"))
                 return self._json({"updated": updated})
+            if method == "GET" and parsed.path == "/api/settings":
+                return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
                 payload = _decode_json(body)
-                self.repository.set_setting(str(payload["key"]), str(payload["value"]))
+                key = str(payload["key"])
+                value = str(payload.get("value") or "")
+                self.repository.set_setting(key, value)
+                if key in SECRET_SETTING_KEYS:
+                    self._sync_secret_to_environment(key, value)
+                    self._refresh_unavailable_sources()
+                    status = self.repository.secret_setting_status()[key]
+                    return self._json(
+                        {
+                            "updated": True,
+                            "configured": status["configured"],
+                            "hint": status["hint"],
+                        }
+                    )
                 return self._json({"updated": True})
             return self._json({"error": "Not found"}, 404)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
@@ -333,6 +351,37 @@ class WebApplication:
                 unavailable[source.name] = str(reason)
         return unavailable
 
+    def _load_secret_settings_to_environment(self) -> None:
+        """Apply whitelisted secrets from app_settings to os.environ.
+
+        Runs after load_environment_file(.env), so a value saved through the
+        Settings page (database) intentionally wins over the .env default.
+        """
+        for key, value in self.repository.load_secret_settings().items():
+            os.environ[key] = value
+
+    def _sync_secret_to_environment(self, key: str, value: str) -> None:
+        """Sync one whitelisted secret to the running process environment."""
+        normalized = value.strip()
+        if normalized:
+            os.environ[key] = normalized
+        else:
+            os.environ.pop(key, None)
+
+    def _refresh_unavailable_sources(self) -> None:
+        """Recompute connector availability after a secret setting changed."""
+        settings = load_settings(self.settings_path)
+        self.unavailable_sources = self._detect_unavailable_sources(
+            self._registry,
+            settings.sources,
+        )
+        self.repository.set_unavailable_sources(self.unavailable_sources)
+
+    def _settings_payload(self) -> Mapping[str, Any]:
+        return {
+            "page_size": int(self.repository.setting("page_size", "25")),
+            "secrets": self.repository.secret_setting_status(),
+        }
 
     def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         selected_text = _first(query, "date")

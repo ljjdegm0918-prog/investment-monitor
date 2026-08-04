@@ -272,9 +272,45 @@ function activityContent(data) {
 }
 
 function renderSettings() {
-  const size = state.bootstrap.settings.page_size;
-  document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section>`;
-  document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
+  api("/api/settings").then(data => {
+    const size = data.page_size;
+    const secretKeys = [
+      { key:"FINNHUB_API_KEY", label:"Finnhub API Key", placeholder:"finnhub_api_key", description:"Used by the News source. Leave blank to keep the current value; use Clear to remove it." },
+      { key:"SEC_USER_AGENT", label:"SEC User-Agent", placeholder:"InvestmentMonitor/0.1 your-email@example.com", description:"Used by SEC EDGAR requests. Leave blank to keep the current value; use Clear to remove it." },
+    ];
+    const secretFields = secretKeys.map(entry => {
+      const status = (data.secrets && data.secrets[entry.key]) || { configured:false, hint:"" };
+      return `<div class="filter-field"><label for="secret-${entry.key}">${entry.label}</label><input id="secret-${entry.key}" type="password" autocomplete="new-password" placeholder="${esc(entry.placeholder)}"><span class="timestamp" id="status-${entry.key}">${status.configured ? `Configured (${esc(status.hint)})` : "Not configured"}</span><button class="button link" type="button" data-clear-secret="${entry.key}" ${status.configured ? "" : "disabled"}>Clear</button><p class="timestamp">${entry.description}</p></div>`;
+    }).join("");
+    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>API Keys</h2><p class="timestamp">Stored locally in the workspace database (plain text for this internal MVP) and never shown in full after saving.</p>${secretFields}<button class="button primary" id="save-api-keys">Save API keys</button></section>`;
+    document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
+    document.getElementById("save-api-keys").addEventListener("click", saveApiKeys);
+    document.querySelectorAll("[data-clear-secret]").forEach(button => button.addEventListener("click", () => clearSecretKey(button.dataset.clearSecret)));
+  }).catch(error => { document.getElementById("page").innerHTML = `<div class="error-state"><div><strong>Settings request failed</strong><p>${esc(error.message)}</p></div></div>`; });
+}
+
+async function saveApiKeys() {
+  const updates = [];
+  for (const key of ["FINNHUB_API_KEY","SEC_USER_AGENT"]) {
+    const input = document.getElementById(`secret-${key}`);
+    const value = input && input.value.trim();
+    if (value) updates.push({ key, value });
+  }
+  try {
+    for (const update of updates) await api("/api/settings", { method:"POST", body: JSON.stringify(update) });
+    await reloadWorkspaceCounts();
+    await renderSettings();
+    toast(updates.length ? "API keys saved." : "No API key changed.");
+  } catch (error) { toast(error.message, true); }
+}
+
+async function clearSecretKey(key) {
+  try {
+    await api("/api/settings", { method:"POST", body: JSON.stringify({ key, value:"" }) });
+    await reloadWorkspaceCounts();
+    await renderSettings();
+    toast(`${key} cleared.`);
+  } catch (error) { toast(error.message, true); }
 }
 
 async function api(url, options = {}) {

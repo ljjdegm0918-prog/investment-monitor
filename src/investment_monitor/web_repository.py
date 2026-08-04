@@ -43,6 +43,7 @@ SOURCE_LABELS = {
 PROVIDER_LABELS = {
     "news": "Finnhub News",
 }
+SECRET_SETTING_KEYS = frozenset({"FINNHUB_API_KEY", "SEC_USER_AGENT"})
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("news", "News", "news"),
@@ -978,16 +979,65 @@ class WebRepository:
             )
 
     def set_setting(self, key: str, value: str) -> None:
-        if key != "page_size" or value not in {"10", "25", "50"}:
+        if key == "page_size":
+            if value not in {"10", "25", "50"}:
+                raise ValueError("Unsupported setting value")
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO app_settings (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """,
+                    (key, value),
+                )
+            return
+        if key not in SECRET_SETTING_KEYS:
             raise ValueError("Unsupported setting value")
         with self._connect() as connection:
+            normalized = value.strip()
+            if not normalized:
+                connection.execute(
+                    "DELETE FROM app_settings WHERE key = ?",
+                    (key,),
+                )
+                return
             connection.execute(
                 """
                 INSERT INTO app_settings (key, value) VALUES (?, ?)
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
                 """,
-                (key, value),
+                (key, normalized),
             )
+
+    def set_unavailable_sources(self, sources: Mapping[str, str]) -> None:
+        """Replace the connector-unavailable reasons surfaced by statuses."""
+        self._unavailable_sources = dict(sources)
+
+    def load_secret_settings(self) -> Mapping[str, str]:
+        """Return stored whitelisted secret values (used at startup)."""
+        if not SECRET_SETTING_KEYS:
+            return {}
+        placeholders = ",".join("?" for _ in SECRET_SETTING_KEYS)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT key, value FROM app_settings
+                WHERE key IN ({placeholders})
+                """,
+                tuple(SECRET_SETTING_KEYS),
+            ).fetchall()
+        return {str(row["key"]): str(row["value"]) for row in rows}
+
+    def secret_setting_status(self) -> Mapping[str, Mapping[str, Any]]:
+        """Return configured/hint metadata for whitelisted secret keys."""
+        stored = self.load_secret_settings()
+        return {
+            key: {
+                "configured": bool(stored.get(key)),
+                "hint": _mask_secret(stored.get(key)),
+            }
+            for key in sorted(SECRET_SETTING_KEYS)
+        }
 
     def _feed_where(self, filters: FeedFilters) -> Tuple[str, List[Any]]:
         conditions: List[str] = []
@@ -1351,3 +1401,12 @@ def _eastern_day_bounds(day: date) -> Tuple[datetime, datetime]:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _mask_secret(value: Optional[str]) -> str:
+    """Mask a secret for display without ever returning the full value."""
+    if not value:
+        return ""
+    if len(value) <= 4:
+        return "••••"
+    return "••••" + value[-4:]
