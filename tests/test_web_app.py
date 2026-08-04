@@ -1,8 +1,10 @@
 import json
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from investment_monitor.application import ConfiguredCollectionResult
 from investment_monitor.web import DailyCollectionScheduler, WebApplication
@@ -144,6 +146,56 @@ class WebApplicationTests(unittest.TestCase):
         application = WebApplication(self.project_root)
 
         self.assertEqual(application.enabled_sources, ("sec",))
+
+    def test_news_enabled_without_api_key_stays_not_connected(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        with patch.dict(os.environ, {"FINNHUB_API_KEY": ""}, clear=False):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            statuses = application.repository.source_statuses()
+            news = next(
+                record for record in statuses if record["type"] == "News"
+            )
+            feed = self.payload(
+                application.handle("GET", "/api/feed?type=news")
+            )
+
+        self.assertEqual(news["status"], "not_connected")
+        self.assertIn("FINNHUB_API_KEY", news["last_failure"])
+        self.assertEqual(feed["items"], [])
+        self.assertEqual(
+            feed["disconnected_message"],
+            "News source not connected",
+        )
+
+    def test_news_enabled_with_api_key_is_implemented_and_waiting(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"FINNHUB_API_KEY": "test-key"},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            statuses = application.repository.source_statuses()
+            news = next(
+                record for record in statuses if record["type"] == "News"
+            )
+
+        self.assertEqual(news["status"], "unavailable")
+        self.assertIsNone(news["last_failure"])
 
     def test_http_workflow_covers_batch_memberships_feed_read_and_search(self) -> None:
         self.items.save([InformationItem(

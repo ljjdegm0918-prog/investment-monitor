@@ -40,6 +40,9 @@ SOURCE_LABELS = {
     "community": "Community",
     "research": "Research",
 }
+PROVIDER_LABELS = {
+    "news": "Finnhub News",
+}
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("news", "News", "news"),
@@ -118,6 +121,7 @@ class WebRepository:
         allowed_sources: Sequence[str] = PRODUCTION_SOURCES,
         known_sources: Optional[Sequence[SourceConfig]] = None,
         implemented_sources: Optional[Sequence[str]] = None,
+        unavailable_sources: Optional[Mapping[str, str]] = None,
     ) -> None:
         self._database_path = database_path
         self._allowed_sources = tuple(allowed_sources)
@@ -125,6 +129,7 @@ class WebRepository:
         self._implemented_sources = tuple(
             implemented_sources if implemented_sources is not None else self._allowed_sources
         )
+        self._unavailable_sources = dict(unavailable_sources or {})
         self._migration_path = migration_path or (
             Path(__file__).parent / "migrations" / "001_web_mvp.sql"
         )
@@ -345,14 +350,26 @@ class WebRepository:
                     (ticker, market),
                 ).fetchone()
                 if mapping is None and existing is None:
-                    failed.append(
-                        {
-                            "ticker": ticker,
-                            "error": "Ticker could not be mapped to an SEC CIK.",
-                        }
-                    )
-                    continue
-                identity = mapping or dict(existing)
+                    if market == MARKET_US:
+                        failed.append(
+                            {
+                                "ticker": ticker,
+                                "error": (
+                                    "Ticker could not be mapped to an SEC CIK."
+                                ),
+                            }
+                        )
+                        continue
+                    # Non-US markets are added honestly without pretending the
+                    # SEC resolver can map them; mapping_status stays unmapped.
+                    identity = {
+                        "name": ticker,
+                        "exchange": "Unavailable",
+                        "cik": "",
+                        "mapping_status": "unmapped",
+                    }
+                else:
+                    identity = mapping or dict(existing)
                 company_id = self._upsert_company(
                     connection,
                     ticker=ticker,
@@ -577,6 +594,8 @@ class WebRepository:
                     label,
                     source_type,
                     catalog_by_type.get(source_type),
+                    current_time=current_time,
+                    stale_after=stale_after,
                 )
             )
         return statuses
@@ -652,6 +671,9 @@ class WebRepository:
         label: str,
         source_type: str,
         source: Optional[SourceConfig],
+        *,
+        current_time: datetime,
+        stale_after: timedelta,
     ) -> Mapping[str, Any]:
         providers, latest = self._content_type_data(source_type)
         connected = bool(providers)
@@ -659,20 +681,81 @@ class WebRepository:
         implemented = bool(
             source and source.name in self._implemented_sources
         )
+        run_row, failure_row = self._source_run_status(
+            source.name if source else None
+        )
+        unavailable_reason = (
+            self._unavailable_sources.get(source.name) if source else None
+        )
+        is_stale = bool(
+            connected
+            and latest
+            and current_time.astimezone(timezone.utc)
+            - _parse_datetime(str(latest)).astimezone(timezone.utc)
+            > stale_after
+        )
         if connected:
-            status = "connected"
+            status = "stale" if is_stale else "connected"
+        elif unavailable_reason:
+            status = "not_connected"
         elif enabled and implemented:
-            status = "unavailable"
+            status = (
+                "temporarily_unavailable"
+                if run_row and run_row["status"] == "failure"
+                else "unavailable"
+            )
         else:
             status = "not_connected"
+        if source and PROVIDER_LABELS.get(source.name):
+            provider = (
+                PROVIDER_LABELS[source.name] if connected else None
+            )
+        elif source and enabled:
+            provider = source.label if connected else None
+        else:
+            provider = str(providers) if connected else None
         return {
             "type": label,
-            "provider": str(providers) if connected else None,
+            "provider": provider,
             "status": status,
             "latest_success": latest if connected else None,
-            "latest_attempt": None,
-            "last_failure": None,
+            "latest_attempt": (
+                (run_row["finished_at"] or run_row["started_at"])
+                if run_row
+                else None
+            ),
+            "last_failure": (
+                unavailable_reason
+                or (failure_row["error_summary"] if failure_row else None)
+            ),
+            "is_stale": is_stale,
         }
+
+    def _source_run_status(
+        self,
+        source_name: Optional[str],
+    ) -> Tuple[Optional[sqlite3.Row], Optional[sqlite3.Row]]:
+        if not source_name:
+            return None, None
+        with self._connect() as connection:
+            run_row = connection.execute(
+                """
+                SELECT * FROM ingestion_runs
+                WHERE source = ?
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                (source_name,),
+            ).fetchone()
+            failure_row = connection.execute(
+                """
+                SELECT error_summary
+                FROM ingestion_runs
+                WHERE source = ? AND status IN ('failure', 'partial')
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                (source_name,),
+            ).fetchone()
+        return run_row, failure_row
 
     def _content_type_data(
         self,

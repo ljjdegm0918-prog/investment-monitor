@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import logging
 from typing import Iterable, List, Optional, Tuple
 
@@ -78,9 +78,14 @@ class CollectionPipeline:
         for connector in self._connectors:
             for ticker in request.tickers:
                 started_at = datetime.now(timezone.utc)
+                ticker_start_date = self._clamped_start_date(
+                    connector,
+                    request.start_date,
+                    request.end_date,
+                )
                 ticker_request = CollectionRequest(
                     tickers=(ticker,),
-                    start_date=request.start_date,
+                    start_date=ticker_start_date,
                     end_date=request.end_date,
                     markets={ticker: request.market_for(ticker)},
                 )
@@ -154,3 +159,16 @@ class CollectionPipeline:
         self._last_save_result = save_result
         self._last_events = tuple(events)
         return items
+
+    @staticmethod
+    def _clamped_start_date(
+        connector: SourceConnector,
+        start_date: date,
+        end_date: date,
+    ) -> date:
+        """Limit a connector's lookback window when it declares a maximum."""
+        max_lookback = getattr(connector, "max_lookback_days", None)
+        if max_lookback is None:
+            return start_date
+        minimum_start = end_date - timedelta(days=int(max_lookback))
+        return start_date if start_date >= minimum_start else minimum_start

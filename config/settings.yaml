@@ -2,12 +2,12 @@ database_path: ../data/investment_monitor.sqlite3
 sources:
   - name: sec
     label: SEC EDGAR
-    source_type: filings
+    source_type: filings   # config type; stored items use 'regulatory_filing'
     enabled: true
   - name: news
     label: News
     source_type: news
-    enabled: false
+    enabled: true          # requires FINNHUB_API_KEY; degrades to Not connected without it
   - name: community
     label: Community
     source_type: community

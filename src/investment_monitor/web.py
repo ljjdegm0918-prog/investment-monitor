@@ -56,7 +56,12 @@ class WebApplication:
             source for source in configured_sources if not source.startswith("mock")
         )
         self.enabled_sources = allowed_sources
-        self.implemented_sources = tuple(create_default_registry().registered_names)
+        registry = create_default_registry()
+        self.implemented_sources = tuple(registry.registered_names)
+        self.unavailable_sources = self._detect_unavailable_sources(
+            registry,
+            settings.sources,
+        )
         self.source_catalog = tuple(
             source
             for source in settings.sources
@@ -69,6 +74,7 @@ class WebApplication:
             allowed_sources=allowed_sources,
             known_sources=self.source_catalog,
             implemented_sources=self.implemented_sources,
+            unavailable_sources=self.unavailable_sources,
         )
         self.repository.import_universe(load_universe(project_root / "config" / "universe.csv"))
         cache_path = project_root / ".cache" / "investment_monitor" / "company_tickers.json"
@@ -305,6 +311,27 @@ class WebApplication:
         )
         if events:
             self.repository.record_collection_events(events)
+
+    @staticmethod
+    def _detect_unavailable_sources(
+        registry: Any,
+        catalog: Sequence[Any],
+    ) -> Mapping[str, str]:
+        """Find enabled catalog sources whose connector lacks configuration."""
+        unavailable: Dict[str, str] = {}
+        for source in catalog:
+            if not source.enabled:
+                continue
+            factory = registry.factory_for(source.name)
+            if factory is None:
+                continue
+            configuration_error = getattr(factory, "configuration_error", None)
+            if not callable(configuration_error):
+                continue
+            reason = configuration_error()
+            if reason:
+                unavailable[source.name] = str(reason)
+        return unavailable
 
 
     def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:

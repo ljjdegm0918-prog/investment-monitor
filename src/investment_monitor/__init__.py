@@ -17,9 +17,16 @@ from .config import (
     load_settings,
     load_universe,
 )
-from .connectors.base import SourceConnector
+from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.news import (
+    FinnhubClient,
+    FinnhubNewsConnector,
+    FinnhubNewsDataError,
+    FinnhubNewsError,
+    FinnhubNewsRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -54,6 +61,12 @@ __all__ = [
     "CollectionSettings",
     "ConfigurationError",
     "ConfiguredCollectionResult",
+    "ConnectorUnavailableError",
+    "FinnhubClient",
+    "FinnhubNewsConnector",
+    "FinnhubNewsDataError",
+    "FinnhubNewsError",
+    "FinnhubNewsRequestError",
     "InformationRepository",
     "InformationItem",
     "MARKET_CN",

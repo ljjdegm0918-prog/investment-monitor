@@ -77,14 +77,22 @@ def run_ticker_collection(
     settings = load_settings(settings_path)
     active_registry = registry or create_default_registry()
     missing_sources: List[str] = []
+    unavailable_sources: List[str] = []
     connectors = active_registry.load_enabled(
         settings.enabled_sources,
         missing=missing_sources,
+        unavailable=unavailable_sources,
     )
     for missing_source in missing_sources:
         LOGGER.warning(
             "Source declared in settings but not implemented; skipped: %s",
             missing_source,
+        )
+    for unavailable_source in unavailable_sources:
+        LOGGER.warning(
+            "Source declared in settings but unavailable (missing "
+            "configuration); skipped: %s",
+            unavailable_source,
         )
     repository = SQLiteInformationRepository(settings.database_path)
     pipeline = CollectionPipeline(connectors, repository=repository)
@@ -123,14 +131,22 @@ def run_workflow(
     settings = load_settings(settings_path)
     active_registry = registry or create_default_registry()
     missing_sources: List[str] = []
+    unavailable_sources: List[str] = []
     connectors = active_registry.load_enabled(
         settings.enabled_sources,
         missing=missing_sources,
+        unavailable=unavailable_sources,
     )
     for missing_source in missing_sources:
         LOGGER.warning(
             "Source declared in settings but not implemented; skipped: %s",
             missing_source,
+        )
+    for unavailable_source in unavailable_sources:
+        LOGGER.warning(
+            "Source declared in settings but unavailable (missing "
+            "configuration); skipped: %s",
+            unavailable_source,
         )
     repository = SQLiteInformationRepository(settings.database_path)
     pipeline = CollectionPipeline(connectors, repository=repository)

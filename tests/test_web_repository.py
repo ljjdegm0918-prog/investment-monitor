@@ -290,7 +290,12 @@ class WebRepositoryTests(unittest.TestCase):
         production = WebRepository(self.database_path, allowed_sources=("sec", "reddit"))
 
         result = production.query_feed(FeedFilters(information_type="community"))
-        statuses = {record["type"]: record for record in production.source_statuses()}
+        statuses = {
+            record["type"]: record
+            for record in production.source_statuses(
+                now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+            )
+        }
 
         self.assertEqual(result.total, 1)
         self.assertEqual(result.items[0]["source"], "reddit")

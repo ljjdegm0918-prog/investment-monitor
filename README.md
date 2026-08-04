@@ -20,7 +20,7 @@ lists does not duplicate the filing.
 | Information type | Provider | Production status |
 | --- | --- | --- |
 | Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
-| News | None | Not connected |
+| News | Finnhub company news | Connected after a successful sync; needs `FINNHUB_API_KEY` |
 | Community | None | Not connected |
 | Research | None | Not connected |
 
@@ -88,7 +88,7 @@ sources:
   - name: news
     label: News
     source_type: news
-    enabled: false
+    enabled: true
   - name: community
     label: Community
     source_type: community
@@ -98,6 +98,12 @@ sources:
     source_type: research
     enabled: false
 ```
+
+The News source is Finnhub company news. Set `FINNHUB_API_KEY` in `.env` (see
+`.env.example`) to enable it; without a key the source stays Not connected
+and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
+symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
+A-share or HK resolution.
 
 ## 2. Optional manual SEC collection
 

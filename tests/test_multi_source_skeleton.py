@@ -237,6 +237,33 @@ class MultiMarketCompanyTests(unittest.TestCase):
             }
             self.assertEqual(companies, {("AAPL", "us"), ("AAPL", "hk")})
 
+    def test_non_us_company_can_be_added_without_sec_mapping(self) -> None:
+        result = self.repository.add_companies_batch(
+            "0700.HK",
+            ("holdings",),
+            self.resolver,
+            market="hk",
+        )
+
+        self.assertEqual(len(result["added"]), 1)
+        self.assertEqual(result["failed"], [])
+        added = result["added"][0]
+        self.assertEqual(added["ticker"], "0700.HK")
+        self.assertEqual(added["market"], "hk")
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(self.repository.companies()[0]["cik"], "")
+
+    def test_us_ticker_still_requires_sec_mapping(self) -> None:
+        result = self.repository.add_companies_batch(
+            "BADTICKER",
+            ("holdings",),
+            self.resolver,
+            market="us",
+        )
+
+        self.assertEqual(result["added"], [])
+        self.assertEqual(result["failed"][0]["ticker"], "BADTICKER")
+
 
 class SourceStatusAndFilterTests(unittest.TestCase):
     def setUp(self) -> None:

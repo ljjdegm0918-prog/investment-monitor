@@ -1,8 +1,15 @@
 """Connector implementations and their shared contract."""
 
-from .base import SourceConnector
+from .base import ConnectorUnavailableError, SourceConnector
 from .mock import MockConnector
 from .mock_community import MockCommunityConnector
+from ..sources.news import (
+    FinnhubClient,
+    FinnhubNewsConnector,
+    FinnhubNewsDataError,
+    FinnhubNewsError,
+    FinnhubNewsRequestError,
+)
 from ..sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -14,6 +21,12 @@ from ..sources.sec import (
 )
 
 __all__ = [
+    "ConnectorUnavailableError",
+    "FinnhubClient",
+    "FinnhubNewsConnector",
+    "FinnhubNewsDataError",
+    "FinnhubNewsError",
+    "FinnhubNewsRequestError",
     "MockConnector",
     "MockCommunityConnector",
     "SECClient",
