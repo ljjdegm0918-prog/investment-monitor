@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 import json
 from pathlib import Path
 import re
 import sqlite3
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Protocol, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from .config import UniverseEntry
@@ -743,7 +744,7 @@ class WebRepository:
             "cik": row["cik"],
             "published_at": row["published_at"],
             "effective_at": effective_dt.isoformat(),
-            "effective_et": effective_dt.astimezone(EASTERN).strftime("%b %-d, %Y %-I:%M %p ET"),
+            "effective_et": self._format_eastern_timestamp(effective_dt),
             "title": row["title"],
             "document_type": row["document_type"],
             "url": row["url"],
@@ -752,6 +753,17 @@ class WebRepository:
             "list_slugs": list_slugs,
             "raw_metadata": raw_metadata,
         }
+
+    @staticmethod
+    def _format_eastern_timestamp(value: datetime) -> str:
+        """Format an Eastern timestamp without Unix-only strftime flags."""
+        local = value.astimezone(EASTERN)
+        hour12 = (local.hour % 12) or 12
+        meridiem = "AM" if local.hour < 12 else "PM"
+        return (
+            f"{local.strftime('%b')} {local.day}, {local.year} "
+            f"{hour12}:{local.minute:02d} {meridiem} ET"
+        )
 
     def _count_unread(self, connection: sqlite3.Connection, list_slug: Optional[str]) -> int:
         source_placeholders = ",".join("?" for _ in self._allowed_sources)
@@ -819,11 +831,19 @@ class WebRepository:
         )
         return cursor.rowcount > 0
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(str(self._database_path))
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 def _normalize_tickers(raw: str) -> Tuple[str, ...]:
