@@ -47,10 +47,10 @@ function renderShell() {
   status.className = `status-line ${sec.status === "connected" ? "connected" : sec.status === "stale" ? "stale" : "failed"}`;
   const listBySlug = Object.fromEntries(b.lists.map(list => [list.slug, list]));
   const nav = [
-    ["OVERVIEW", [["/today","◷","Today"],["/information","▤","All Information"]]],
-    ["MY LISTS", [["/lists/holdings","▣","Holdings",listBySlug.holdings.unread_count],["/lists/planned","◫","Planned Purchases",listBySlug.planned.unread_count],["/lists/watchlist","◉","Watchlist",listBySlug.watchlist.unread_count]]],
-    ["TOOLS", [["/search","⌕","Search"],["/activity","↶","Activity & Logs"]]],
-    ["SYSTEM", [["/sources","◫","Data Sources"],["/settings","⚙","Settings"]]],
+    ["OVERVIEW", [["/today","●","Today"],["/information","◧","All Information"]]],
+    ["MY LISTS", [["/lists/holdings","◧","Holdings",listBySlug.holdings.unread_count],["/lists/planned","●","Planned Purchases",listBySlug.planned.unread_count],["/lists/watchlist","●","Watchlist",listBySlug.watchlist.unread_count]]],
+    ["TOOLS", [["/search","⌕","Search"],["/activity","↗","Activity & Logs"]]],
+    ["SYSTEM", [["/sources","●","Data Sources"],["/settings","⚙","Settings"]]],
   ];
   document.getElementById("sidebar-nav").innerHTML = nav.map(([heading, links]) => `
     <section class="nav-section"><h2 class="nav-heading">${heading}</h2>
@@ -94,7 +94,7 @@ async function renderInformationPage() {
   document.getElementById("page").innerHTML = `
     <header class="page-header"><div><h1>${title}</h1><p>${isToday ? "Updates across your lists, grouped by filing acceptance time in Eastern Time." : isSearch ? "Metadata search across information already collected and stored." : isList ? `${companyCount} ${companyCount === 1 ? "company" : "companies"} · ${currentList.unread_count} unread items` : "Historical information across every company in at least one list."}</p></div>${isList ? `<button class="button primary" id="toggle-add">+ Add companies</button>` : ""}</header>
     ${isToday ? summaryCards() : ""}
-    ${isSearch ? `<div class="notice"><strong>Metadata search only.</strong> Filing bodies have not been downloaded or full-text indexed.</div>` : ""}
+    ${isSearch ? `<div class="notice"><strong>Metadata search only.</strong> Item bodies have not been downloaded or full-text indexed.</div>` : ""}
     ${isList ? addCompanyPanel() : ""}
     <section class="panel" aria-label="Information feed">
       ${filterBar(companies, { advanced: !isToday })}
@@ -109,15 +109,15 @@ async function renderInformationPage() {
 function summaryCards() {
   const c = state.bootstrap.counts;
   return `<div class="summary-grid">
-    ${summaryCard("▦", c.companies, "followed companies")}
-    ${summaryCard("✉", c.unread, "unread items")}
-    ${summaryCard("▤", c.filings, "filings for selected date")}
+    ${summaryCard("◧", c.companies, "followed companies")}
+    ${summaryCard("✓", c.unread, "unread items")}
+    ${summaryCard("◧", c.filings, "filings for selected date")}
   </div>`;
 }
 function summaryCard(icon, number, label) { return `<div class="summary-card"><span class="summary-icon" aria-hidden="true">${icon}</span><div><div class="summary-number">${number}</div><div class="summary-label">${label}</div></div></div>`; }
 
 function filterBar(companies, options) {
-  const types = [["all","All"],["filings","Filings"],["news","News"],["community","Community"]];
+  const types = [["all","All"],["filings","Filings"],["news","News"],["community","Community"],["research","Research"]];
   const searchInput = state.view === "search" ? `<div class="filter-field" style="min-width:260px"><label for="metadata-search">Metadata search</label><input id="metadata-search" value="${esc(state.filters.q)}" placeholder="Ticker, company, title, form, accession"></div>` : "";
   return `<div class="filter-bar">
     ${searchInput}
@@ -129,7 +129,7 @@ function filterBar(companies, options) {
 }
 
 function advancedFilters() {
-  return `<div class="filter-field"><label for="form-filter">SEC form</label><input id="form-filter" value="${esc(state.filters.form)}" placeholder="10-K, 8-K…"></div>
+  return `<div class="filter-field"><label for="form-filter">Form / document type</label><input id="form-filter" value="${esc(state.filters.form)}" placeholder="10-K, 8-K…"></div>
     <div class="filter-field"><label for="start-date">Start date</label><input id="start-date" type="date" value="${state.filters.start_date}"></div>
     <div class="filter-field"><label for="end-date">End date</label><input id="end-date" type="date" value="${state.filters.end_date}"></div>
     <div class="filter-field"><label for="read-filter">Read state</label><select id="read-filter"><option value="all">All</option><option value="unread" ${state.filters.read === "unread" ? "selected" : ""}>Unread</option><option value="read" ${state.filters.read === "read" ? "selected" : ""}>Read</option></select></div>
@@ -137,11 +137,11 @@ function advancedFilters() {
 }
 
 function addCompanyPanel() {
-  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
+  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="unknown">Unknown</option></select></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
 }
 
 function companyManagement(companies) {
-  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete historical information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Company</th><th>Exchange</th><th>CIK</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => `<tr><td><strong>${company.ticker}</strong></td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${esc(company.cik || "Unmapped")}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}">Remove from all lists</button></td></tr>`).join("") : `<tr><td colspan="6">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
+  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete historical information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Market</th><th>Company</th><th>Exchange</th><th>CIK</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => `<tr><td><strong>${company.ticker}</strong></td><td>${marketLabel(company.market)}</td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${esc(company.cik || "Unmapped")}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}" data-market="${company.market}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}" data-market="${company.market}">Remove from all lists</button></td></tr>`).join("") : `<tr><td colspan="7">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
 }
 
 function bindFeedControls() {
@@ -201,10 +201,13 @@ function renderFeed(response) {
 
 function feedItem(item) {
   const readControl = item.is_read ? `<span class="read-check">✓</span><span class="read-label">Read</span>` : `<span class="unread-dot"></span><span class="sr-only">Unread</span>`;
-  return `<article class="feed-item ${item.is_read ? "is-read" : "is-unread"}"><button class="read-control" data-id="${item.id}" data-read="${item.is_read}" aria-label="Mark ${item.ticker} ${item.document_type} as ${item.is_read ? "unread" : "read"}">${readControl}</button><div class="company-cell"><strong>${item.ticker}</strong><span>${esc(item.company_name || item.issuer)}</span></div><span class="form-badge">${esc(item.document_type)}${item.is_amendment ? " · Amended" : ""}</span><time class="timestamp" datetime="${item.effective_at}">${esc(item.effective_et)}</time><div class="item-title"><strong>${esc(item.title)}</strong><span>${esc(item.source_label)} · Live · Accession ${esc(item.external_id)}</span></div><div class="list-badges">${item.list_slugs.map(slug => badge(slug)).join("")}</div><a class="open-link" data-id="${item.id}" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open filing ↗</a></article>`;
+  const summaryHtml = item.summary ? `<p class="item-summary">${esc(item.summary)}</p>` : "";
+  const identityLabel = item.source === "sec" ? `Accession ${esc(item.external_id)}` : `ID ${esc(item.external_id)}`;
+  return `<article class="feed-item ${item.is_read ? "is-read" : "is-unread"}"><button class="read-control" data-id="${item.id}" data-read="${item.is_read}" aria-label="Mark ${item.ticker} ${item.document_type} as ${item.is_read ? "unread" : "read"}">${readControl}</button><div class="company-cell"><strong>${item.ticker}</strong><span>${esc(item.company_name || item.issuer)}</span></div><span class="form-badge">${esc(item.document_type || "Information")}${item.is_amendment ? " · Amended" : ""}</span><time class="timestamp" datetime="${item.effective_at}">${esc(item.effective_et)}</time><div class="item-title"><strong>${esc(item.title)}</strong><span>${esc(item.source_label)} · ${marketLabel(item.market)} · Live · ${identityLabel}</span></div>${summaryHtml}<div class="list-badges">${item.list_slugs.map(slug => badge(slug)).join("")}</div><a class="open-link" data-id="${item.id}" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open original →</a></article>`;
 }
 
 function badge(slug) { return `<span class="list-badge ${slug}">${listLabels[slug] || slug}</span>`; }
+function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
 function pagination(p) { return `<div class="pagination"><span>Page ${p.page} of ${p.pages}</span><div><button class="button" data-page="${p.page - 1}" ${p.page <= 1 ? "disabled" : ""}>Previous</button> <button class="button" data-page="${p.page + 1}" ${p.page >= p.pages ? "disabled" : ""}>Next</button></div></div>`; }
 
 async function markRead(id, isRead) { try { await setRead([id], isRead); await reloadWorkspaceCounts(); await loadFeed(); toast(`Marked as ${isRead ? "read" : "unread"}.`); } catch (error) { toast(error.message, true); } }
@@ -221,18 +224,19 @@ function bindListControls() {
   document.getElementById("add-form").addEventListener("submit", async event => {
     event.preventDefault(); const button = event.submitter; button.disabled = true;
     const lists = [...document.querySelectorAll('[name="destination"]:checked')].map(input => input.value);
-    try { const result = await api("/api/companies/batch", { method:"POST", body: JSON.stringify({ tickers:document.getElementById("ticker-input").value, lists }) }); document.getElementById("batch-result").innerHTML = batchResult(result); await reloadWorkspaceCounts(); toast("Batch add completed."); }
+    const market = document.getElementById("market-select").value;
+    try { const result = await api("/api/companies/batch", { method:"POST", body: JSON.stringify({ tickers:document.getElementById("ticker-input").value, lists, market }) }); document.getElementById("batch-result").innerHTML = batchResult(result); await reloadWorkspaceCounts(); toast("Batch add completed."); }
     catch (error) { document.getElementById("batch-result").innerHTML = `<div class="batch-result">${esc(error.message)}</div>`; }
     finally { button.disabled = false; }
   });
-  document.querySelectorAll(".remove-current").forEach(button => button.addEventListener("click", async () => { try { await api("/api/memberships/remove", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,list:state.view}) }); toast(`${button.dataset.ticker} removed from ${listLabels[state.view]}.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
-  document.querySelectorAll(".remove-all").forEach(button => button.addEventListener("click", async () => { if (!confirm(`Remove ${button.dataset.ticker} from all lists? Historical information will be preserved.`)) return; try { const result = await api("/api/companies/remove-all", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker}) }); toast(`Removed ${result.removed_memberships} memberships. Historical information was preserved.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
+  document.querySelectorAll(".remove-current").forEach(button => button.addEventListener("click", async () => { try { await api("/api/memberships/remove", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,list:state.view,market:button.dataset.market || "us"}) }); toast(`${button.dataset.ticker} removed from ${listLabels[state.view]}.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
+  document.querySelectorAll(".remove-all").forEach(button => button.addEventListener("click", async () => { if (!confirm(`Remove ${button.dataset.ticker} from all lists? Historical information will be preserved.`)) return; try { const result = await api("/api/companies/remove-all", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,market:button.dataset.market || "us"}) }); toast(`Removed ${result.removed_memberships} memberships. Historical information was preserved.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
 }
 
 function batchResult(result) {
   const sections = [];
-  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} (${esc(item.name)}, CIK ${esc(item.cik)})`).join(", ")}`);
-  if (result.already_present.length) sections.push(`<strong>Already present:</strong> ${result.already_present.map(item => item.ticker).join(", ")}`);
+  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} ${marketLabel(item.market)} (${esc(item.name)}, CIK ${esc(item.cik)})`).join(", ")}`);
+  if (result.already_present.length) sections.push(`<strong>Already present:</strong> ${result.already_present.map(item => `${item.ticker} ${marketLabel(item.market)}`).join(", ")}`);
   if (result.failed.length) sections.push(`<strong>Failed:</strong> ${result.failed.map(item => `${item.ticker} — ${esc(item.error)}`).join("; ")}`);
   if (result.collection) {
     const sync = result.collection;
@@ -264,7 +268,7 @@ function activityContent(data) {
 
 function renderSettings() {
   const size = state.bootstrap.settings.page_size;
-  document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed filing timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section>`;
+  document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section>`;
   document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
 }
 
@@ -278,5 +282,5 @@ function toast(message, error=false) { const region=document.getElementById("toa
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
 function formatDateTime(value) { try { return new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:"America/New_York"}).format(new Date(value)) + " ET"; } catch { return value || "Unavailable"; } }
-function sourceStatusLabel(status) { return ({connected:"● Connected and up to date",stale:"△ Connected, data is stale",not_connected:"○ Not connected",temporarily_unavailable:"! Temporarily unavailable",failed:"! Failed",loading:"… Checking",unavailable:"! Unavailable"})[status] || `! ${status}`; }
+function sourceStatusLabel(status) { return ({connected:"● Connected and up to date",stale:"▲ Connected, data is stale",not_connected:"○ Not connected",temporarily_unavailable:"! Temporarily unavailable",failed:"! Failed",loading:"… Checking",unavailable:"! Unavailable"})[status] || `! ${status}`; }
 function renderFatal(error) { document.getElementById("page").innerHTML = `<div class="error-state"><div><strong>Workspace request failed</strong><p>${esc(error.message)}</p><button class="button" id="retry-workspace">Retry</button></div></div>`; document.getElementById("retry-workspace").addEventListener("click", () => location.reload()); }

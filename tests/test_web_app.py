@@ -86,6 +86,8 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["sources"][0]["status"], "unavailable")
         self.assertEqual(payload["sources"][1]["status"], "not_connected")
         self.assertEqual(payload["sources"][2]["status"], "not_connected")
+        self.assertEqual(payload["sources"][3]["status"], "not_connected")
+        self.assertEqual(payload["sources"][3]["type"], "Research")
 
     def test_initial_csv_does_not_restore_removed_memberships_on_restart(self) -> None:
         removed = self.application.handle(
@@ -108,6 +110,14 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(payload["items"], [])
         self.assertEqual(payload["disconnected_message"], "Community source not connected")
+
+    def test_research_filter_has_explicit_empty_state(self) -> None:
+        response = self.application.handle("GET", "/api/feed?type=research")
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["items"], [])
+        self.assertEqual(payload["disconnected_message"], "Research source not connected")
 
     def test_invalid_filter_returns_clear_client_error(self) -> None:
         response = self.application.handle("GET", "/api/feed?start_date=2026-08-03&end_date=2026-08-02")

@@ -22,6 +22,7 @@ lists does not duplicate the filing.
 | Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
 | News | None | Not connected |
 | Community | None | Not connected |
+| Research | None | Not connected |
 
 The repository still contains mock connectors for automated extensibility
 tests. They are not enabled in `config/settings.yaml`, and generated mock data
@@ -62,23 +63,40 @@ refresh temporarily fails, the last valid local copy is used.
 Edit `config/universe.csv`:
 
 ```csv
-ticker,list_type
-AAPL,holdings
+ticker,list_type,market
+AAPL,holdings,us
 ```
 
-The CSV is an initial import only. It accepts 1–10 unique tickers, and
-`list_type` must be `holdings`, `planned`, or `watchlist`. After the first web
+The CSV is an initial import only. It accepts 1-10 unique (ticker, market)
+rows, and `list_type` must be `holdings`, `planned`, or `watchlist`. The
+optional `market` column accepts `us`, `cn`, `hk`, or `unknown` and defaults
+to `us`. After the first web
 startup, active memberships in SQLite are the collection source of truth. A
 company such as NVDA added in the web interface does not need to be added to
 the CSV.
 
-`config/settings.yaml` enables production sources and selects the local SQLite
-file:
+`config/settings.yaml` declares the logical sources (sec, news, community,
+research), their enabled state, and selects the local SQLite file:
 
 ```yaml
-enabled_sources:
-  - sec
 database_path: ../data/investment_monitor.sqlite3
+sources:
+  - name: sec
+    label: SEC EDGAR
+    source_type: filings
+    enabled: true
+  - name: news
+    label: News
+    source_type: news
+    enabled: false
+  - name: community
+    label: Community
+    source_type: community
+    enabled: false
+  - name: research
+    label: Research
+    source_type: research
+    enabled: false
 ```
 
 ## 2. Optional manual SEC collection
@@ -151,17 +169,24 @@ These defaults can be adjusted in `.env`.
 - **Activity & Logs** shows only collection operations recorded after this web
   migration was introduced. It does not invent metrics for earlier CLI runs.
 - **Data Sources** reports the latest real SEC attempt and success, marks SEC
-  data stale after 36 hours, and marks News and Community as not connected.
+  data stale after 36 hours, and marks News, Community, and Research as
+  not connected until a real connector is enabled.
 - Official filing links open in a new tab with `noopener` and `noreferrer`.
 
 ## Data model and safe migration
 
-The existing standardized filing tables remain unchanged:
+The standardized item tables now carry `market`, nullable `summary`, and
+`effective_at` in addition to the original columns:
 
 ```text
 information_items -- unique (source, external_id)
 information_item_tickers
 ```
+
+`companies` has a `market` column and a unique `(ticker, market)` identity, so
+the same code in different markets is never conflated. The idempotent startup
+migration upgrades existing single-market databases without deleting stored
+SEC records.
 
 The idempotent web migration adds:
 

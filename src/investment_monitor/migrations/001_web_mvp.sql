@@ -8,13 +8,15 @@ CREATE TABLE IF NOT EXISTS system_lists (
 
 CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY,
-    ticker TEXT NOT NULL UNIQUE,
+    ticker TEXT NOT NULL,
+    market TEXT NOT NULL DEFAULT 'us',
     name TEXT NOT NULL,
     exchange TEXT,
     cik TEXT,
     mapping_status TEXT NOT NULL DEFAULT 'mapped',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    UNIQUE (ticker, market)
 );
 
 CREATE TABLE IF NOT EXISTS company_list_memberships (

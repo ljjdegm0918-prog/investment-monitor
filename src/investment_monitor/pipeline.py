@@ -82,6 +82,7 @@ class CollectionPipeline:
                     tickers=(ticker,),
                     start_date=request.start_date,
                     end_date=request.end_date,
+                    markets={ticker: request.market_for(ticker)},
                 )
                 try:
                     collected = connector.collect(ticker_request)

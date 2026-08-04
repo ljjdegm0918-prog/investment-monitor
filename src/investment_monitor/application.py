@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import logging
 from pathlib import Path
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, List, Mapping, Optional, Tuple
 
 from .config import load_environment_file, load_settings, load_universe
 from .models import CollectionRequest, InformationItem
@@ -15,6 +16,8 @@ from .report import ReportResult, generate_html_report
 from .repository import SaveResult
 from .sqlite_repository import SQLiteInformationRepository
 from .web_repository import WebRepository
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,7 @@ def run_configured_collection(
         start_date=start_date,
         end_date=end_date,
         registry=registry,
+        markets={entry.ticker: entry.market for entry in universe},
     )
 
 
@@ -61,6 +65,7 @@ def run_ticker_collection(
     start_date: date,
     end_date: date,
     registry: Optional[SourceRegistry] = None,
+    markets: Optional[Mapping[str, str]] = None,
 ) -> ConfiguredCollectionResult:
     """Collect an explicit ticker set, independent of the initial universe CSV."""
     normalized_tickers = tuple(
@@ -71,7 +76,16 @@ def run_ticker_collection(
     load_environment_file(settings_path.parent.parent / ".env")
     settings = load_settings(settings_path)
     active_registry = registry or create_default_registry()
-    connectors = active_registry.load_enabled(settings.enabled_sources)
+    missing_sources: List[str] = []
+    connectors = active_registry.load_enabled(
+        settings.enabled_sources,
+        missing=missing_sources,
+    )
+    for missing_source in missing_sources:
+        LOGGER.warning(
+            "Source declared in settings but not implemented; skipped: %s",
+            missing_source,
+        )
     repository = SQLiteInformationRepository(settings.database_path)
     pipeline = CollectionPipeline(connectors, repository=repository)
     items = pipeline.collect(
@@ -79,6 +93,7 @@ def run_ticker_collection(
             tickers=normalized_tickers,
             start_date=start_date,
             end_date=end_date,
+            markets=dict(markets or {}),
         )
     )
     WebRepository(settings.database_path, allowed_sources=settings.enabled_sources).record_collection_events(
@@ -107,7 +122,16 @@ def run_workflow(
     load_environment_file(settings_path.parent.parent / ".env")
     settings = load_settings(settings_path)
     active_registry = registry or create_default_registry()
-    connectors = active_registry.load_enabled(settings.enabled_sources)
+    missing_sources: List[str] = []
+    connectors = active_registry.load_enabled(
+        settings.enabled_sources,
+        missing=missing_sources,
+    )
+    for missing_source in missing_sources:
+        LOGGER.warning(
+            "Source declared in settings but not implemented; skipped: %s",
+            missing_source,
+        )
     repository = SQLiteInformationRepository(settings.database_path)
     pipeline = CollectionPipeline(connectors, repository=repository)
     items = pipeline.collect(
@@ -115,6 +139,7 @@ def run_workflow(
             tickers=tuple(entry.ticker for entry in universe),
             start_date=start_date,
             end_date=end_date,
+            markets={entry.ticker: entry.market for entry in universe},
         )
     )
     WebRepository(settings.database_path, allowed_sources=settings.enabled_sources).record_collection_events(

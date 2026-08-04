@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 from .connectors.base import SourceConnector
 from .connectors.mock import MockConnector
@@ -26,14 +26,30 @@ class SourceRegistry:
             raise ValueError(f"Connector already registered: {name}")
         self._factories[name] = factory
 
-    def load_enabled(self, names: Iterable[str]) -> List[SourceConnector]:
-        """Create only the connectors named in application configuration."""
+    @property
+    def registered_names(self) -> Tuple[str, ...]:
+        """Return the names of all registered connector factories."""
+        return tuple(sorted(self._factories))
+
+    def load_enabled(
+        self,
+        names: Iterable[str],
+        missing: Optional[List[str]] = None,
+    ) -> List[SourceConnector]:
+        """Create connectors named in configuration; skip unimplemented names.
+
+        A source declared in configuration but not yet implemented (for
+        example news or research before their P1 connectors exist) is
+        collected into ``missing`` when provided instead of aborting the
+        whole pipeline.
+        """
         connectors: List[SourceConnector] = []
         for name in names:
-            try:
-                factory = self._factories[name]
-            except KeyError as error:
-                raise KeyError(f"Unknown connector: {name}") from error
+            factory = self._factories.get(name)
+            if factory is None:
+                if missing is not None:
+                    missing.append(name)
+                continue
             connectors.append(factory())
         return connectors
 

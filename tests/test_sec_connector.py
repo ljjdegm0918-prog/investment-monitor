@@ -5,7 +5,12 @@ from tempfile import TemporaryDirectory
 from typing import Any, Dict
 import unittest
 
-from investment_monitor import CollectionRequest, SECConnector, SECRequestError
+from investment_monitor import (
+    CollectionRequest,
+    SECConnector,
+    SECError,
+    SECRequestError,
+)
 from investment_monitor.sources.sec.connector import (
     COMPANY_TICKERS_URL,
     SUBMISSIONS_BASE_URL,
@@ -124,6 +129,24 @@ class SECConnectorTests(unittest.TestCase):
         self.assertEqual({item.tickers for item in items}, {("AAPL",)})
         self.assertEqual(len(connector.last_errors), 1)
         self.assertEqual(connector.last_errors[0].ticker, "FAIL")
+
+    def test_non_us_market_ticker_is_skipped_without_calling_sec(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            client = FixtureSECClient()
+            connector = self.make_connector(
+                client, Path(temporary_directory) / "tickers.json"
+            )
+            request = CollectionRequest(
+                tickers=("AAPL",),
+                start_date=date(2026, 1, 1),
+                end_date=date(2026, 1, 31),
+                markets={"AAPL": "hk"},
+            )
+
+            with self.assertRaisesRegex(SECError, "does not cover market 'hk'"):
+                connector.collect(request)
+
+        self.assertEqual(client.requested_urls, [])
 
     def test_ticker_mapping_is_reused_from_the_local_cache(self) -> None:
         with TemporaryDirectory() as temporary_directory:

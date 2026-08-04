@@ -12,13 +12,15 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .application import ConfiguredCollectionResult, run_ticker_collection
 from .config import load_environment_file, load_settings, load_universe
+from .models import MARKET_US
 from .pipeline import CollectionEvent
+from .registry import create_default_registry
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -54,11 +56,19 @@ class WebApplication:
             source for source in configured_sources if not source.startswith("mock")
         )
         self.enabled_sources = allowed_sources
+        self.implemented_sources = tuple(create_default_registry().registered_names)
+        self.source_catalog = tuple(
+            source
+            for source in settings.sources
+            if not source.name.startswith("mock")
+        )
         # Base filing tables must exist before the web migration and universe import.
         SQLiteInformationRepository(settings.database_path)
         self.repository = WebRepository(
             settings.database_path,
             allowed_sources=allowed_sources,
+            known_sources=self.source_catalog,
+            implemented_sources=self.implemented_sources,
         )
         self.repository.import_universe(load_universe(project_root / "config" / "universe.csv"))
         cache_path = project_root / ".cache" / "investment_monitor" / "company_tickers.json"
@@ -106,10 +116,12 @@ class WebApplication:
                 return self._json({"sources": self.repository.source_statuses()})
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
+                market = str(payload.get("market") or MARKET_US)
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
                     self.resolver,
+                    market=market,
                 ))
                 added_tickers = tuple(
                     str(record["ticker"]) for record in result["added"]
@@ -120,18 +132,22 @@ class WebApplication:
                         lookback_days=_environment_int(
                             "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
                         ),
+                        markets={ticker: market for ticker in added_tickers},
                     )
                 return self._json(result, 201)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
                 removed = self.repository.remove_membership(
-                    str(payload["ticker"]), str(payload["list"])
+                    str(payload["ticker"]),
+                    str(payload["list"]),
+                    str(payload.get("market") or MARKET_US),
                 )
                 return self._json({"removed": removed})
             if method == "POST" and parsed.path == "/api/companies/remove-all":
                 payload = _decode_json(body)
                 removed_memberships = self.repository.remove_all_memberships(
-                    str(payload["ticker"])
+                    str(payload["ticker"]),
+                    str(payload.get("market") or MARKET_US),
                 )
                 return self._json({"removed_memberships": removed_memberships})
             if method == "POST" and parsed.path == "/api/read":
@@ -164,11 +180,16 @@ class WebApplication:
         *,
         lookback_days: int,
         today: Optional[date] = None,
+        markets: Optional[Mapping[str, str]] = None,
     ) -> Mapping[str, Any]:
         """Collect an explicit ticker set and return a JSON-safe summary."""
         normalized = tuple(dict.fromkeys(ticker.strip().upper() for ticker in tickers))
         if not normalized:
             return _empty_collection_summary(())
+        market_map = {
+            ticker: str((markets or {}).get(ticker) or MARKET_US)
+            for ticker in normalized
+        }
         end_date = today or datetime.now(EASTERN).date()
         start_date = end_date - timedelta(days=lookback_days)
         with self._collection_lock:
@@ -178,6 +199,7 @@ class WebApplication:
                     settings_path=self.settings_path,
                     start_date=start_date,
                     end_date=end_date,
+                    markets=market_map,
                 )
             except Exception as error:
                 message = str(error) or error.__class__.__name__
@@ -226,29 +248,39 @@ class WebApplication:
         today: Optional[date] = None,
     ) -> Mapping[str, Any]:
         """Collect every company that still belongs to at least one list."""
-        tickers = self.repository.active_tickers()
-        if not tickers:
+        active_companies = self.repository.active_companies()
+        if not active_companies:
             return _empty_collection_summary(())
-        backfill_tickers = set(
-            self.repository.active_tickers_without_source_items("sec")
+        backfill_companies = set(
+            self.repository.active_companies_without_any_source_items(
+                self.enabled_sources
+            )
         )
-        incremental_tickers = tuple(
-            ticker for ticker in tickers if ticker not in backfill_tickers
-        )
+        backfill_by_market: Dict[str, List[str]] = {}
+        incremental_by_market: Dict[str, List[str]] = {}
+        for ticker, market in active_companies:
+            destination = (
+                backfill_by_market
+                if (ticker, market) in backfill_companies
+                else incremental_by_market
+            )
+            destination.setdefault(market, []).append(ticker)
         summaries = []
-        if backfill_tickers:
+        for market, tickers in sorted(backfill_by_market.items()):
             summaries.append(self.collect_tickers(
-                tuple(sorted(backfill_tickers)),
+                tuple(sorted(set(tickers))),
                 lookback_days=_environment_int(
                     "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
                 ),
                 today=today,
+                markets={ticker: market for ticker in set(tickers)},
             ))
-        if incremental_tickers:
+        for market, tickers in sorted(incremental_by_market.items()):
             summaries.append(self.collect_tickers(
-                incremental_tickers,
+                tuple(sorted(set(tickers))),
                 lookback_days=lookback_days,
                 today=today,
+                markets={ticker: market for ticker in set(tickers)},
             ))
         return _combine_collection_summaries(summaries)
 
@@ -306,6 +338,8 @@ class WebApplication:
             disconnected = "News source not connected"
         elif filters.information_type == "community" and "community" not in available_types:
             disconnected = "Community source not connected"
+        elif filters.information_type == "research" and "research" not in available_types:
+            disconnected = "Research source not connected"
         return {
             "items": list(result.items),
             "pagination": {

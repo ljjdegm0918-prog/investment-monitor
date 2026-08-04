@@ -11,7 +11,7 @@ from pathlib import Path
 import time
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
-from ...models import CollectionRequest, InformationItem
+from ...models import CollectionRequest, InformationItem, MARKET_US
 from .client import SECClient, SECDataError, SECError
 
 LOGGER = logging.getLogger(__name__)
@@ -188,6 +188,18 @@ class SECConnector:
         collected_at = datetime.now(timezone.utc)
 
         for ticker in request.tickers:
+            market = request.market_for(ticker)
+            if market not in ("us", "unknown"):
+                failures.append(
+                    TickerCollectionFailure(
+                        ticker=ticker,
+                        message=(
+                            f"SEC connector does not cover market "
+                            f"'{market}'"
+                        ),
+                    )
+                )
+                continue
             try:
                 cik, mapped_issuer = self._resolver.resolve(ticker)
                 payload = self._client.get_json(_submission_url(cik))
@@ -345,6 +357,11 @@ def _map_filing_table(
                 url=_filing_url(cik, accession_number, primary_document),
                 collected_at=collected_at,
                 raw_metadata=metadata,
+                market=MARKET_US,
+                effective_at=_effective_datetime(
+                    columns.get("acceptanceDateTime"),
+                    index,
+                ),
             )
         )
 
@@ -408,3 +425,17 @@ def _read_cache_ttl() -> float:
             "SEC_TICKER_CACHE_TTL_SECONDS must not be negative."
         )
     return result
+
+
+def _effective_datetime(values: Any, index: int) -> Optional[datetime]:
+    """Parse SEC acceptanceDateTime into a timezone-aware datetime."""
+    if not isinstance(values, list) or index >= len(values):
+        return None
+    raw = values[index]
+    if raw is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)

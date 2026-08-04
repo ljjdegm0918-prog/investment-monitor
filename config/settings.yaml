@@ -1,3 +1,18 @@
-enabled_sources:
-  - sec
 database_path: ../data/investment_monitor.sqlite3
+sources:
+  - name: sec
+    label: SEC EDGAR
+    source_type: filings
+    enabled: true
+  - name: news
+    label: News
+    source_type: news
+    enabled: false
+  - name: community
+    label: Community
+    source_type: community
+    enabled: false
+  - name: research
+    label: Research
+    source_type: research
+    enabled: false
