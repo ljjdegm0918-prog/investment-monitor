@@ -46,15 +46,27 @@ function renderShell() {
   status.textContent = sec.status === "connected" ? "SEC Up to date" : sec.status === "stale" ? "SEC Data stale" : "SEC Unavailable";
   status.className = `status-line ${sec.status === "connected" ? "connected" : sec.status === "stale" ? "stale" : "failed"}`;
   const listBySlug = Object.fromEntries(b.lists.map(list => [list.slug, list]));
+  const svg = body => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+  const navIcons = {
+    today: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 4.75V8l2.25 1.5"/>`),
+    information: svg(`<path d="M8 1.75l5.75 3L8 7.75 2.25 4.75 8 1.75z"/><path d="M2.25 8l5.75 3 5.75-3"/><path d="M2.25 11.25L8 14.25l5.75-3"/>`),
+    holdings: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 2.25V8h5.5"/>`),
+    planned: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 5.5v5M5.5 8h5"/>`),
+    watchlist: svg(`<path d="M1.75 8S4.25 3.75 8 3.75 14.25 8 14.25 8 11.75 12.25 8 12.25 1.75 8 1.75 8z"/><circle cx="8" cy="8" r="1.9"/>`),
+    search: svg(`<circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4L14 14"/>`),
+    activity: svg(`<path d="M1.75 8h2.75l1.75-4 3.25 8 1.75-4h2.75"/>`),
+    sources: svg(`<ellipse cx="8" cy="4.25" rx="5.5" ry="2.25"/><path d="M2.5 4.25v7.5c0 1.25 2.46 2.25 5.5 2.25s5.5-1 5.5-2.25v-7.5"/><path d="M2.5 8c0 1.25 2.46 2.25 5.5 2.25s5.5-1 5.5-2.25"/>`),
+    settings: svg(`<path d="M2.25 4.75h11.5M2.25 11.25h11.5"/><circle cx="5.9" cy="4.75" r="1.7"/><circle cx="10.1" cy="11.25" r="1.7"/>`),
+  };
   const nav = [
-    ["OVERVIEW", [["/today","●","Today"],["/information","◧","All Information"]]],
-    ["MY LISTS", [["/lists/holdings","◧","Holdings",listBySlug.holdings.unread_count],["/lists/planned","●","Planned Purchases",listBySlug.planned.unread_count],["/lists/watchlist","●","Watchlist",listBySlug.watchlist.unread_count]]],
-    ["TOOLS", [["/search","⌕","Search"],["/activity","↗","Activity & Logs"]]],
-    ["SYSTEM", [["/sources","●","Data Sources"],["/settings","⚙","Settings"]]],
+    ["OVERVIEW", [["/today","today","Today"],["/information","information","All Information"]]],
+    ["MY LISTS", [["/lists/holdings","holdings","Holdings",listBySlug.holdings.unread_count],["/lists/planned","planned","Planned Purchases",listBySlug.planned.unread_count],["/lists/watchlist","watchlist","Watchlist",listBySlug.watchlist.unread_count]]],
+    ["TOOLS", [["/search","search","Search"],["/activity","activity","Activity & Logs"]]],
+    ["SYSTEM", [["/sources","sources","Data Sources"],["/settings","settings","Settings"]]],
   ];
   document.getElementById("sidebar-nav").innerHTML = nav.map(([heading, links]) => `
     <section class="nav-section"><h2 class="nav-heading">${heading}</h2>
-      ${links.map(([href,icon,label,count]) => `<a class="nav-link ${isActive(href) ? "active" : ""}" href="${href}" aria-label="${label}${count !== undefined ? `, ${count} unread` : ""}"><span class="nav-icon" aria-hidden="true">${icon}</span><span>${label}</span>${count !== undefined ? `<span class="nav-count" aria-hidden="true">${count}</span>` : ""}</a>`).join("")}
+      ${links.map(([href,icon,label,count]) => `<a class="nav-link ${isActive(href) ? "active" : ""}" href="${href}" aria-label="${label}${count !== undefined ? `, ${count} unread` : ""}"><span class="nav-icon" aria-hidden="true">${navIcons[icon]}</span><span>${label}</span>${count !== undefined ? `<span class="nav-count" aria-hidden="true">${count}</span>` : ""}</a>`).join("")}
     </section>`).join("");
 }
 
@@ -108,10 +120,11 @@ async function renderInformationPage() {
 
 function summaryCards() {
   const c = state.bootstrap.counts;
+  const svgIcon = body => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
   return `<div class="summary-grid">
-    ${summaryCard("◧", c.companies, "followed companies")}
-    ${summaryCard("✓", c.unread, "unread items")}
-    ${summaryCard("◧", c.filings, "filings for selected date")}
+    ${summaryCard(svgIcon(`<path d="M8 1.75l5.75 3L8 7.75 2.25 4.75 8 1.75z"/><path d="M2.25 8l5.75 3 5.75-3"/><path d="M2.25 11.25L8 14.25l5.75-3"/>`), c.companies, "followed companies")}
+    ${summaryCard(svgIcon(`<circle cx="8" cy="8" r="5.75"/><path d="M5.5 8.25l1.75 1.75 3.25-3.5"/>`), c.unread, "unread items")}
+    ${summaryCard(svgIcon(`<path d="M4 1.75h5.5L12 4.25V14.25H4V1.75z"/><path d="M9.25 1.75v2.75H12"/><path d="M6 8h4M6 10.75h4"/>`), c.filings, "filings for selected date")}
   </div>`;
 }
 function summaryCard(icon, number, label) { return `<div class="summary-card"><span class="summary-icon" aria-hidden="true">${icon}</span><div><div class="summary-number">${number}</div><div class="summary-label">${label}</div></div></div>`; }
@@ -199,11 +212,11 @@ function renderFeed(response) {
   container.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => { state.filters.page = Number(button.dataset.page); loadFeed(); document.getElementById("main-content").focus(); }));
 }
 
-function feedItem(item) {
+function feedItem(item, index) {
   const readControl = item.is_read ? `<span class="read-check">✓</span><span class="read-label">Read</span>` : `<span class="unread-dot"></span><span class="sr-only">Unread</span>`;
   const summaryHtml = item.summary ? `<p class="item-summary">${esc(item.summary)}</p>` : "";
   const identityLabel = item.source === "sec" ? `Accession ${esc(item.external_id)}` : `ID ${esc(item.external_id)}`;
-  return `<article class="feed-item ${item.is_read ? "is-read" : "is-unread"}"><button class="read-control" data-id="${item.id}" data-read="${item.is_read}" aria-label="Mark ${item.ticker} ${item.document_type} as ${item.is_read ? "unread" : "read"}">${readControl}</button><div class="company-cell"><strong>${item.ticker}</strong><span>${esc(item.company_name || item.issuer)}</span></div><span class="form-badge">${esc(item.document_type || "Information")}${item.is_amendment ? " · Amended" : ""}</span><time class="timestamp" datetime="${item.effective_at}">${esc(item.effective_et)}</time><div class="item-title"><strong>${esc(item.title)}</strong><span>${esc(item.source_label)} · ${marketLabel(item.market)} · Live · ${identityLabel}</span></div>${summaryHtml}<div class="list-badges">${item.list_slugs.map(slug => badge(slug)).join("")}</div><a class="open-link" data-id="${item.id}" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open original →</a></article>`;
+  return `<article class="feed-item ${item.is_read ? "is-read" : "is-unread"}" style="--i:${index}"><button class="read-control" data-id="${item.id}" data-read="${item.is_read}" aria-label="Mark ${item.ticker} ${item.document_type} as ${item.is_read ? "unread" : "read"}">${readControl}</button><div class="company-cell"><strong>${item.ticker}</strong><span>${esc(item.company_name || item.issuer)}</span></div><span class="form-badge">${esc(item.document_type || "Information")}${item.is_amendment ? " · Amended" : ""}</span><time class="timestamp" datetime="${item.effective_at}">${esc(item.effective_et)}</time><div class="item-title"><strong>${esc(item.title)}</strong><span>${esc(item.source_label)} · ${marketLabel(item.market)} · Live · ${identityLabel}</span></div>${summaryHtml}<div class="list-badges">${item.list_slugs.map(slug => badge(slug)).join("")}</div><a class="open-link" data-id="${item.id}" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open original →</a></article>`;
 }
 
 function badge(slug) { return `<span class="list-badge ${slug}">${listLabels[slug] || slug}</span>`; }
