@@ -1,3 +1,50 @@
-enabled_sources:
-  - sec
 database_path: ../data/investment_monitor.sqlite3
+sources:
+  - name: sec
+    label: SEC EDGAR
+    source_type: filings   # config type; stored items use 'regulatory_filing'
+    enabled: true
+  - name: dart
+    label: OpenDART
+    source_type: filings
+    enabled: true          # requires DART_API_KEY; degrades to Not connected without it
+  - name: kind
+    label: KIND (KRX)
+    source_type: filings
+    enabled: true          # key-free public disclosure search
+  - name: companies_house
+    label: Companies House
+    source_type: filings
+    enabled: true          # requires COMPANIES_HOUSE_API_KEY; statutory filings, not RNS
+  - name: investegate
+    label: Investegate
+    source_type: filings
+    enabled: true          # RNS-class public mirror; page scrape, may break without notice
+  - name: news
+    label: News
+    source_type: news
+    enabled: true          # requires FINNHUB_API_KEY; degrades to Not connected without it
+  - name: naver_news
+    label: Naver Finance
+    source_type: news
+    enabled: true          # key-free public page scrape; may break without notice
+  - name: hankyung
+    label: Hankyung
+    source_type: news
+    enabled: false         # stock news endpoint returned 403/404 from current network
+  - name: thebell
+    label: TheBell
+    source_type: news
+    enabled: false         # stock news endpoint returned soft 404 from current network
+  - name: yahoo_uk
+    label: Yahoo Finance UK
+    source_type: news
+    enabled: true          # key-free public RSS; may break without notice
+  - name: community
+    label: Community
+    source_type: community
+    enabled: false
+  - name: research
+    label: Research
+    source_type: research
+    enabled: false

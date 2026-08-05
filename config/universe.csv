@@ -1,2 +1,2 @@
-ticker,list_type
-AAPL,holdings
+ticker,list_type,market
+AAPL,holdings,us

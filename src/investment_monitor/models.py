@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Mapping, Tuple
+from typing import Any, Mapping, Optional, Tuple
+
+
+ALLOWED_MARKETS = frozenset({"us", "cn", "hk", "kr", "uk", "unknown"})
+MARKET_UNKNOWN = "unknown"
+MARKET_US = "us"
+MARKET_CN = "cn"
+MARKET_HK = "hk"
+MARKET_KR = "kr"
+MARKET_UK = "uk"
 
 
 @dataclass(frozen=True)
@@ -14,6 +23,7 @@ class CollectionRequest:
     tickers: Tuple[str, ...]
     start_date: date
     end_date: date
+    markets: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         normalized_tickers = tuple(
@@ -23,7 +33,28 @@ class CollectionRequest:
             raise ValueError("At least one ticker is required.")
         if self.start_date > self.end_date:
             raise ValueError("start_date must not be after end_date.")
+        normalized_markets = {
+            ticker.strip().upper(): market.strip().lower()
+            for ticker, market in self.markets.items()
+            if ticker.strip()
+        }
+        invalid_markets = [
+            market
+            for market in normalized_markets.values()
+            if market not in ALLOWED_MARKETS
+        ]
+        if invalid_markets:
+            raise ValueError(
+                "market must be one of: "
+                + ", ".join(sorted(ALLOWED_MARKETS))
+                + f"; got {invalid_markets[0]!r}"
+            )
         object.__setattr__(self, "tickers", normalized_tickers)
+        object.__setattr__(self, "markets", normalized_markets)
+
+    def market_for(self, ticker: str) -> str:
+        """Return the declared market for a ticker, or unknown when absent."""
+        return self.markets.get(ticker.strip().upper(), MARKET_UNKNOWN)
 
 
 @dataclass(frozen=True)
@@ -41,4 +72,17 @@ class InformationItem:
     url: str
     collected_at: datetime
     raw_metadata: Mapping[str, Any] = field(default_factory=dict)
+    market: str = MARKET_UNKNOWN
+    summary: Optional[str] = None
+    effective_at: Optional[datetime] = None
+
+    def __post_init__(self) -> None:
+        normalized_market = self.market.strip().lower()
+        if normalized_market not in ALLOWED_MARKETS:
+            raise ValueError(
+                "market must be one of: "
+                + ", ".join(sorted(ALLOWED_MARKETS))
+                + f"; got {self.market!r}"
+            )
+        object.__setattr__(self, "market", normalized_market)
 

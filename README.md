@@ -20,8 +20,9 @@ lists does not duplicate the filing.
 | Information type | Provider | Production status |
 | --- | --- | --- |
 | Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
-| News | None | Not connected |
+| News | Finnhub company news | Connected after a successful sync; needs `FINNHUB_API_KEY` |
 | Community | None | Not connected |
+| Research | None | Not connected |
 
 The repository still contains mock connectors for automated extensibility
 tests. They are not enabled in `config/settings.yaml`, and generated mock data
@@ -62,24 +63,84 @@ refresh temporarily fails, the last valid local copy is used.
 Edit `config/universe.csv`:
 
 ```csv
-ticker,list_type
-AAPL,holdings
+ticker,list_type,market
+AAPL,holdings,us
 ```
 
-The CSV is an initial import only. It accepts 1–10 unique tickers, and
-`list_type` must be `holdings`, `planned`, or `watchlist`. After the first web
+The CSV is an initial import only. It accepts 1-10 unique (ticker, market)
+rows, and `list_type` must be `holdings`, `planned`, or `watchlist`. The
+optional `market` column accepts `us`, `cn`, `hk`, or `unknown` and defaults
+to `us`. After the first web
 startup, active memberships in SQLite are the collection source of truth. A
 company such as NVDA added in the web interface does not need to be added to
 the CSV.
 
-`config/settings.yaml` enables production sources and selects the local SQLite
-file:
+`config/settings.yaml` declares the logical sources (sec, news, community,
+research), their enabled state, and selects the local SQLite file:
 
 ```yaml
-enabled_sources:
-  - sec
 database_path: ../data/investment_monitor.sqlite3
+sources:
+  - name: sec
+    label: SEC EDGAR
+    source_type: filings
+    enabled: true
+  - name: news
+    label: News
+    source_type: news
+    enabled: true
+  - name: community
+    label: Community
+    source_type: community
+    enabled: false
+  - name: research
+    label: Research
+    source_type: research
+    enabled: false
 ```
+
+The News source is Finnhub company news. Set `FINNHUB_API_KEY` in `.env` (see
+`.env.example`) to enable it; without a key the source stays Not connected
+and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
+symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
+A-share or HK resolution.
+
+### Korea sources (KR)
+- OpenDART (`DART_API_KEY`): official disclosure API; corp_code mapping and
+  disclosure list.
+- KIND (KRX): key-free exchange disclosure page scrape; may break without
+  notice.
+- Naver Finance (`naver_news`): key-free stock news scrape; fragile, may be
+  empty from non-KR networks. Hankyung/TheBell are implemented but disabled
+  until their endpoints are reachable.
+- Tradeable universe: cached from the OpenDART corpCode listing; ETF/ETN
+  coverage is partial. FSC/data.go.kr is skipped because registration
+  requires Korean identity.
+- Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
+  sharing a 14-digit receipt number fold in the feed with an "Also from"
+  label; all database rows are kept.
+
+### UK sources (UK)
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| companies_house | filings | `COMPANIES_HOUSE_API_KEY` — Test app keys authenticate only against `https://api-sandbox.company-information.service.gov.uk`; Live keys use the default live API | Statutory company filings (accounts, officers), **not RNS** |
+| investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
+| uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
+| yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
+| Finnhub | news | existing | **US only** — never queried for UK |
+
+UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+(Investegate) or Companies House transaction ids; title fallback is
+same-source only, so Companies House and Investegate are never cross-folded
+by title. News folds on ticker + London day + normalized title.
+
+The web Settings page shows Provider credentials for every implemented source
+(each connector declares its own fields, currently `FINNHUB_API_KEY` and
+`SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
+cannot be configured. An advanced section allows extra environment variables
+for connectors that explicitly read them. Values saved in the workspace
+database take priority over `.env` for the running process and are never
+returned in full by any API response.
 
 ## 2. Optional manual SEC collection
 
@@ -151,17 +212,24 @@ These defaults can be adjusted in `.env`.
 - **Activity & Logs** shows only collection operations recorded after this web
   migration was introduced. It does not invent metrics for earlier CLI runs.
 - **Data Sources** reports the latest real SEC attempt and success, marks SEC
-  data stale after 36 hours, and marks News and Community as not connected.
+  data stale after 36 hours, and marks News, Community, and Research as
+  not connected until a real connector is enabled.
 - Official filing links open in a new tab with `noopener` and `noreferrer`.
 
 ## Data model and safe migration
 
-The existing standardized filing tables remain unchanged:
+The standardized item tables now carry `market`, nullable `summary`, and
+`effective_at` in addition to the original columns:
 
 ```text
 information_items -- unique (source, external_id)
 information_item_tickers
 ```
+
+`companies` has a `market` column and a unique `(ticker, market)` identity, so
+the same code in different markets is never conflated. The idempotent startup
+migration upgrades existing single-market databases without deleting stored
+SEC records.
 
 The idempotent web migration adds:
 
