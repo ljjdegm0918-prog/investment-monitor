@@ -26,6 +26,15 @@ from .kr_universe import (
     load_kr_universe,
     refresh_kr_universe,
 )
+from .sources.companies_house import (
+    CompaniesHouseClient,
+    CompaniesHouseCompanyResolver,
+    CompaniesHouseConnector,
+    CompaniesHouseDataError,
+    CompaniesHouseError,
+    CompaniesHouseRequestError,
+    CompanyNumberCache,
+)
 from .sources.dart import (
     CorpCodeCache,
     DARTCompanyResolver,
@@ -103,6 +112,13 @@ __all__ = [
     "ConfigurationError",
     "ConfiguredCollectionResult",
     "ConnectorUnavailableError",
+    "CompaniesHouseClient",
+    "CompaniesHouseCompanyResolver",
+    "CompaniesHouseConnector",
+    "CompaniesHouseDataError",
+    "CompaniesHouseError",
+    "CompaniesHouseRequestError",
+    "CompanyNumberCache",
     "CorpCodeCache",
     "DARTCompanyResolver",
     "DARTConnector",

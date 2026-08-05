@@ -19,6 +19,7 @@ DEFAULT_SOURCE_META = {
     "sec": ("SEC EDGAR", "filings"),
     "dart": ("OpenDART", "filings"),
     "kind": ("KIND (KRX)", "filings"),
+    "companies_house": ("Companies House", "filings"),
     "naver_news": ("Naver Finance", "news"),
     "hankyung": ("Hankyung", "news"),
     "thebell": ("TheBell", "news"),

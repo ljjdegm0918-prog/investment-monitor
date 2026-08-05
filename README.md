@@ -120,6 +120,13 @@ A-share or HK resolution.
   sharing a 14-digit receipt number fold in the feed with an "Also from"
   label; all database rows are kept.
 
+### UK sources (UK)
+- Companies House (`COMPANIES_HOUSE_API_KEY`): free Public Data API for
+  statutory filings (accounts, confirmation statements, officers); this is
+  company filings, not RNS. Company numbers are resolved from a small
+  verified seed table, numeric inputs, or a unique active search match;
+  otherwise companies stay unmapped.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

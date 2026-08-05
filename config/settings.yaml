@@ -12,6 +12,10 @@ sources:
     label: KIND (KRX)
     source_type: filings
     enabled: true          # key-free public disclosure search
+  - name: companies_house
+    label: Companies House
+    source_type: filings
+    enabled: true          # requires COMPANIES_HOUSE_API_KEY; statutory filings, not RNS
   - name: news
     label: News
     source_type: news

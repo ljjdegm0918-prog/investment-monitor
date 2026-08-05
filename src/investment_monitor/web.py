@@ -28,6 +28,7 @@ from .kr_universe import kr_universe_name_map
 from .models import MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
+from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
@@ -150,6 +151,24 @@ class WebApplication:
             )
         except ConnectorUnavailableError:
             self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
+        companies_house_cache_path = (
+            project_root
+            / ".cache"
+            / "investment_monitor"
+            / "companies_house_numbers.json"
+        )
+        try:
+            self.companies_house_resolver = (
+                CompaniesHouseCompanyResolver.from_environment(
+                    companies_house_cache_path
+                )
+            )
+        except ConnectorUnavailableError:
+            self.companies_house_resolver = (
+                CompaniesHouseCompanyResolver.offline(
+                    companies_house_cache_path
+                )
+            )
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -414,9 +433,9 @@ class WebApplication:
         if market == MARKET_KR:
             return self.dart_resolver
         if market == MARKET_UK:
-            # UK has no resolver in this phase; never let SEC map a UK ticker
+            # UK maps through Companies House; never let SEC map a UK ticker
             # to a same-named US company.
-            return None
+            return self.companies_house_resolver
         return self.resolver
 
     @staticmethod

@@ -11,6 +11,7 @@ from .connectors.base import (
 )
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.companies_house import CompaniesHouseConnector
 from .sources.dart import DARTConnector
 from .sources.kind import KindConnector
 from .sources.kr_news import (
@@ -123,6 +124,12 @@ def create_default_registry() -> SourceRegistry:
         configuration_error=DARTConnector.configuration_error,
     )
     registry.register(KindConnector.name, KindConnector)
+    registry.register(
+        CompaniesHouseConnector.name,
+        CompaniesHouseConnector,
+        secret_fields=CompaniesHouseConnector.secret_fields,
+        configuration_error=CompaniesHouseConnector.configuration_error,
+    )
     registry.register(NaverNewsConnector.name, NaverNewsConnector)
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)

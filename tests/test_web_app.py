@@ -585,6 +585,21 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(added["cik"], "")
 
+    def test_uk_resolver_is_companies_house(self) -> None:
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+
+        self.assertIs(
+            application._resolver_for("uk"),
+            application.companies_house_resolver,
+        )
+        self.assertIsNot(
+            application._resolver_for("uk"),
+            application.resolver,
+        )
+
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
             "POST",
