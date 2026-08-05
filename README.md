@@ -121,25 +121,18 @@ A-share or HK resolution.
   label; all database rows are kept.
 
 ### UK sources (UK)
-- Companies House (`COMPANIES_HOUSE_API_KEY`): free Public Data API for
-  statutory filings (accounts, confirmation statements, officers); this is
-  company filings, not RNS. Company numbers are resolved from a small
-  verified seed table, numeric inputs, or a unique active search match;
-  otherwise companies stay unmapped.
-  Test application keys authenticate only against
-  `COMPANIES_HOUSE_BASE_URL=https://api-sandbox.company-information.service.gov.uk`;
-  Live application keys use the default live API.
-- Investegate: key-free RNS-class public mirror of company announcements
-  (`investegate` source). It is not an official LSEG RNS feed; the page is
-  scraped politely (>=1s/request) and may break without notice.
-- UK universe: key-free FCA FIRDS FULINS cache (ISIN / LEI / venue / name).
-  FIRDS does not carry ticker mnemonics, so the cache is ISIN-keyed and a
-  small seed adds tickers for common blue chips; it is breadth-only and never
-  enters the feed. Refresh via `refresh_uk_universe()` (the full daily set
-  is large; use `UK_UNIVERSE_MAX_PARTS` to validate incrementally).
-- UK news: key-free Yahoo Finance UK RSS mirror (`yahoo_uk` source) for
-  `market=uk` tickers (symbols get a `.L` suffix at request time only). The
-  feed may break without notice; Finnhub remains US-only.
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| companies_house | filings | `COMPANIES_HOUSE_API_KEY` — Test app keys authenticate only against `https://api-sandbox.company-information.service.gov.uk`; Live keys use the default live API | Statutory company filings (accounts, officers), **not RNS** |
+| investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
+| uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
+| yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
+| Finnhub | news | existing | **US only** — never queried for UK |
+
+UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+(Investegate) or Companies House transaction ids; title fallback is
+same-source only, so Companies House and Investegate are never cross-folded
+by title. News folds on ticker + London day + normalized title.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
