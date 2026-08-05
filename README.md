@@ -126,6 +126,9 @@ A-share or HK resolution.
   company filings, not RNS. Company numbers are resolved from a small
   verified seed table, numeric inputs, or a unique active search match;
   otherwise companies stay unmapped.
+  Test application keys authenticate only against
+  `COMPANIES_HOUSE_BASE_URL=https://api-sandbox.company-information.service.gov.uk`;
+  Live application keys use the default live API.
 - Investegate: key-free RNS-class public mirror of company announcements
   (`investegate` source). It is not an official LSEG RNS feed; the page is
   scraped politely (>=1s/request) and may break without notice.
