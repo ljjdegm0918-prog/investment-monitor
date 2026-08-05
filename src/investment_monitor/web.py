@@ -12,21 +12,62 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .application import ConfiguredCollectionResult, run_ticker_collection
-from .config import load_environment_file, load_settings, load_universe
+from .config import (
+    SourceConfig,
+    load_environment_file,
+    load_settings,
+    load_universe,
+)
+from .connectors.base import ConnectorUnavailableError
+from .kr_universe import kr_universe_name_map
+from .models import MARKET_KR, MARKET_US
 from .pipeline import CollectionEvent
+from .registry import SourceRegistry, create_default_registry
+from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
-from .web_repository import FeedFilters, WebRepository
+from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
+
+
+def build_provider_catalog(
+    registry: SourceRegistry,
+    sources: Sequence[SourceConfig],
+) -> Sequence[Mapping[str, Any]]:
+    """Describe implemented sources and their declared credential fields."""
+    providers = []
+    for source in sources:
+        if source.name.startswith("mock"):
+            continue
+        factory = registry.factory_for(source.name)
+        providers.append(
+            {
+                "name": source.name,
+                "label": source.label,
+                "source_type": source.source_type,
+                "enabled": source.enabled,
+                "implemented": factory is not None,
+                "fields": [
+                    {
+                        "env": field.env,
+                        "label": field.label,
+                        "kind": field.kind,
+                        "help": field.help,
+                    }
+                    for field in registry.secret_fields_for(source.name)
+                ],
+            }
+        )
+    return tuple(providers)
 
 
 @dataclass(frozen=True)
@@ -54,18 +95,61 @@ class WebApplication:
             source for source in configured_sources if not source.startswith("mock")
         )
         self.enabled_sources = allowed_sources
+        registry = create_default_registry()
+        self._registry = registry
+        self.implemented_sources = tuple(registry.registered_names)
+        self.source_catalog = tuple(
+            source
+            for source in settings.sources
+            if not source.name.startswith("mock")
+        )
+        self.provider_catalog = build_provider_catalog(
+            registry,
+            self.source_catalog,
+        )
+        self.writable_env_keys = tuple(
+            sorted(
+                {
+                    field["env"]
+                    for provider in self.provider_catalog
+                    for field in provider["fields"]
+                }
+            )
+        )
         # Base filing tables must exist before the web migration and universe import.
         SQLiteInformationRepository(settings.database_path)
         self.repository = WebRepository(
             settings.database_path,
             allowed_sources=allowed_sources,
+            known_sources=self.source_catalog,
+            implemented_sources=self.implemented_sources,
+            allowed_secret_keys=self.writable_env_keys,
         )
+        # DB/UI-stored secrets take priority over .env for this process.
+        self._load_credentials_to_environment()
+        self.unavailable_sources = self._detect_unavailable_sources(
+            registry,
+            settings.sources,
+        )
+        self.repository.set_unavailable_sources(self.unavailable_sources)
         self.repository.import_universe(load_universe(project_root / "config" / "universe.csv"))
         cache_path = project_root / ".cache" / "investment_monitor" / "company_tickers.json"
         try:
             self.resolver = SECCompanyResolver.from_environment(cache_path)
         except SECConfigurationError:
             self.resolver = SECCompanyResolver(cache_path)
+        dart_cache_path = (
+            project_root
+            / ".cache"
+            / "investment_monitor"
+            / "dart_corp_codes.json"
+        )
+        try:
+            self.dart_resolver = DARTCompanyResolver.from_environment(
+                dart_cache_path
+            )
+        except ConnectorUnavailableError:
+            self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -106,10 +190,17 @@ class WebApplication:
                 return self._json({"sources": self.repository.source_statuses()})
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
+                market = str(payload.get("market") or MARKET_US)
+                resolver = self._resolver_for(market)
+                name_fallback = (
+                    kr_universe_name_map() if market == MARKET_KR else None
+                )
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
-                    self.resolver,
+                    resolver,
+                    market=market,
+                    name_fallback=name_fallback,
                 ))
                 added_tickers = tuple(
                     str(record["ticker"]) for record in result["added"]
@@ -120,18 +211,22 @@ class WebApplication:
                         lookback_days=_environment_int(
                             "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
                         ),
+                        markets={ticker: market for ticker in added_tickers},
                     )
                 return self._json(result, 201)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
                 removed = self.repository.remove_membership(
-                    str(payload["ticker"]), str(payload["list"])
+                    str(payload["ticker"]),
+                    str(payload["list"]),
+                    str(payload.get("market") or MARKET_US),
                 )
                 return self._json({"removed": removed})
             if method == "POST" and parsed.path == "/api/companies/remove-all":
                 payload = _decode_json(body)
                 removed_memberships = self.repository.remove_all_memberships(
-                    str(payload["ticker"])
+                    str(payload["ticker"]),
+                    str(payload.get("market") or MARKET_US),
                 )
                 return self._json({"removed_memberships": removed_memberships})
             if method == "POST" and parsed.path == "/api/read":
@@ -145,9 +240,33 @@ class WebApplication:
                 filters = _filters_from_mapping(payload.get("filters") or {})
                 updated = self.repository.bulk_set_read(filters, _required_bool(payload, "is_read"))
                 return self._json({"updated": updated})
+            if method == "GET" and parsed.path == "/api/settings":
+                return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
                 payload = _decode_json(body)
-                self.repository.set_setting(str(payload["key"]), str(payload["value"]))
+                key = str(payload["key"])
+                value = str(payload.get("value") or "")
+                self.repository.set_setting(key, value)
+                is_credential = (
+                    key in self.writable_env_keys
+                    or key.startswith(EXTRA_ENV_PREFIX)
+                )
+                if is_credential:
+                    env_name = (
+                        key[len(EXTRA_ENV_PREFIX):]
+                        if key.startswith(EXTRA_ENV_PREFIX)
+                        else key
+                    )
+                    self._sync_environment_value(env_name, value)
+                    self._refresh_unavailable_sources()
+                    status = self.repository.setting_status([key])[key]
+                    return self._json(
+                        {
+                            "updated": True,
+                            "configured": status["configured"],
+                            "hint": status["hint"],
+                        }
+                    )
                 return self._json({"updated": True})
             return self._json({"error": "Not found"}, 404)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
@@ -164,11 +283,16 @@ class WebApplication:
         *,
         lookback_days: int,
         today: Optional[date] = None,
+        markets: Optional[Mapping[str, str]] = None,
     ) -> Mapping[str, Any]:
         """Collect an explicit ticker set and return a JSON-safe summary."""
         normalized = tuple(dict.fromkeys(ticker.strip().upper() for ticker in tickers))
         if not normalized:
             return _empty_collection_summary(())
+        market_map = {
+            ticker: str((markets or {}).get(ticker) or MARKET_US)
+            for ticker in normalized
+        }
         end_date = today or datetime.now(EASTERN).date()
         start_date = end_date - timedelta(days=lookback_days)
         with self._collection_lock:
@@ -178,6 +302,7 @@ class WebApplication:
                     settings_path=self.settings_path,
                     start_date=start_date,
                     end_date=end_date,
+                    markets=market_map,
                 )
             except Exception as error:
                 message = str(error) or error.__class__.__name__
@@ -226,29 +351,39 @@ class WebApplication:
         today: Optional[date] = None,
     ) -> Mapping[str, Any]:
         """Collect every company that still belongs to at least one list."""
-        tickers = self.repository.active_tickers()
-        if not tickers:
+        active_companies = self.repository.active_companies()
+        if not active_companies:
             return _empty_collection_summary(())
-        backfill_tickers = set(
-            self.repository.active_tickers_without_source_items("sec")
+        backfill_companies = set(
+            self.repository.active_companies_without_any_source_items(
+                self.enabled_sources
+            )
         )
-        incremental_tickers = tuple(
-            ticker for ticker in tickers if ticker not in backfill_tickers
-        )
+        backfill_by_market: Dict[str, List[str]] = {}
+        incremental_by_market: Dict[str, List[str]] = {}
+        for ticker, market in active_companies:
+            destination = (
+                backfill_by_market
+                if (ticker, market) in backfill_companies
+                else incremental_by_market
+            )
+            destination.setdefault(market, []).append(ticker)
         summaries = []
-        if backfill_tickers:
+        for market, tickers in sorted(backfill_by_market.items()):
             summaries.append(self.collect_tickers(
-                tuple(sorted(backfill_tickers)),
+                tuple(sorted(set(tickers))),
                 lookback_days=_environment_int(
                     "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
                 ),
                 today=today,
+                markets={ticker: market for ticker in set(tickers)},
             ))
-        if incremental_tickers:
+        for market, tickers in sorted(incremental_by_market.items()):
             summaries.append(self.collect_tickers(
-                incremental_tickers,
+                tuple(sorted(set(tickers))),
                 lookback_days=lookback_days,
                 today=today,
+                markets={ticker: market for ticker in set(tickers)},
             ))
         return _combine_collection_summaries(summaries)
 
@@ -274,6 +409,101 @@ class WebApplication:
         if events:
             self.repository.record_collection_events(events)
 
+    def _resolver_for(self, market: str) -> Any:
+        """Pick the company resolver for a market (KR uses OpenDART)."""
+        if market == MARKET_KR:
+            return self.dart_resolver
+        return self.resolver
+
+    @staticmethod
+    def _detect_unavailable_sources(
+        registry: Any,
+        catalog: Sequence[Any],
+    ) -> Mapping[str, str]:
+        """Find enabled catalog sources whose connector lacks configuration."""
+        unavailable: Dict[str, str] = {}
+        for source in catalog:
+            if not source.enabled:
+                continue
+            reason = registry.configuration_error_for(source.name)
+            if reason:
+                unavailable[source.name] = str(reason)
+        return unavailable
+
+    def _load_credentials_to_environment(self) -> None:
+        """Apply stored provider credentials and extra env vars to os.environ.
+
+        Runs after load_environment_file(.env), so a value saved through the
+        Settings page (database) intentionally wins over the .env default.
+        """
+        for key, value in self.repository.load_setting_values(
+            self.writable_env_keys
+        ).items():
+            os.environ[key] = value
+        for name, value in self.repository.load_extra_env():
+            os.environ[name] = value
+
+    @staticmethod
+    def _sync_environment_value(name: str, value: str) -> None:
+        """Sync one credential/custom env value to the running process."""
+        normalized = value.strip()
+        if normalized:
+            os.environ[name] = normalized
+        else:
+            os.environ.pop(name, None)
+
+    def _refresh_unavailable_sources(self) -> None:
+        """Recompute connector availability after a secret setting changed."""
+        settings = load_settings(self.settings_path)
+        self.unavailable_sources = self._detect_unavailable_sources(
+            self._registry,
+            settings.sources,
+        )
+        self.repository.set_unavailable_sources(self.unavailable_sources)
+
+    def _settings_payload(self) -> Mapping[str, Any]:
+        provider_field_keys = [
+            field["env"]
+            for provider in self.provider_catalog
+            for field in provider["fields"]
+        ]
+        field_statuses = self.repository.setting_status(provider_field_keys)
+        providers = []
+        for provider in self.provider_catalog:
+            fields = []
+            for field in provider["fields"]:
+                status = field_statuses.get(
+                    field["env"],
+                    {"configured": False, "hint": ""},
+                )
+                fields.append(
+                    {
+                        **field,
+                        "configured": status["configured"],
+                        "hint": status["hint"],
+                    }
+                )
+            providers.append({**provider, "fields": fields})
+        stored_extra = self.repository.load_extra_env()
+        extra_keys = [
+            EXTRA_ENV_PREFIX + name for name, _ in stored_extra
+        ]
+        extra_statuses = self.repository.setting_status(extra_keys)
+        extra_env = [
+            {
+                "name": name,
+                "configured": extra_statuses[EXTRA_ENV_PREFIX + name][
+                    "configured"
+                ],
+                "hint": extra_statuses[EXTRA_ENV_PREFIX + name]["hint"],
+            }
+            for name, _ in stored_extra
+        ]
+        return {
+            "page_size": int(self.repository.setting("page_size", "25")),
+            "providers": providers,
+            "extra_env": extra_env,
+        }
 
     def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         selected_text = _first(query, "date")
@@ -299,13 +529,15 @@ class WebApplication:
 
     def _feed(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         filters = _filters_from_mapping({key: values[-1] for key, values in query.items()})
-        result = self.repository.query_feed(filters)
+        result = self.repository.query_feed_display(filters)
         disconnected = None
         available_types = set(self.repository.available_source_types())
         if filters.information_type == "news" and "news" not in available_types:
             disconnected = "News source not connected"
         elif filters.information_type == "community" and "community" not in available_types:
             disconnected = "Community source not connected"
+        elif filters.information_type == "research" and "research" not in available_types:
+            disconnected = "Research source not connected"
         return {
             "items": list(result.items),
             "pagination": {

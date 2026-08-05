@@ -32,6 +32,7 @@ class MockConnector:
                 url=f"https://example.test/items/{ticker.lower()}",
                 collected_at=collected_at,
                 raw_metadata={"generated": True},
+                market=request.market_for(ticker),
             )
             for ticker in request.tickers
         ]
