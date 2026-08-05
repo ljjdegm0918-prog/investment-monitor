@@ -604,7 +604,7 @@ class WebRepository:
             source.source_type: source for source in self._source_catalog
         }
         statuses: List[Mapping[str, Any]] = [
-            self._sec_source_status(
+            self._filings_source_status(
                 catalog_by_type.get("filings"),
                 current_time=current_time,
                 stale_after=stale_after,
@@ -622,39 +622,67 @@ class WebRepository:
             )
         return statuses
 
-    def _sec_source_status(
+    def _filings_source_status(
         self,
         source: Optional[SourceConfig],
         *,
         current_time: datetime,
         stale_after: timedelta,
     ) -> Mapping[str, Any]:
+        filings_sources = self._enabled_filings_sources()
+        filings_enabled = bool(filings_sources)
+        if not filings_enabled:
+            return {
+                "type": "Filings",
+                "provider": None,
+                "status": "not_connected",
+                "latest_success": None,
+                "latest_attempt": None,
+                "last_failure": None,
+                "is_stale": False,
+                "stale_after_hours": int(stale_after.total_seconds() // 3600),
+            }
+        placeholders = ",".join("?" for _ in filings_sources)
+        parameters = tuple(filings_sources)
         with self._connect() as connection:
-            sec_row = connection.execute(
-                "SELECT MAX(collected_at) AS latest "
-                "FROM information_items WHERE source = 'sec'"
+            items_row = connection.execute(
+                f"""
+                SELECT MAX(collected_at) AS latest
+                FROM information_items
+                WHERE source IN ({placeholders})
+                  AND source_type = 'regulatory_filing'
+                """,
+                parameters,
             ).fetchone()
             run_row = connection.execute(
-                "SELECT * FROM ingestion_runs WHERE source = 'sec' "
-                "ORDER BY started_at DESC LIMIT 1"
+                f"""
+                SELECT * FROM ingestion_runs
+                WHERE source IN ({placeholders})
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                parameters,
             ).fetchone()
             success_row = connection.execute(
-                """
+                f"""
                 SELECT MAX(finished_at) AS latest
                 FROM ingestion_runs
-                WHERE source = 'sec' AND status IN ('success', 'partial')
-                """
+                WHERE source IN ({placeholders})
+                  AND status IN ('success', 'partial')
+                """,
+                parameters,
             ).fetchone()
             failure_row = connection.execute(
-                """
+                f"""
                 SELECT error_summary
                 FROM ingestion_runs
-                WHERE source = 'sec' AND status IN ('failure', 'partial')
+                WHERE source IN ({placeholders})
+                  AND status IN ('failure', 'partial')
                 ORDER BY started_at DESC LIMIT 1
-                """
+                """,
+                parameters,
             ).fetchone()
         latest = (success_row["latest"] if success_row else None) or (
-            sec_row["latest"] if sec_row else None
+            items_row["latest"] if items_row else None
         )
         is_stale = bool(
             latest
@@ -662,19 +690,29 @@ class WebRepository:
             - _parse_datetime(str(latest)).astimezone(timezone.utc)
             > stale_after
         )
-        sec_enabled = "sec" in self._allowed_sources
-        if not sec_enabled:
-            sec_status = "not_connected"
+        if not filings_enabled:
+            filings_status = "not_connected"
         elif run_row and run_row["status"] == "failure":
-            sec_status = "temporarily_unavailable"
+            filings_status = "temporarily_unavailable"
         elif latest and is_stale:
-            sec_status = "stale"
+            filings_status = "stale"
         else:
-            sec_status = "connected" if latest else "unavailable"
+            filings_status = "connected" if latest else "unavailable"
+        label_by_name = {
+            catalog_source.name: catalog_source.label
+            for catalog_source in self._source_catalog
+        }
+        provider = (
+            "SEC EDGAR"
+            if filings_sources == ("sec",)
+            else ", ".join(
+                label_by_name.get(name, name) for name in filings_sources
+            )
+        )
         return {
             "type": "Filings",
-            "provider": "SEC EDGAR" if sec_enabled else None,
-            "status": sec_status,
+            "provider": provider,
+            "status": filings_status,
             "latest_success": latest,
             "latest_attempt": (
                 (run_row["finished_at"] or run_row["started_at"])
@@ -687,6 +725,14 @@ class WebRepository:
             "is_stale": is_stale,
             "stale_after_hours": int(stale_after.total_seconds() // 3600),
         }
+
+    def _enabled_filings_sources(self) -> Tuple[str, ...]:
+        """Return enabled catalog sources whose content type is filings."""
+        return tuple(
+            source.name
+            for source in self._source_catalog
+            if source.source_type == "filings" and source.enabled
+        )
 
     def _content_type_status(
         self,

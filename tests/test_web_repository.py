@@ -313,6 +313,22 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(sec["status"], "stale")
         self.assertTrue(sec["is_stale"])
 
+    def test_filings_status_is_driven_by_regulatory_filing_items(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            make_item("fresh-sec-item", accepted_at="2026-08-04T12:00:00+00:00")
+        ])
+
+        statuses = self.repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "SEC EDGAR")
+
     def test_collection_activity_is_persisted_without_invented_metrics(self) -> None:
         started = datetime(2026, 8, 2, 12, tzinfo=timezone.utc)
         finished = datetime(2026, 8, 2, 12, 0, 2, tzinfo=timezone.utc)

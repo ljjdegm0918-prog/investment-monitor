@@ -42,6 +42,7 @@ from .models import (
     InformationItem,
     MARKET_CN,
     MARKET_HK,
+    MARKET_KR,
     MARKET_UNKNOWN,
     MARKET_US,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "InformationItem",
     "MARKET_CN",
     "MARKET_HK",
+    "MARKET_KR",
     "MARKET_UNKNOWN",
     "MARKET_US",
     "MockConnector",
