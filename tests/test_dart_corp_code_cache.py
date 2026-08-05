@@ -128,6 +128,32 @@ class CorpCodeCacheTests(unittest.TestCase):
             with self.assertRaises(DartRequestError):
                 cache.resolve("005930")
 
+    def test_all_entries_returns_full_mapping(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "corp.json"
+            client = FakeClient(
+                make_zip(
+                    [
+                        ("00593000", "삼성전자", "005930"),
+                        ("00027000", "기아", "000270"),
+                        ("00000001", "미상장법인", ""),
+                    ]
+                )
+            )
+            cache = CorpCodeCache(client=client, cache_path=cache_path)
+
+            entries = cache.all_entries()
+
+            self.assertEqual(
+                entries["005930"],
+                ("00593000", "삼성전자"),
+            )
+            self.assertEqual(
+                entries["000270"],
+                ("00027000", "기아"),
+            )
+            self.assertNotIn("00000001", entries)
+
 
 if __name__ == "__main__":
     unittest.main()

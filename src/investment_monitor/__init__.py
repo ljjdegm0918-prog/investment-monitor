@@ -20,6 +20,12 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .kr_universe import (
+    KrUniverseError,
+    kr_universe_name_map,
+    load_kr_universe,
+    refresh_kr_universe,
+)
 from .sources.dart import (
     CorpCodeCache,
     DARTCompanyResolver,
@@ -98,6 +104,7 @@ __all__ = [
     "KindDataError",
     "KindError",
     "KindRequestError",
+    "KrUniverseError",
     "MARKET_CN",
     "MARKET_HK",
     "MARKET_KR",
@@ -121,9 +128,12 @@ __all__ = [
     "WorkflowResult",
     "WebRepository",
     "create_default_registry",
+    "kr_universe_name_map",
+    "load_kr_universe",
     "load_settings",
     "load_environment_file",
     "load_universe",
+    "refresh_kr_universe",
     "generate_html_report",
     "run_configured_collection",
     "run_ticker_collection",

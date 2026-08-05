@@ -48,6 +48,10 @@ class CorpCodeCache:
         corp_code, corp_name = entry
         return corp_code, corp_name, key
 
+    def all_entries(self) -> Dict[str, Tuple[str, str]]:
+        """Return all cached stock_code -> (corp_code, corp_name) pairs."""
+        return dict(self._load_mapping())
+
     def _load_mapping(self) -> Dict[str, Tuple[str, str]]:
         if self._mapping is not None:
             return self._mapping

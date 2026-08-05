@@ -350,6 +350,7 @@ class WebRepository:
         list_slugs: Sequence[str],
         resolver: CompanyResolver,
         market: str = MARKET_US,
+        name_fallback: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> Mapping[str, Any]:
         tickers = _normalize_tickers(raw_tickers)
         if not tickers:
@@ -367,6 +368,7 @@ class WebRepository:
         already_present: List[Mapping[str, Any]] = []
         failed: List[Mapping[str, str]] = []
         now = _utc_now()
+        fallback = name_fallback or {}
         with self._connect() as connection:
             for ticker in tickers:
                 mapping = (
@@ -392,9 +394,10 @@ class WebRepository:
                         continue
                     # Non-US markets are added honestly without pretending the
                     # SEC resolver can map them; mapping_status stays unmapped.
+                    entry = fallback.get(ticker, {})
                     identity = {
-                        "name": ticker,
-                        "exchange": "Unavailable",
+                        "name": str(entry.get("name") or ticker),
+                        "exchange": str(entry.get("exchange") or "Unavailable"),
                         "cik": "",
                         "mapping_status": "unmapped",
                     }

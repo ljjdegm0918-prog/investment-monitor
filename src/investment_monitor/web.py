@@ -24,6 +24,7 @@ from .config import (
     load_universe,
 )
 from .connectors.base import ConnectorUnavailableError
+from .kr_universe import kr_universe_name_map
 from .models import MARKET_KR, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
@@ -191,11 +192,15 @@ class WebApplication:
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
                 resolver = self._resolver_for(market)
+                name_fallback = (
+                    kr_universe_name_map() if market == MARKET_KR else None
+                )
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
                     resolver,
                     market=market,
+                    name_fallback=name_fallback,
                 ))
                 added_tickers = tuple(
                     str(record["ticker"]) for record in result["added"]

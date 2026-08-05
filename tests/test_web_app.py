@@ -507,6 +507,61 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["added"][0]["cik"], "00593000")
         self.assertEqual(companies[0]["cik"], "00593000")
 
+    def test_adding_kr_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "kr_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-08-05T00:00:00+00:00",
+                    "source": "dart_corpcode",
+                    "items": [
+                        {
+                            "stock_code": "005930",
+                            "name": "삼성전자",
+                            "market_hint": "KRX",
+                            "instrument_kind": "equity",
+                            "exchange": "KRX",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"KR_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "005930",
+                        "lists": ["holdings"],
+                        "market": "kr",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["name"], "삼성전자")
+        self.assertEqual(added["exchange"], "KRX")
+        self.assertEqual(added["market"], "kr")
+        self.assertEqual(added["mapping_status"], "unmapped")
+
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
             "POST",
