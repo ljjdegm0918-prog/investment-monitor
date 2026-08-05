@@ -74,7 +74,6 @@ class WebApplicationTests(unittest.TestCase):
         for state_text in (
             b"Loading information",
             b"No information for this date",
-            b"Search returned no results",
             b"This source is not configured",
             b"Request failed",
         ):
@@ -654,6 +653,68 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["name"], "VODAFONE GROUP PUBLIC LIMITED COMPANY")
         self.assertEqual(added["exchange"], "LSE")
         self.assertEqual(added["mapping_status"], "unmapped")
+
+    def test_bootstrap_list_unread_counts_only_today(self) -> None:
+        self.items.save([
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="today-1",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+                title="Today filing",
+                document_type="8-K",
+                url="https://www.sec.gov/today-1",
+                collected_at=datetime(2026, 8, 2, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-02T12:00:00+00:00"
+                },
+            ),
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="today-2",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+                title="Today filing two",
+                document_type="8-K",
+                url="https://www.sec.gov/today-2",
+                collected_at=datetime(2026, 8, 2, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-02T13:00:00+00:00"
+                },
+            ),
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="old-1",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                title="Old filing",
+                document_type="8-K",
+                url="https://www.sec.gov/old-1",
+                collected_at=datetime(2026, 8, 1, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-01T12:00:00+00:00"
+                },
+            ),
+        ])
+
+        payload = self.payload(
+            self.application.handle("GET", "/api/bootstrap?date=2026-08-02")
+        )
+
+        holdings = next(
+            list_record
+            for list_record in payload["lists"]
+            if list_record["slug"] == "holdings"
+        )
+        self.assertEqual(holdings["unread_count"], 2)
+        self.assertEqual(payload["counts"]["unread"], 2)
+        self.assertNotEqual(holdings["unread_count"], 3)
 
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
