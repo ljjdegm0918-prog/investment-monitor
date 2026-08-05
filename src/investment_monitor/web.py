@@ -25,7 +25,7 @@ from .config import (
 )
 from .connectors.base import ConnectorUnavailableError
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_KR, MARKET_US
+from .models import MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.dart import DARTCompanyResolver
@@ -413,6 +413,10 @@ class WebApplication:
         """Pick the company resolver for a market (KR uses OpenDART)."""
         if market == MARKET_KR:
             return self.dart_resolver
+        if market == MARKET_UK:
+            # UK has no resolver in this phase; never let SEC map a UK ticker
+            # to a same-named US company.
+            return None
         return self.resolver
 
     @staticmethod

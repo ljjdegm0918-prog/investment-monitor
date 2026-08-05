@@ -562,6 +562,29 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["market"], "kr")
         self.assertEqual(added["mapping_status"], "unmapped")
 
+    def test_adding_uk_company_never_uses_sec_resolver(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "MSFT",
+                    "lists": ["holdings"],
+                    "market": "uk",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "MSFT")
+        self.assertEqual(added["market"], "uk")
+        # MSFT exists in the SEC cache; without the UK guard this would be
+        # mapped as the US company.
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(added["cik"], "")
+
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
             "POST",

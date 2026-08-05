@@ -150,7 +150,7 @@ function advancedFilters() {
 }
 
 function addCompanyPanel() {
-  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped. Korea (KR) news/disclosure sources are not connected yet in this phase.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
+  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="uk">UK (LSE/AIM)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped. UK disclosure sources are not connected yet in this phase.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
 }
 
 function companyManagement(companies) {
@@ -222,7 +222,7 @@ function feedItem(item, index) {
 }
 
 function badge(slug) { return `<span class="list-badge ${slug}">${listLabels[slug] || slug}</span>`; }
-function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
+function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", uk: "UK", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
 function pagination(p) { return `<div class="pagination"><span>Page ${p.page} of ${p.pages}</span><div><button class="button" data-page="${p.page - 1}" ${p.page <= 1 ? "disabled" : ""}>Previous</button> <button class="button" data-page="${p.page + 1}" ${p.page >= p.pages ? "disabled" : ""}>Next</button></div></div>`; }
 
 async function markRead(id, isRead) { try { await setRead([id], isRead); await reloadWorkspaceCounts(); await loadFeed(); toast(`Marked as ${isRead ? "read" : "unread"}.`); } catch (error) { toast(error.message, true); } }
