@@ -24,6 +24,7 @@ DEFAULT_SOURCE_META = {
     "naver_news": ("Naver Finance", "news"),
     "hankyung": ("Hankyung", "news"),
     "thebell": ("TheBell", "news"),
+    "yahoo_uk": ("Yahoo Finance UK", "news"),
     "news": ("News", "news"),
     "community": ("Community", "community"),
     "research": ("Research", "research"),

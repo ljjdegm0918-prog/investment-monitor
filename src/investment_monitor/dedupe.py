@@ -26,9 +26,10 @@ FILING_SOURCE_PRIORITY = {
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
-    "news": 1,
-    "hankyung": 2,
-    "thebell": 3,
+    "yahoo_uk": 1,
+    "news": 2,
+    "hankyung": 3,
+    "thebell": 4,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -40,6 +41,7 @@ SOURCE_DISPLAY_LABELS = {
     "news": "Finnhub News",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
+    "yahoo_uk": "Yahoo Finance UK",
 }
 
 _FULLWIDTH_SPACE = "\u3000"

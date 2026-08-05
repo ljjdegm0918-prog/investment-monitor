@@ -88,6 +88,13 @@ from .sources.news import (
     FinnhubNewsError,
     FinnhubNewsRequestError,
 )
+from .sources.uk_news import (
+    YahooNewsClient,
+    YahooNewsConnector,
+    YahooNewsDataError,
+    YahooNewsError,
+    YahooNewsRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -183,6 +190,11 @@ __all__ = [
     "UkUniverseError",
     "UniverseEntry",
     "WorkflowResult",
+    "YahooNewsClient",
+    "YahooNewsConnector",
+    "YahooNewsDataError",
+    "YahooNewsError",
+    "YahooNewsRequestError",
     "WebRepository",
     "create_default_registry",
     "kr_universe_name_map",

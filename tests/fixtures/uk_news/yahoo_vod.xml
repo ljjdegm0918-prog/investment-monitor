@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Latest Financial News for VOD.L</title>
+    <item>
+      <title>Vodafone completes VodafoneZiggo exit</title>
+      <link>https://finance.yahoo.com/markets/stocks/articles/vodafone-ziggo-exit-110000619.html</link>
+      <pubDate>Mon, 03 Aug 2026 11:00:00 +0000</pubDate>
+      <description>Vodafone has completed the sale of VodafoneZiggo.</description>
+    </item>
+    <item>
+      <title>Director dealings: Vodafone finance chief sells shares</title>
+      <link>https://uk.finance.yahoo.com/news/vodafone-director-dealings-110000620.html</link>
+      <pubDate>Fri, 31 Jul 2026 10:42:00 +0000</pubDate>
+      <description>A director sold shares in Vodafone.</description>
+    </item>
+    <item>
+      <title>Old Vodafone story</title>
+      <link>https://finance.yahoo.com/markets/stocks/articles/old-vodafone-109900001.html</link>
+      <pubDate>Mon, 20 Jul 2026 09:00:00 +0000</pubDate>
+      <description>An older story outside the window.</description>
+    </item>
+  </channel>
+</rss>

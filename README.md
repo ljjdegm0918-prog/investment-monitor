@@ -137,6 +137,9 @@ A-share or HK resolution.
   small seed adds tickers for common blue chips; it is breadth-only and never
   enters the feed. Refresh via `refresh_uk_universe()` (the full daily set
   is large; use `UK_UNIVERSE_MAX_PARTS` to validate incrementally).
+- UK news: key-free Yahoo Finance UK RSS mirror (`yahoo_uk` source) for
+  `market=uk` tickers (symbols get a `.L` suffix at request time only). The
+  feed may break without notice; Finnhub remains US-only.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

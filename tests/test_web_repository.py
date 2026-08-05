@@ -675,6 +675,38 @@ class WebRepositoryTests(unittest.TestCase):
         )
         self.assertIsNotNone(news["latest_attempt"])
 
+    def test_news_status_includes_yahoo_uk_provider(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("yahoo_uk",),
+            known_sources=(
+                SourceConfig(
+                    name="yahoo_uk",
+                    label="Yahoo Finance UK",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("yahoo_uk",),
+        )
+        self.items.save([
+            make_item(
+                "yahoo-1",
+                source="yahoo_uk",
+                source_type="news",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertEqual(news["status"], "connected")
+        self.assertEqual(news["provider"], "Yahoo Finance UK")
+
     def test_filings_status_can_be_driven_by_investegate_items(self) -> None:
         repository = WebRepository(
             self.database_path,
