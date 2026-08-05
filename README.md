@@ -126,6 +126,9 @@ A-share or HK resolution.
   company filings, not RNS. Company numbers are resolved from a small
   verified seed table, numeric inputs, or a unique active search match;
   otherwise companies stay unmapped.
+- Investegate: key-free RNS-class public mirror of company announcements
+  (`investegate` source). It is not an official LSEG RNS feed; the page is
+  scraped politely (>=1s/request) and may break without notice.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

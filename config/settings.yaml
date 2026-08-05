@@ -16,6 +16,10 @@ sources:
     label: Companies House
     source_type: filings
     enabled: true          # requires COMPANIES_HOUSE_API_KEY; statutory filings, not RNS
+  - name: investegate
+    label: Investegate
+    source_type: filings
+    enabled: true          # RNS-class public mirror; page scrape, may break without notice
   - name: news
     label: News
     source_type: news

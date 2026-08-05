@@ -675,6 +675,39 @@ class WebRepositoryTests(unittest.TestCase):
         )
         self.assertIsNotNone(news["latest_attempt"])
 
+    def test_filings_status_can_be_driven_by_investegate_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("investegate",),
+            known_sources=(
+                SourceConfig(
+                    name="investegate",
+                    label="Investegate",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("investegate",),
+        )
+        self.items.save([
+            make_item(
+                "investegate-1",
+                source="investegate",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "Investegate")
+
 
 if __name__ == "__main__":
     unittest.main()

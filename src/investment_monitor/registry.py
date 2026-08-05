@@ -13,6 +13,7 @@ from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
 from .sources.companies_house import CompaniesHouseConnector
 from .sources.dart import DARTConnector
+from .sources.investegate import InvestegateConnector
 from .sources.kind import KindConnector
 from .sources.kr_news import (
     HankyungConnector,
@@ -130,6 +131,7 @@ def create_default_registry() -> SourceRegistry:
         secret_fields=CompaniesHouseConnector.secret_fields,
         configuration_error=CompaniesHouseConnector.configuration_error,
     )
+    registry.register(InvestegateConnector.name, InvestegateConnector)
     registry.register(NaverNewsConnector.name, NaverNewsConnector)
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)

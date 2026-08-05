@@ -17,7 +17,13 @@ from zoneinfo import ZoneInfo
 KST = ZoneInfo("Asia/Seoul")
 RECEIPT_LENGTH = 14
 
-FILING_SOURCE_PRIORITY = {"dart": 0, "kind": 1, "sec": 2}
+FILING_SOURCE_PRIORITY = {
+    "dart": 0,
+    "investegate": 1,
+    "companies_house": 2,
+    "kind": 3,
+    "sec": 4,
+}
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
     "news": 1,
@@ -26,6 +32,8 @@ NEWS_SOURCE_PRIORITY = {
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
+    "investegate": "Investegate",
+    "companies_house": "Companies House",
     "kind": "KIND (KRX)",
     "sec": "SEC EDGAR",
     "naver_news": "Naver Finance",

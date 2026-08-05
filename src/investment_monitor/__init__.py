@@ -44,6 +44,13 @@ from .sources.dart import (
     DartError,
     DartRequestError,
 )
+from .sources.investegate import (
+    InvestegateClient,
+    InvestegateConnector,
+    InvestegateDataError,
+    InvestegateError,
+    InvestegateRequestError,
+)
 from .sources.kind import (
     KindClient,
     KindConnector,
@@ -126,6 +133,11 @@ __all__ = [
     "DartDataError",
     "DartError",
     "DartRequestError",
+    "InvestegateClient",
+    "InvestegateConnector",
+    "InvestegateDataError",
+    "InvestegateError",
+    "InvestegateRequestError",
     "FinnhubClient",
     "FinnhubNewsConnector",
     "FinnhubNewsDataError",
