@@ -26,6 +26,12 @@ from .kr_universe import (
     load_kr_universe,
     refresh_kr_universe,
 )
+from .uk_universe import (
+    UkUniverseError,
+    load_uk_universe,
+    refresh_uk_universe,
+    uk_universe_name_map,
+)
 from .sources.companies_house import (
     CompaniesHouseClient,
     CompaniesHouseCompanyResolver,
@@ -174,19 +180,23 @@ __all__ = [
     "SaveResult",
     "TickerCollectionFailure",
     "TheBellConnector",
+    "UkUniverseError",
     "UniverseEntry",
     "WorkflowResult",
     "WebRepository",
     "create_default_registry",
     "kr_universe_name_map",
     "load_kr_universe",
+    "load_uk_universe",
     "load_settings",
     "load_environment_file",
     "load_universe",
     "refresh_kr_universe",
+    "refresh_uk_universe",
     "generate_html_report",
     "run_configured_collection",
     "run_ticker_collection",
     "run_workflow",
+    "uk_universe_name_map",
     "ReportResult",
 ]

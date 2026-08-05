@@ -33,6 +33,7 @@ from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
+from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
@@ -211,9 +212,11 @@ class WebApplication:
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
                 resolver = self._resolver_for(market)
-                name_fallback = (
-                    kr_universe_name_map() if market == MARKET_KR else None
-                )
+                name_fallback = None
+                if market == MARKET_KR:
+                    name_fallback = kr_universe_name_map()
+                elif market == MARKET_UK:
+                    name_fallback = uk_universe_name_map()
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),

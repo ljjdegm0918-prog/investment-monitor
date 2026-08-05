@@ -132,6 +132,11 @@ A-share or HK resolution.
 - Investegate: key-free RNS-class public mirror of company announcements
   (`investegate` source). It is not an official LSEG RNS feed; the page is
   scraped politely (>=1s/request) and may break without notice.
+- UK universe: key-free FCA FIRDS FULINS cache (ISIN / LEI / venue / name).
+  FIRDS does not carry ticker mnemonics, so the cache is ISIN-keyed and a
+  small seed adds tickers for common blue chips; it is breadth-only and never
+  enters the feed. Refresh via `refresh_uk_universe()` (the full daily set
+  is large; use `UK_UNIVERSE_MAX_PARTS` to validate incrementally).
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

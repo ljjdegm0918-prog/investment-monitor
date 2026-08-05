@@ -600,6 +600,61 @@ class WebApplicationTests(unittest.TestCase):
             application.resolver,
         )
 
+    def test_adding_uk_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "uk_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-08-06T00:00:00+00:00",
+                    "source": "firds",
+                    "items": [
+                        {
+                            "ticker": "VOD",
+                            "name": "VODAFONE GROUP PUBLIC LIMITED COMPANY",
+                            "isin": "GB00BH4HKS39",
+                            "exchange": "LSE",
+                            "instrument_kind": "equity",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"UK_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "VOD",
+                        "lists": ["holdings"],
+                        "market": "uk",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "VOD")
+        self.assertEqual(added["name"], "VODAFONE GROUP PUBLIC LIMITED COMPANY")
+        self.assertEqual(added["exchange"], "LSE")
+        self.assertEqual(added["mapping_status"], "unmapped")
+
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
             "POST",
