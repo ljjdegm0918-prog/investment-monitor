@@ -16,6 +16,18 @@ sources:
     label: News
     source_type: news
     enabled: true          # requires FINNHUB_API_KEY; degrades to Not connected without it
+  - name: naver_news
+    label: Naver Finance
+    source_type: news
+    enabled: true          # key-free public page scrape; may break without notice
+  - name: hankyung
+    label: Hankyung
+    source_type: news
+    enabled: false         # stock news endpoint returned 403/404 from current network
+  - name: thebell
+    label: TheBell
+    source_type: news
+    enabled: false         # stock news endpoint returned soft 404 from current network
   - name: community
     label: Community
     source_type: community

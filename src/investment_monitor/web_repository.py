@@ -38,6 +38,9 @@ SOURCE_LABELS = {
     "sec": "SEC EDGAR",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
+    "naver_news": "Naver Finance",
+    "hankyung": "Hankyung",
+    "thebell": "TheBell",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -46,6 +49,9 @@ PROVIDER_LABELS = {
     "news": "Finnhub News",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
+    "naver_news": "Naver Finance",
+    "hankyung": "Hankyung",
+    "thebell": "TheBell",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -71,6 +77,9 @@ STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("dart", "OpenDART", "filings"),
     ("kind", "KIND (KRX)", "filings"),
+    ("naver_news", "Naver Finance", "news"),
+    ("hankyung", "Hankyung", "news"),
+    ("thebell", "TheBell", "news"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
@@ -753,15 +762,33 @@ class WebRepository:
     ) -> Mapping[str, Any]:
         providers, latest = self._content_type_data(source_type)
         connected = bool(providers)
-        enabled = bool(source and source.enabled)
-        implemented = bool(
-            source and source.name in self._implemented_sources
+        type_sources = [
+            catalog_source
+            for catalog_source in self._source_catalog
+            if catalog_source.source_type == source_type
+        ]
+        enabled = any(
+            catalog_source.name in self._allowed_sources
+            for catalog_source in type_sources
         )
+        implemented = any(
+            catalog_source.name in self._implemented_sources
+            for catalog_source in type_sources
+        )
+        active_sources = [
+            catalog_source
+            for catalog_source in type_sources
+            if catalog_source.name in self._allowed_sources
+            and catalog_source.name in self._implemented_sources
+            and catalog_source.name not in self._unavailable_sources
+        ]
+        unavailable_reasons = [
+            self._unavailable_sources[catalog_source.name]
+            for catalog_source in type_sources
+            if catalog_source.name in self._unavailable_sources
+        ]
         run_row, failure_row = self._source_run_status(
-            source.name if source else None
-        )
-        unavailable_reason = (
-            self._unavailable_sources.get(source.name) if source else None
+            active_sources[0].name if active_sources else None
         )
         is_stale = bool(
             connected
@@ -772,7 +799,7 @@ class WebRepository:
         )
         if connected:
             status = "stale" if is_stale else "connected"
-        elif unavailable_reason:
+        elif unavailable_reasons:
             status = "not_connected"
         elif enabled and implemented:
             status = (
@@ -782,12 +809,14 @@ class WebRepository:
             )
         else:
             status = "not_connected"
-        if source and PROVIDER_LABELS.get(source.name):
-            provider = (
-                PROVIDER_LABELS[source.name] if connected else None
+        if connected and active_sources:
+            provider = ", ".join(
+                PROVIDER_LABELS.get(
+                    active_source.name,
+                    active_source.label,
+                )
+                for active_source in active_sources
             )
-        elif source and enabled:
-            provider = source.label if connected else None
         else:
             provider = str(providers) if connected else None
         return {
@@ -801,8 +830,9 @@ class WebRepository:
                 else None
             ),
             "last_failure": (
-                unavailable_reason
-                or (failure_row["error_summary"] if failure_row else None)
+                "; ".join(unavailable_reasons)
+                if unavailable_reasons
+                else (failure_row["error_summary"] if failure_row else None)
             ),
             "is_stale": is_stale,
         }

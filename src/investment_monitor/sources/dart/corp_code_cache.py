@@ -87,7 +87,9 @@ class CorpCodeCache:
             age = float(self._clock()) - self._cache_path.stat().st_mtime
         except OSError:
             return False
-        return 0 <= age <= self._ttl_seconds
+        # A just-written file can report mtime slightly ahead of the clock on
+        # Windows; treat a tiny negative age as fresh.
+        return -1 <= age <= self._ttl_seconds
 
     def _download_and_cache(self) -> Dict[str, Tuple[str, str]]:
         if self._client is None:

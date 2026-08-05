@@ -593,6 +593,45 @@ class WebRepositoryTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=bad_name):
                 self.repository.set_setting(f"extra_env:{bad_name}", "x")
 
+    def test_news_status_aggregates_multiple_news_sources(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("news", "naver_news"),
+            known_sources=(
+                SourceConfig(
+                    name="news",
+                    label="News",
+                    source_type="news",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="naver_news",
+                    label="Naver Finance",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("news", "naver_news"),
+        )
+        self.items.save([
+            make_item("news-1", source="news", source_type="news"),
+            make_item(
+                "naver-1",
+                source="naver_news",
+                source_type="news",
+            ),
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertEqual(news["status"], "connected")
+        self.assertEqual(news["provider"], "Finnhub News, Naver Finance")
+
 
 if __name__ == "__main__":
     unittest.main()
