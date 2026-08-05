@@ -105,6 +105,21 @@ and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
 symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
 A-share or HK resolution.
 
+### Korea sources (KR)
+- OpenDART (`DART_API_KEY`): official disclosure API; corp_code mapping and
+  disclosure list.
+- KIND (KRX): key-free exchange disclosure page scrape; may break without
+  notice.
+- Naver Finance (`naver_news`): key-free stock news scrape; fragile, may be
+  empty from non-KR networks. Hankyung/TheBell are implemented but disabled
+  until their endpoints are reachable.
+- Tradeable universe: cached from the OpenDART corpCode listing; ETF/ETN
+  coverage is partial. FSC/data.go.kr is skipped because registration
+  requires Korean identity.
+- Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
+  sharing a 14-digit receipt number fold in the feed with an "Also from"
+  label; all database rows are kept.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

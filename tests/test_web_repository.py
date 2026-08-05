@@ -632,6 +632,49 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(news["status"], "connected")
         self.assertEqual(news["provider"], "Finnhub News, Naver Finance")
 
+    def test_news_status_latest_attempt_covers_any_news_source(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("news", "naver_news"),
+            known_sources=(
+                SourceConfig(
+                    name="news",
+                    label="News",
+                    source_type="news",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="naver_news",
+                    label="Naver Finance",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("news", "naver_news"),
+        )
+        repository.record_collection_events((SimpleNamespace(
+            source="naver_news",
+            ticker="005930",
+            started_at=datetime(2026, 8, 2, 12, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 8, 2, 12, 0, 1, tzinfo=timezone.utc),
+            status="success",
+            records_read=1,
+            records_written=1,
+            records_inserted=1,
+            records_updated=0,
+            duplicate_records=0,
+            error_message=None,
+        ),))
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertIsNotNone(news["latest_attempt"])
+
 
 if __name__ == "__main__":
     unittest.main()

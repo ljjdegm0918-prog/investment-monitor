@@ -529,7 +529,7 @@ class WebApplication:
 
     def _feed(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         filters = _filters_from_mapping({key: values[-1] for key, values in query.items()})
-        result = self.repository.query_feed(filters)
+        result = self.repository.query_feed_display(filters)
         disconnected = None
         available_types = set(self.repository.available_source_types())
         if filters.information_type == "news" and "news" not in available_types:

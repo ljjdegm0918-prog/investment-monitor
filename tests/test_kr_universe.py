@@ -244,6 +244,25 @@ class KrUniverseTests(unittest.TestCase):
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(companies[0]["name"], "삼성전자")
 
+    def test_name_fallback_handles_unpadded_ticker(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "web.sqlite3"
+            SQLiteInformationRepository(database_path)
+            repository = WebRepository(database_path)
+
+            result = repository.add_companies_batch(
+                "5930",
+                ("holdings",),
+                None,
+                market="kr",
+                name_fallback={
+                    "005930": {"name": "삼성전자", "exchange": "KRX"}
+                },
+            )
+
+        self.assertEqual(result["added"][0]["name"], "삼성전자")
+        self.assertEqual(result["added"][0]["exchange"], "KRX")
+
 
 if __name__ == "__main__":
     unittest.main()

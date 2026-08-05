@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -24,6 +25,7 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
+from .dedupe import fold_feed_items
 from .models import ALLOWED_MARKETS, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
@@ -404,6 +406,15 @@ class WebRepository:
                     # Non-US markets are added honestly without pretending the
                     # SEC resolver can map them; mapping_status stays unmapped.
                     entry = fallback.get(ticker, {})
+                    if not entry:
+                        entry = fallback.get(
+                            (
+                                ticker.zfill(6)
+                                if ticker.isdigit()
+                                else ticker
+                            ),
+                            {},
+                        )
                     identity = {
                         "name": str(entry.get("name") or ticker),
                         "exchange": str(entry.get("exchange") or "Unavailable"),
@@ -538,6 +549,25 @@ class WebRepository:
             page,
             filters.page_size,
         )
+
+    def query_feed_display(self, filters: FeedFilters) -> PageResult:
+        """Return a feed page with cross-source soft dedupe applied."""
+        result = self.query_feed(filters)
+        items = fold_feed_items(
+            result.items,
+            enabled=self._kr_soft_dedupe_enabled(),
+        )
+        return PageResult(
+            tuple(items),
+            result.total,
+            result.page,
+            result.page_size,
+        )
+
+    @staticmethod
+    def _kr_soft_dedupe_enabled() -> bool:
+        value = os.environ.get("KR_FEED_SOFT_DEDUPE", "true").strip().lower()
+        return value not in {"0", "false", "no", "off"}
 
     def counts(self, selected_date: date) -> Mapping[str, Any]:
         start_utc, end_utc = _eastern_day_bounds(selected_date)
@@ -788,7 +818,7 @@ class WebRepository:
             if catalog_source.name in self._unavailable_sources
         ]
         run_row, failure_row = self._source_run_status(
-            active_sources[0].name if active_sources else None
+            [active_source.name for active_source in active_sources]
         )
         is_stale = bool(
             connected
@@ -839,27 +869,30 @@ class WebRepository:
 
     def _source_run_status(
         self,
-        source_name: Optional[str],
+        source_names: Sequence[str],
     ) -> Tuple[Optional[sqlite3.Row], Optional[sqlite3.Row]]:
-        if not source_name:
+        unique_names = tuple(dict.fromkeys(source_names))
+        if not unique_names:
             return None, None
+        placeholders = ",".join("?" for _ in unique_names)
         with self._connect() as connection:
             run_row = connection.execute(
-                """
+                f"""
                 SELECT * FROM ingestion_runs
-                WHERE source = ?
+                WHERE source IN ({placeholders})
                 ORDER BY started_at DESC LIMIT 1
                 """,
-                (source_name,),
+                unique_names,
             ).fetchone()
             failure_row = connection.execute(
-                """
+                f"""
                 SELECT error_summary
                 FROM ingestion_runs
-                WHERE source = ? AND status IN ('failure', 'partial')
+                WHERE source IN ({placeholders})
+                  AND status IN ('failure', 'partial')
                 ORDER BY started_at DESC LIMIT 1
                 """,
-                (source_name,),
+                unique_names,
             ).fetchone()
         return run_row, failure_row
 
