@@ -206,7 +206,7 @@ class FinnhubNewsConnectorTests(unittest.TestCase):
 
         self.assertEqual(items, [])
 
-    def test_market_symbol_mapping(self) -> None:
+    def test_market_symbol_mapping_is_us_only(self) -> None:
         opener = FakeOpener(
             responses={
                 "https://finnhub.io/api/v1/company-news": [article()]
@@ -214,7 +214,7 @@ class FinnhubNewsConnectorTests(unittest.TestCase):
         )
         connector = make_connector(opener)
         request = CollectionRequest(
-            tickers=("AAPL", "0700", "600519"),
+            tickers=("AAPL", "0700", "600519", "BRK.B"),
             start_date=date(2026, 8, 1),
             end_date=date(2026, 8, 2),
             markets={"AAPL": "us", "0700": "hk", "600519": "cn"},
@@ -223,35 +223,30 @@ class FinnhubNewsConnectorTests(unittest.TestCase):
         items = connector.collect(request)
         requested = opener.requested
 
+        # Only US (and unknown-as-US-style) symbols are requested; HK/CN are
+        # skipped before any HTTP call.
+        self.assertEqual(len(requested), 2)
         self.assertIn("symbol=AAPL", requested[0])
-        self.assertIn("symbol=0700.HK", requested[1])
-        self.assertIn("symbol=600519.SS", requested[2])
-        self.assertIn("symbol=600519.SZ", requested[3])
+        self.assertIn("symbol=BRK.B", requested[1])
         self.assertTrue(items)
+        self.assertEqual(connector.last_errors, ())
 
-    def test_cn_no_coverage_404_is_not_a_ticker_failure(self) -> None:
-        opener = FakeOpener(errors={
-            "https://finnhub.io/api/v1/company-news": HTTPError(
-                "https://finnhub.io/api/v1/company-news",
-                404,
-                "not found",
-                {},
-                None,
-            )
-        })
+    def test_non_us_markets_are_skipped_without_http_requests(self) -> None:
+        opener = FakeOpener()
         connector = make_connector(opener)
 
         items = connector.collect(
             CollectionRequest(
-                tickers=("600519",),
+                tickers=("0700", "600519"),
                 start_date=date(2026, 8, 1),
                 end_date=date(2026, 8, 2),
-                markets={"600519": "cn"},
+                markets={"0700": "hk", "600519": "cn"},
             )
         )
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+        self.assertEqual(opener.requested, [])
 
     def test_us_http_failure_becomes_a_ticker_failure(self) -> None:
         opener = FakeOpener(errors={
@@ -265,6 +260,34 @@ class FinnhubNewsConnectorTests(unittest.TestCase):
         })
         connector = make_connector(opener)
 
+        with self.assertRaises(FinnhubNewsRequestError) as raised:
+            connector.collect(
+                CollectionRequest(
+                    tickers=("AAPL",),
+                    start_date=date(2026, 8, 1),
+                    end_date=date(2026, 8, 2),
+                )
+            )
+
+        message = str(raised.exception)
+        self.assertEqual(len(connector.last_errors), 1)
+        self.assertNotIn("test-key", message)
+        self.assertIn("REDACTED", message)
+        self.assertNotIn("test-key", connector.last_errors[0][1])
+        self.assertIn("REDACTED", connector.last_errors[0][1])
+
+    def test_unexpected_errors_are_redacted_in_last_errors(self) -> None:
+        def exploding_opener(request, timeout=None):
+            raise RuntimeError("boom token=test-key leak")
+
+        connector = FinnhubNewsConnector(
+            client=FinnhubClient(
+                api_key="test-key",
+                opener=exploding_opener,
+                requests_per_second=1000,
+            )
+        )
+
         with self.assertRaises(FinnhubNewsRequestError):
             connector.collect(
                 CollectionRequest(
@@ -274,7 +297,21 @@ class FinnhubNewsConnectorTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(len(connector.last_errors), 1)
+        message = connector.last_errors[0][1]
+        self.assertNotIn("test-key", message)
+        self.assertIn("REDACTED", message)
+
+    def test_redact_secrets_removes_token_values(self) -> None:
+        from investment_monitor.sources.news.connector import _redact_secrets
+
+        text = (
+            "https://finnhub.io/api/v1/company-news?symbol=AAPL"
+            "&from=2026-08-01&to=2026-08-02&token=test-key"
+        )
+        redacted = _redact_secrets(text)
+
+        self.assertNotIn("test-key", redacted)
+        self.assertIn("token=REDACTED", redacted)
 
     def test_retries_temporary_http_failure(self) -> None:
         calls = []

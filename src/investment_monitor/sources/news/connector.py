@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 from datetime import date, datetime, timezone
@@ -26,6 +27,8 @@ from ...models import (
     InformationItem,
     MARKET_CN,
     MARKET_HK,
+    MARKET_UNKNOWN,
+    MARKET_US,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -33,7 +36,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://finnhub.io/api/v1"
 MAX_LOOKBACK_DAYS = 30
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
-NO_COVERAGE_STATUS_CODES = frozenset({400, 404})
+TOKEN_IN_TEXT = re.compile(r"token=[^&#\s]*")
 
 
 class FinnhubNewsError(Exception):
@@ -121,6 +124,7 @@ class FinnhubClient:
         """GET one Finnhub endpoint and decode its JSON response."""
         query = urlencode({**dict(parameters), "token": self._api_key})
         url = f"{self._base_url}/{path.lstrip('/')}?{query}"
+        safe_url = _redact_secrets(url)
         for attempt in range(self._max_retries + 1):
             self._wait_for_rate_limit()
             request = Request(
@@ -135,7 +139,7 @@ class FinnhubClient:
                     return json.loads(body.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError) as error:
                     raise FinnhubNewsDataError(
-                        f"Finnhub returned invalid JSON for {url}"
+                        f"Finnhub returned invalid JSON for {safe_url}"
                     ) from error
             except HTTPError as error:
                 if (
@@ -143,23 +147,23 @@ class FinnhubClient:
                     or attempt == self._max_retries
                 ):
                     raise FinnhubNewsRequestError(
-                        f"Finnhub request failed with HTTP {error.code}: {url}",
+                        f"Finnhub request failed with HTTP {error.code}: {safe_url}",
                         status_code=error.code,
                     ) from error
             except URLError as error:
                 if attempt == self._max_retries:
                     raise FinnhubNewsRequestError(
                         f"Finnhub request failed after "
-                        f"{self._max_retries + 1} attempts: {url}"
+                        f"{self._max_retries + 1} attempts: {safe_url}"
                     ) from error
             except TimeoutError as error:
                 if attempt == self._max_retries:
                     raise FinnhubNewsRequestError(
                         f"Finnhub request timed out after "
-                        f"{self._max_retries + 1} attempts: {url}"
+                        f"{self._max_retries + 1} attempts: {safe_url}"
                     ) from error
             self._sleeper(0.5 * (2**attempt))
-        raise FinnhubNewsRequestError(f"Finnhub request failed: {url}")
+        raise FinnhubNewsRequestError(f"Finnhub request failed: {safe_url}")
 
     def _wait_for_rate_limit(self) -> None:
         with self._rate_limit_lock:
@@ -226,6 +230,15 @@ class FinnhubNewsConnector:
 
         for ticker in request.tickers:
             market = request.market_for(ticker)
+            # Finnhub company-news is treated as a US coverage source only.
+            # HK / A-share markets need dedicated connectors later.
+            if market in (MARKET_HK, MARKET_CN):
+                LOGGER.info(
+                    "news ticker=%s market=%s skipped unsupported_for_finnhub",
+                    ticker,
+                    market,
+                )
+                continue
             symbols = _symbols_for(market, ticker)
             ticker_items: List[InformationItem] = []
             candidate_failures: List[str] = []
@@ -251,21 +264,12 @@ class FinnhubNewsConnector:
                         )
                     )
                 except FinnhubNewsRequestError as error:
-                    if (
-                        error.status_code in NO_COVERAGE_STATUS_CODES
-                        and market in (MARKET_HK, MARKET_CN)
-                    ):
-                        LOGGER.info(
-                            "news symbol=%s market=%s no_coverage http=%s",
-                            symbol,
-                            market,
-                            error.status_code,
-                        )
-                        continue
-                    candidate_failures.append(f"{symbol}: {error}")
+                    candidate_failures.append(
+                        f"{symbol}: {_redact_secrets(str(error))}"
+                    )
                 except Exception as error:
                     candidate_failures.append(
-                        f"{symbol}: {str(error) or error.__class__.__name__}"
+                        f"{symbol}: {_redact_secrets(str(error) or error.__class__.__name__)}"
                     )
 
             if ticker_items:
@@ -370,19 +374,22 @@ class FinnhubNewsConnector:
 
 
 def _symbols_for(market: str, ticker: str) -> Tuple[str, ...]:
-    """Map a (ticker, market) pair to Finnhub symbol candidates."""
-    normalized = ticker.strip().upper()
-    if market == MARKET_HK:
-        return (
-            (normalized,)
-            if normalized.endswith(".HK")
-            else (f"{normalized}.HK",)
+    """Map a (ticker, market) pair to a US-style Finnhub symbol.
+
+    Finnhub company-news only covers US-listed symbols. The ``unknown``
+    market keeps the existing behavior of being queried with the raw ticker
+    (the same as US); HK/CN markets are skipped before this helper is called.
+    """
+    if market not in (MARKET_US, MARKET_UNKNOWN):
+        raise ValueError(
+            f"Finnhub company-news does not support market '{market}'"
         )
-    if market == MARKET_CN:
-        if "." in normalized:
-            return (normalized,)
-        return (f"{normalized}.SS", f"{normalized}.SZ")
-    return (normalized,)
+    return (ticker.strip().upper(),)
+
+
+def _redact_secrets(text: str) -> str:
+    """Replace query ``token=`` values so logs/errors never leak API keys."""
+    return TOKEN_IN_TEXT.sub("token=REDACTED", text)
 
 
 def _dedupe_articles(
