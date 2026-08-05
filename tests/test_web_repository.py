@@ -403,6 +403,82 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(filings["status"], "connected")
         self.assertEqual(filings["provider"], "SEC EDGAR, OpenDART")
 
+    def test_filings_status_can_be_driven_by_kind_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("kind",),
+            known_sources=(
+                SourceConfig(
+                    name="kind",
+                    label="KIND (KRX)",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("kind",),
+        )
+        self.items.save([
+            make_item(
+                "kind-1",
+                source="kind",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "KIND (KRX)")
+
+    def test_filings_status_combines_sec_dart_and_kind_providers(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "dart", "kind"),
+            known_sources=(
+                SourceConfig(
+                    name="sec",
+                    label="SEC EDGAR",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="kind",
+                    label="KIND (KRX)",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("sec", "dart", "kind"),
+        )
+        self.items.save([
+            make_item("kind-1", source="kind", source_type="regulatory_filing")
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(
+            filings["provider"],
+            "SEC EDGAR, OpenDART, KIND (KRX)",
+        )
+
     def test_collection_activity_is_persisted_without_invented_metrics(self) -> None:
         started = datetime(2026, 8, 2, 12, tzinfo=timezone.utc)
         finished = datetime(2026, 8, 2, 12, 0, 2, tzinfo=timezone.utc)

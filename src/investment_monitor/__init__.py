@@ -29,6 +29,13 @@ from .sources.dart import (
     DartError,
     DartRequestError,
 )
+from .sources.kind import (
+    KindClient,
+    KindConnector,
+    KindDataError,
+    KindError,
+    KindRequestError,
+)
 from .sources.news import (
     FinnhubClient,
     FinnhubNewsConnector,
@@ -86,6 +93,11 @@ __all__ = [
     "FinnhubNewsRequestError",
     "InformationRepository",
     "InformationItem",
+    "KindClient",
+    "KindConnector",
+    "KindDataError",
+    "KindError",
+    "KindRequestError",
     "MARKET_CN",
     "MARKET_HK",
     "MARKET_KR",

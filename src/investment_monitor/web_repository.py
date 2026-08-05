@@ -37,6 +37,7 @@ PRODUCTION_SOURCES = ("sec",)
 SOURCE_LABELS = {
     "sec": "SEC EDGAR",
     "dart": "OpenDART",
+    "kind": "KIND (KRX)",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -44,6 +45,7 @@ SOURCE_LABELS = {
 PROVIDER_LABELS = {
     "news": "Finnhub News",
     "dart": "OpenDART",
+    "kind": "KIND (KRX)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -68,6 +70,7 @@ EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("dart", "OpenDART", "filings"),
+    ("kind", "KIND (KRX)", "filings"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
