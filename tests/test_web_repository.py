@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
+from investment_monitor.config import SourceConfig
 from investment_monitor.models import InformationItem
 from investment_monitor.sqlite_repository import SQLiteInformationRepository
 from investment_monitor.web_repository import FeedFilters, WebRepository
@@ -328,6 +329,79 @@ class WebRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(filings["status"], "connected")
         self.assertEqual(filings["provider"], "SEC EDGAR")
+
+    def test_filings_status_can_be_driven_by_dart_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("dart",),
+            known_sources=(
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("dart",),
+        )
+        self.items.save([
+            make_item(
+                "dart-1",
+                source="dart",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "OpenDART")
+
+    def test_filings_status_combines_sec_and_dart_providers(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "dart"),
+            known_sources=(
+                SourceConfig(
+                    name="sec",
+                    label="SEC EDGAR",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("sec", "dart"),
+        )
+        self.items.save([
+            make_item("sec-1", accepted_at="2026-08-04T12:00:00+00:00"),
+            make_item(
+                "dart-1",
+                source="dart",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:30:00+00:00",
+            ),
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "SEC EDGAR, OpenDART")
 
     def test_collection_activity_is_persisted_without_invented_metrics(self) -> None:
         started = datetime(2026, 8, 2, 12, tzinfo=timezone.utc)

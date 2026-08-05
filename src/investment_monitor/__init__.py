@@ -20,6 +20,15 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.dart import (
+    CorpCodeCache,
+    DARTCompanyResolver,
+    DARTConnector,
+    DartClient,
+    DartDataError,
+    DartError,
+    DartRequestError,
+)
 from .sources.news import (
     FinnhubClient,
     FinnhubNewsConnector,
@@ -63,6 +72,13 @@ __all__ = [
     "ConfigurationError",
     "ConfiguredCollectionResult",
     "ConnectorUnavailableError",
+    "CorpCodeCache",
+    "DARTCompanyResolver",
+    "DARTConnector",
+    "DartClient",
+    "DartDataError",
+    "DartError",
+    "DartRequestError",
     "FinnhubClient",
     "FinnhubNewsConnector",
     "FinnhubNewsDataError",

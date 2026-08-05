@@ -154,7 +154,7 @@ function addCompanyPanel() {
 }
 
 function companyManagement(companies) {
-  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete historical information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Market</th><th>Company</th><th>Exchange</th><th>CIK</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => `<tr><td><strong>${company.ticker}</strong></td><td>${marketLabel(company.market)}</td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${esc(company.cik || "Unmapped")}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}" data-market="${company.market}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}" data-market="${company.market}">Remove from all lists</button></td></tr>`).join("") : `<tr><td colspan="7">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
+  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete historical information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Market</th><th>Company</th><th>Exchange</th><th>CIK / Corp</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => { const idText = company.market === "kr" && company.cik ? `Corp ${esc(company.cik)}` : esc(company.cik || "Unmapped"); return `<tr><td><strong>${company.ticker}</strong></td><td>${marketLabel(company.market)}</td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${idText}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}" data-market="${company.market}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}" data-market="${company.market}">Remove from all lists</button></td></tr>`; }).join("") : `<tr><td colspan="7">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
 }
 
 function bindFeedControls() {
@@ -253,7 +253,7 @@ function bindListControls() {
 
 function batchResult(result) {
   const sections = [];
-  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} ${marketLabel(item.market)} (${esc(item.name)}, CIK ${esc(item.cik)}${item.mapping_status === "unmapped" ? ", unmapped for SEC" : ""})`).join(", ")}`);
+  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} ${marketLabel(item.market)} (${esc(item.name)}, ${item.market === "kr" && item.cik ? `Corp code ${esc(item.cik)}` : `CIK ${esc(item.cik)}`}${item.mapping_status === "unmapped" ? ", unmapped for SEC" : ""})`).join(", ")}`);
   if (result.already_present.length) sections.push(`<strong>Already present:</strong> ${result.already_present.map(item => `${item.ticker} ${marketLabel(item.market)}`).join(", ")}`);
   if (result.failed.length) sections.push(`<strong>Failed:</strong> ${result.failed.map(item => `${item.ticker} — ${esc(item.error)}`).join("; ")}`);
   if (result.collection) {

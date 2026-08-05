@@ -17,6 +17,7 @@ SUPPORTED_SETTINGS_KEYS = frozenset({"sources", "enabled_sources", "database_pat
 # Fallback metadata for the legacy enabled_sources-only settings format.
 DEFAULT_SOURCE_META = {
     "sec": ("SEC EDGAR", "filings"),
+    "dart": ("OpenDART", "filings"),
     "news": ("News", "news"),
     "community": ("Community", "community"),
     "research": ("Research", "research"),

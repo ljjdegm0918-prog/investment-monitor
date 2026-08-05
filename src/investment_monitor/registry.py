@@ -11,6 +11,7 @@ from .connectors.base import (
 )
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.dart import DARTConnector
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 
@@ -108,5 +109,11 @@ def create_default_registry() -> SourceRegistry:
         SECConnector.from_environment,
         secret_fields=SECConnector.secret_fields,
         configuration_error=SECConnector.configuration_error,
+    )
+    registry.register(
+        DARTConnector.name,
+        DARTConnector,
+        secret_fields=DARTConnector.secret_fields,
+        configuration_error=DARTConnector.configuration_error,
     )
     return registry

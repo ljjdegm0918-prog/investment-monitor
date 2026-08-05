@@ -23,9 +23,11 @@ from .config import (
     load_settings,
     load_universe,
 )
-from .models import MARKET_US
+from .connectors.base import ConnectorUnavailableError
+from .models import MARKET_KR, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
+from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -135,6 +137,18 @@ class WebApplication:
             self.resolver = SECCompanyResolver.from_environment(cache_path)
         except SECConfigurationError:
             self.resolver = SECCompanyResolver(cache_path)
+        dart_cache_path = (
+            project_root
+            / ".cache"
+            / "investment_monitor"
+            / "dart_corp_codes.json"
+        )
+        try:
+            self.dart_resolver = DARTCompanyResolver.from_environment(
+                dart_cache_path
+            )
+        except ConnectorUnavailableError:
+            self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -176,10 +190,11 @@ class WebApplication:
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
+                resolver = self._resolver_for(market)
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
-                    self.resolver,
+                    resolver,
                     market=market,
                 ))
                 added_tickers = tuple(
@@ -388,6 +403,12 @@ class WebApplication:
         )
         if events:
             self.repository.record_collection_events(events)
+
+    def _resolver_for(self, market: str) -> Any:
+        """Pick the company resolver for a market (KR uses OpenDART)."""
+        if market == MARKET_KR:
+            return self.dart_resolver
+        return self.resolver
 
     @staticmethod
     def _detect_unavailable_sources(

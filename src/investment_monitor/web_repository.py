@@ -36,12 +36,14 @@ FIXED_LISTS = (
 PRODUCTION_SOURCES = ("sec",)
 SOURCE_LABELS = {
     "sec": "SEC EDGAR",
+    "dart": "OpenDART",
     "news": "News",
     "community": "Community",
     "research": "Research",
 }
 PROVIDER_LABELS = {
     "news": "Finnhub News",
+    "dart": "OpenDART",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -65,6 +67,7 @@ EXTRA_ENV_BLOCKED_EXACT = frozenset(
 EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
+    ("dart", "OpenDART", "filings"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
@@ -363,7 +366,9 @@ class WebRepository:
         now = _utc_now()
         with self._connect() as connection:
             for ticker in tickers:
-                mapping = resolver.resolve(ticker)
+                mapping = (
+                    resolver.resolve(ticker) if resolver is not None else None
+                )
                 existing = connection.execute(
                     """
                     SELECT * FROM companies
@@ -605,7 +610,6 @@ class WebRepository:
         }
         statuses: List[Mapping[str, Any]] = [
             self._filings_source_status(
-                catalog_by_type.get("filings"),
                 current_time=current_time,
                 stale_after=stale_after,
             )
@@ -624,7 +628,6 @@ class WebRepository:
 
     def _filings_source_status(
         self,
-        source: Optional[SourceConfig],
         *,
         current_time: datetime,
         stale_after: timedelta,
@@ -690,9 +693,7 @@ class WebRepository:
             - _parse_datetime(str(latest)).astimezone(timezone.utc)
             > stale_after
         )
-        if not filings_enabled:
-            filings_status = "not_connected"
-        elif run_row and run_row["status"] == "failure":
+        if run_row and run_row["status"] == "failure":
             filings_status = "temporarily_unavailable"
         elif latest and is_stale:
             filings_status = "stale"
@@ -732,6 +733,7 @@ class WebRepository:
             source.name
             for source in self._source_catalog
             if source.source_type == "filings" and source.enabled
+            and source.name not in self._unavailable_sources
         )
 
     def _content_type_status(
