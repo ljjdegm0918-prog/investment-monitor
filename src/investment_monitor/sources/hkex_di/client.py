@@ -30,7 +30,7 @@ import os
 import re
 import threading
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from http.cookiejar import CookieJar
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
@@ -40,7 +40,9 @@ from urllib.request import (
     Request,
     build_opener,
 )
+from zoneinfo import ZoneInfo
 
+from ...daily import date_only_market_noon
 from ..hkexnews.client import normalize_hk_ticker
 
 LOGGER = logging.getLogger(__name__)
@@ -54,6 +56,7 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/126.0 Safari/537.36"
 )
+HKT = ZoneInfo("Asia/Hong_Kong")
 class HkexDiError(Exception):
     """Base error for HKEX DI collection."""
 
@@ -327,9 +330,10 @@ def _parse_hk_date(value: str) -> Optional[datetime]:
         parsed = datetime.strptime(value.strip(), "%d/%m/%Y")
     except ValueError:
         return None
-    # Archive rows carry a calendar date without a time; pin to UTC midnight
-    # so the stored calendar day matches the notice date.
-    return parsed.replace(tzinfo=timezone.utc)
+    # Archive rows carry a calendar date without a time; anchor at market
+    # local noon so display stays sane, while Today alignment uses the
+    # connector's date_only/calendar_date metadata.
+    return date_only_market_noon(parsed.date(), HKT)
 
 
 def _absolute_url(base_url: str, href: str) -> str:

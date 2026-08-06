@@ -81,7 +81,7 @@ class HkexDiClientTests(unittest.TestCase):
         self.assertEqual(first["serial"], "20161003000123")
         self.assertEqual(
             first["published_at"],
-            datetime(2016, 10, 3, 0, 0, tzinfo=timezone.utc),
+            datetime(2016, 10, 3, 4, 0, tzinfo=timezone.utc),
         )
         self.assertEqual(first["person"], "MA HUA TENG")
         self.assertEqual(first["reason"], "Acquisition of shares")

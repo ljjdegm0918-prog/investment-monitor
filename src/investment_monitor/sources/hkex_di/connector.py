@@ -138,6 +138,8 @@ def _map_records(
             "provider": "hkex_di",
             "stock_code": code,
             "serial": str(record.get("serial") or ""),
+            "date_only": True,
+            "calendar_date": record["published_at"].date().isoformat(),
             "person": str(record.get("person") or ""),
             "reason": str(record.get("reason") or ""),
             "shares": str(record.get("shares") or ""),

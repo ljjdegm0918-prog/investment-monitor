@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from ...connectors.base import ConnectorUnavailableError, SecretField
+from ...daily import date_only_market_noon
 from ...models import CollectionRequest, InformationItem, MARKET_UK
 from .client import (
     CompaniesHouseClient,
@@ -20,6 +22,7 @@ from .company_cache import CompanyNumberCache
 LOGGER = logging.getLogger(__name__)
 
 MAX_LOOKBACK_DAYS = 30
+LONDON = ZoneInfo("Europe/London")
 
 
 class CompaniesHouseConnector:
@@ -158,11 +161,7 @@ def _map_filings(
         if not start_date <= filing_date <= end_date:
             continue
         links = record.get("links") or {}
-        published_at = datetime.combine(
-            filing_date,
-            time.min,
-            tzinfo=timezone.utc,
-        )
+        published_at = date_only_market_noon(filing_date, LONDON)
         filing_type = str(record.get("type") or "").strip() or "filing"
         items.append(
             InformationItem(
@@ -184,6 +183,8 @@ def _map_filings(
                     "company_number": company_number,
                     "transaction_id": transaction_id,
                     "type": filing_type,
+                    "date_only": True,
+                    "calendar_date": filing_date.isoformat(),
                     "category": str(record.get("category") or ""),
                     "description": description,
                     "document_metadata_url": str(

@@ -24,6 +24,7 @@ from .config import (
     load_universe,
 )
 from .connectors.base import ConnectorUnavailableError
+from .daily import resolve_timezone
 from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
 from .models import MARKET_HK, MARKET_KR, MARKET_UK, MARKET_US
@@ -574,10 +575,15 @@ class WebApplication:
 
     def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         selected_text = _first(query, "date")
-        selected_date = date.fromisoformat(selected_text) if selected_text else datetime.now(EASTERN).date()
+        zone = resolve_timezone(_first(query, "timezone"))
+        selected_date = (
+            date.fromisoformat(selected_text)
+            if selected_text
+            else datetime.now(zone).date()
+        )
         lists = [dict(record) for record in self.repository.fixed_lists()]
         companies = self.repository.companies()
-        counts = self.repository.counts(selected_date)
+        counts = self.repository.counts(selected_date, timezone_name=zone.key)
         for list_record in lists:
             slug = str(list_record["slug"])
             list_record["company_count"] = sum(slug in company["list_slugs"] for company in companies)
@@ -585,8 +591,8 @@ class WebApplication:
         return {
             "selected_date": selected_date.isoformat(),
             "display_date": f"{selected_date.strftime('%b')} {selected_date.day}, {selected_date.year}",
-            "timezone": "America/New_York",
-            "timezone_label": "ET",
+            "timezone": zone.key,
+            "timezone_label": zone.key,
             "lists": lists,
             "companies": companies,
             "counts": counts,
@@ -821,6 +827,7 @@ def _filters_from_mapping(values: Mapping[str, Any]) -> FeedFilters:
         query=str(values["q"]) if values.get("q") else None,
         page=int(values.get("page") or 1),
         page_size=int(values.get("page_size") or 25),
+        timezone=str(values["timezone"]) if values.get("timezone") else None,
     )
 
 
@@ -832,6 +839,7 @@ def _filter_dict(filters: FeedFilters) -> Mapping[str, Any]:
         "form": filters.form_type,
         "start_date": filters.start_date.isoformat() if filters.start_date else None,
         "end_date": filters.end_date.isoformat() if filters.end_date else None,
+        "timezone": filters.timezone,
         "read": filters.read_state,
         "amendment": filters.amendment,
         "q": filters.query,

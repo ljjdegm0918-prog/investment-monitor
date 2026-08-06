@@ -222,8 +222,13 @@ These defaults can be adjusted in `.env`.
 
 ## Main web behavior
 
-- **Today** uses filing acceptance time when available, groups by
-  `America/New_York`, shows `ET`, and deduplicates across lists.
+- **Today** groups by the user's browser timezone (IANA, e.g.
+  `Asia/Shanghai`) and deduplicates across lists. Date-only disclosures
+  (DART `rcept_dt`, Companies House filing dates, HKEX DI notice dates) are
+  aligned by their disclosure `calendar_date`, so they never fall into the
+  previous day through a UTC-midnight conversion; legacy rows at exactly
+  `00:00 UTC` are treated as date-only with their UTC date as the disclosure
+  day. Stored timestamps remain UTC-compatible.
 - **All Information** provides historical server-side filters and stable
   pagination.
 - **Holdings, Planned Purchases, Watchlist** manage many-to-many company-list

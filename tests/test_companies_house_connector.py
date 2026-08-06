@@ -140,7 +140,10 @@ class CompaniesHouseConnectorTests(unittest.TestCase):
         self.assertEqual(first.market, "uk")
         self.assertEqual(first.title, "Appointment of a director")
         self.assertEqual(first.document_type, "AP01")
-        self.assertEqual(first.published_at, datetime(2026, 8, 1, tzinfo=timezone.utc))
+        self.assertEqual(
+            first.published_at,
+            datetime(2026, 8, 1, 11, 0, tzinfo=timezone.utc),
+        )
         self.assertIn("company/01833679/filing-history/MzA1Mjc1NTk2OWFkaXF6a2N4", first.url)
         self.assertEqual(first.raw_metadata["company_number"], "01833679")
         self.assertEqual(client.calls, ["01833679"])

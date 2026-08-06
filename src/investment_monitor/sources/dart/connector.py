@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from ...connectors.base import ConnectorUnavailableError, SecretField
+from ...daily import date_only_market_noon
 from ...models import CollectionRequest, InformationItem, MARKET_KR
 from .client import (
     DartClient,
@@ -20,6 +22,7 @@ from .corp_code_cache import CorpCodeCache, DEFAULT_CACHE_TTL_SECONDS
 LOGGER = logging.getLogger(__name__)
 
 MAX_LOOKBACK_DAYS = 30
+KST = ZoneInfo("Asia/Seoul")
 DART_VIEWER_URL = "https://dart.fss.or.kr/dsaf001/main.do?rcpNo={rcept_no}"
 DART_REPORT_TYPES = {
     "B001": "annual_report",
@@ -176,13 +179,14 @@ class DARTConnector:
             report_nm = str(record.get("report_nm") or "").strip()
             if not rcept_no or not report_nm:
                 continue
-            published_at = _parse_rcept_dt(
+            rcept_day = _parse_rcept_date(
                 str(record.get("rcept_dt") or "").strip()
             )
-            if published_at is None:
+            if rcept_day is None:
                 continue
-            if not start_date <= published_at.date() <= end_date:
+            if not start_date <= rcept_day <= end_date:
                 continue
+            published_at = date_only_market_noon(rcept_day, KST)
             en_title = (
                 str(record.get("en_title") or "").strip() or None
             )
@@ -191,6 +195,8 @@ class DARTConnector:
                 "corp_code": corp_code,
                 "rcept_no": rcept_no,
                 "rcept_dt": str(record.get("rcept_dt") or ""),
+                "date_only": True,
+                "calendar_date": rcept_day.isoformat(),
                 "report_nm": report_nm,
                 "corp_name": corp_name,
             }
@@ -228,14 +234,14 @@ def _document_type(value: Any) -> str:
     )
 
 
-def _parse_rcept_dt(value: str) -> Optional[datetime]:
+def _parse_rcept_date(value: str) -> Optional[date]:
     if not value:
         return None
     try:
         parsed = datetime.strptime(value, "%Y%m%d").date()
     except ValueError:
         return None
-    return datetime.combine(parsed, time.min, tzinfo=timezone.utc)
+    return parsed
 
 
 def _read_cache_ttl() -> float:

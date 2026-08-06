@@ -761,6 +761,155 @@ class WebRepositoryTests(unittest.TestCase):
         # The older unread item must not inflate today's badge.
         self.assertNotEqual(counts["list_unread"]["holdings"], 3)
 
+    def date_only_item(
+        self,
+        external_id: str,
+        *,
+        calendar_date: str,
+        effective_utc: datetime,
+    ) -> InformationItem:
+        return InformationItem(
+            source="sec",
+            source_type="regulatory_filing",
+            external_id=external_id,
+            tickers=("AAPL",),
+            issuer="Apple Inc.",
+            published_at=effective_utc,
+            title=f"Date-only {external_id}",
+            document_type="dart_report",
+            url=f"https://example.test/{external_id}",
+            collected_at=datetime(2026, 8, 6, 12, tzinfo=timezone.utc),
+            raw_metadata={
+                "date_only": True,
+                "calendar_date": calendar_date,
+            },
+            market="us",
+            effective_at=effective_utc,
+        )
+
+    def test_date_only_items_align_by_calendar_date_in_user_zone(self) -> None:
+        self.add_company("AAPL", "holdings")
+        # Seoul-noon-like timestamp: 03:00 UTC is BEFORE the Eastern day, so
+        # only calendar_date alignment can keep it on the disclosed day.
+        self.items.save([
+            self.date_only_item(
+                "dart-0806",
+                calendar_date="2026-08-06",
+                effective_utc=datetime(2026, 8, 6, 3, 0, tzinfo=timezone.utc),
+            ),
+        ])
+
+        shanghai = self.repository.counts(
+            date(2026, 8, 6),
+            timezone_name="Asia/Shanghai",
+        )
+        new_york = self.repository.counts(
+            date(2026, 8, 6),
+            timezone_name="America/New_York",
+        )
+        previous_et = self.repository.counts(
+            date(2026, 8, 5),
+            timezone_name="America/New_York",
+        )
+
+        self.assertEqual(shanghai["list_unread"]["holdings"], 1)
+        self.assertEqual(shanghai["filings"], 1)
+        self.assertEqual(new_york["list_unread"]["holdings"], 1)
+        self.assertEqual(new_york["filings"], 1)
+        self.assertEqual(previous_et["list_unread"]["holdings"], 0)
+
+    def test_legacy_utc_midnight_rows_align_by_utc_date(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="legacy-midnight",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 6, tzinfo=timezone.utc),
+                title="Legacy date-only",
+                document_type="10-Q",
+                url="https://example.test/legacy-midnight",
+                collected_at=datetime(2026, 8, 6, 12, tzinfo=timezone.utc),
+                raw_metadata={},
+                market="us",
+                effective_at=datetime(2026, 8, 6, tzinfo=timezone.utc),
+            ),
+        ])
+
+        on_day = self.repository.counts(
+            date(2026, 8, 6),
+            timezone_name="America/New_York",
+        )
+        previous_day = self.repository.counts(
+            date(2026, 8, 5),
+            timezone_name="America/New_York",
+        )
+
+        self.assertEqual(on_day["list_unread"]["holdings"], 1)
+        self.assertEqual(previous_day["list_unread"]["holdings"], 0)
+
+    def test_timed_items_use_user_local_day_bounds(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="timed-2330",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 5, 23, 30, tzinfo=timezone.utc),
+                title="Timed filing",
+                document_type="8-K",
+                url="https://example.test/timed-2330",
+                collected_at=datetime(2026, 8, 6, 1, tzinfo=timezone.utc),
+                raw_metadata={"date_only": False},
+                market="us",
+                effective_at=datetime(2026, 8, 5, 23, 30, tzinfo=timezone.utc),
+            ),
+        ])
+
+        shanghai_next = self.repository.counts(
+            date(2026, 8, 6),
+            timezone_name="Asia/Shanghai",
+        )
+        shanghai_previous = self.repository.counts(
+            date(2026, 8, 5),
+            timezone_name="Asia/Shanghai",
+        )
+        new_york_previous = self.repository.counts(
+            date(2026, 8, 5),
+            timezone_name="America/New_York",
+        )
+        new_york_next = self.repository.counts(
+            date(2026, 8, 6),
+            timezone_name="America/New_York",
+        )
+
+        self.assertEqual(shanghai_next["list_unread"]["holdings"], 1)
+        self.assertEqual(shanghai_previous["list_unread"]["holdings"], 0)
+        self.assertEqual(new_york_previous["list_unread"]["holdings"], 1)
+        self.assertEqual(new_york_next["list_unread"]["holdings"], 0)
+
+    def test_invalid_timezone_falls_back_to_eastern(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            make_item("tz-1", accepted_at="2026-08-02T12:00:00+00:00"),
+        ])
+
+        invalid = self.repository.counts(
+            date(2026, 8, 2),
+            timezone_name="Not/AZone",
+        )
+        fallback = self.repository.counts(
+            date(2026, 8, 2),
+            timezone_name="America/New_York",
+        )
+
+        self.assertEqual(invalid["list_unread"], fallback["list_unread"])
+        self.assertEqual(invalid["filings"], fallback["filings"])
+
     def test_filings_status_can_be_driven_by_investegate_items(self) -> None:
         repository = WebRepository(
             self.database_path,

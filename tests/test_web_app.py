@@ -924,6 +924,37 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["unread"], 2)
         self.assertNotEqual(holdings["unread_count"], 3)
 
+    def test_bootstrap_echoes_user_timezone(self) -> None:
+        payload = self.payload(
+            self.application.handle(
+                "GET",
+                "/api/bootstrap?date=2026-08-06&timezone=Asia/Shanghai",
+            )
+        )
+
+        self.assertEqual(payload["selected_date"], "2026-08-06")
+        self.assertEqual(payload["timezone"], "Asia/Shanghai")
+        self.assertEqual(payload["timezone_label"], "Asia/Shanghai")
+
+    def test_bootstrap_invalid_timezone_falls_back_safely(self) -> None:
+        response = self.application.handle(
+            "GET",
+            "/api/bootstrap?date=2026-08-06&timezone=Not/AZone",
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["timezone"], "America/New_York")
+
+    def test_feed_accepts_user_timezone(self) -> None:
+        response = self.application.handle(
+            "GET",
+            "/api/feed?start_date=2026-08-06&end_date=2026-08-06"
+            "&timezone=Asia/Shanghai",
+        )
+
+        self.assertEqual(response.status, 200)
+
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
             "POST",

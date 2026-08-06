@@ -10,6 +10,11 @@ const state = {
   controller: null,
 };
 
+const USER_TIMEZONE = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"; }
+  catch { return "America/New_York"; }
+})();
+
 const listLabels = { holdings: "Holdings", planned: "Planned Purchases", watchlist: "Watchlist" };
 const viewTitles = {
   today: "Today",
@@ -25,7 +30,7 @@ async function init() {
     event.currentTarget.setAttribute("aria-expanded", String(open));
   });
   try {
-    state.bootstrap = await api("/api/bootstrap");
+    state.bootstrap = await api(`/api/bootstrap?timezone=${encodeURIComponent(USER_TIMEZONE)}`);
     renderShell();
     await renderPage();
   } catch (error) {
@@ -36,7 +41,7 @@ async function init() {
 function renderShell() {
   const b = state.bootstrap;
   document.getElementById("topbar-title").textContent = viewTitles[state.view] || "Investment Monitor";
-  document.getElementById("current-date").textContent = `${b.display_date} · ET`;
+  document.getElementById("current-date").textContent = `${b.display_date} · ${b.timezone_label}`;
   const sec = b.sources.find(source => source.type === "Filings");
   const status = document.getElementById("top-source-status");
   status.textContent = sec.status === "connected" ? "SEC Up to date" : sec.status === "stale" ? "SEC Data stale" : "SEC Unavailable";
@@ -82,6 +87,7 @@ async function renderTodayPage() {
     form: "",
     start_date: state.bootstrap.selected_date,
     end_date: state.bootstrap.selected_date,
+    timezone: USER_TIMEZONE,
     read: "all",
     amendment: "all",
     q: "",
@@ -270,7 +276,7 @@ function renderSettings() {
       return `<article class="provider-credential"><h3>${esc(provider.label)}${provider.enabled ? "" : " (disabled in settings)"}</h3>${body}</article>`;
     }).join("");
     const extraRows = (data.extra_env || []).map(entry => extraEnvRow(entry.name, "", entry.hint)).join("");
-    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>Provider credentials</h2><p class="timestamp">Credential fields are declared by each implemented source; unimplemented sources cannot be configured here.</p>${providerSections}<button class="button primary" id="save-provider-credentials">Save provider credentials</button></section><section class="panel settings-card"><h2>System pages</h2><p class="timestamp">Operational detail lives outside the daily flow.</p><p><a href="/sources">Data Sources</a> · <a href="/activity">Activity &amp; Logs</a></p></section><section class="panel settings-card"><h2>Extra environment variables</h2><details id="advanced-env"><summary>Advanced: extra environment variables</summary><p class="timestamp">These variables are only used if a connector explicitly reads them; setting one does not connect any new source. Names must match <code>[A-Za-z_][A-Za-z0-9_]*</code>. Dangerous names (PATH, PYTHONPATH, LD_*, SSL*, HOME, USERPROFILE, ...) are rejected.</p><div id="extra-env-rows">${extraRows}</div><button class="button link" id="add-extra-env" type="button">+ Add variable</button><button class="button primary" id="save-extra-env" type="button">Save extra variables</button></details></section>`;
+    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use your browser timezone (${USER_TIMEZONE}). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>Provider credentials</h2><p class="timestamp">Credential fields are declared by each implemented source; unimplemented sources cannot be configured here.</p>${providerSections}<button class="button primary" id="save-provider-credentials">Save provider credentials</button></section><section class="panel settings-card"><h2>System pages</h2><p class="timestamp">Operational detail lives outside the daily flow.</p><p><a href="/sources">Data Sources</a> · <a href="/activity">Activity &amp; Logs</a></p></section><section class="panel settings-card"><h2>Extra environment variables</h2><details id="advanced-env"><summary>Advanced: extra environment variables</summary><p class="timestamp">These variables are only used if a connector explicitly reads them; setting one does not connect any new source. Names must match <code>[A-Za-z_][A-Za-z0-9_]*</code>. Dangerous names (PATH, PYTHONPATH, LD_*, SSL*, HOME, USERPROFILE, ...) are rejected.</p><div id="extra-env-rows">${extraRows}</div><button class="button link" id="add-extra-env" type="button">+ Add variable</button><button class="button primary" id="save-extra-env" type="button">Save extra variables</button></details></section>`;
     document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
     document.getElementById("save-provider-credentials").addEventListener("click", saveProviderCredentials);
     document.querySelectorAll("[data-clear-credential]").forEach(button => button.addEventListener("click", () => clearCredential(button.dataset.clearCredential)));
@@ -343,6 +349,6 @@ async function api(url, options = {}) {
 function toast(message, error=false) { const region=document.getElementById("toast-region"); const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; region.appendChild(node); setTimeout(()=>node.remove(),4500); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
-function formatDateTime(value) { try { return new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:"America/New_York"}).format(new Date(value)) + " ET"; } catch { return value || "Unavailable"; } }
+function formatDateTime(value) { try { return new Intl.DateTimeFormat("en-US",{dateStyle:"medium",timeStyle:"short",timeZone:USER_TIMEZONE}).format(new Date(value)) + " " + USER_TIMEZONE; } catch { return value || "Unavailable"; } }
 function sourceStatusLabel(status) { return ({connected:"● Connected and up to date",stale:"▲ Connected, data is stale",not_connected:"○ Not connected",temporarily_unavailable:"! Temporarily unavailable",failed:"! Failed",loading:"… Checking",unavailable:"! Unavailable"})[status] || `! ${status}`; }
 function renderFatal(error) { document.getElementById("page").innerHTML = `<div class="error-state"><div><strong>Workspace request failed</strong><p>${esc(error.message)}</p><button class="button" id="retry-workspace">Retry</button></div></div>`; document.getElementById("retry-workspace").addEventListener("click", () => location.reload()); }

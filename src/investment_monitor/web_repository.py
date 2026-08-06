@@ -25,6 +25,7 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
+from .daily import local_day_bounds, resolve_timezone
 from .dedupe import fold_feed_items
 from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
@@ -122,6 +123,7 @@ class FeedFilters:
     read_state: str = "all"
     amendment: str = "all"
     query: Optional[str] = None
+    timezone: Optional[str] = None
     page: int = 1
     page_size: int = 25
 
@@ -605,8 +607,9 @@ class WebRepository:
                 sql,
                 base_parameters + [filters.page_size, offset],
             ).fetchall()
+        zone = resolve_timezone(filters.timezone)
         return PageResult(
-            tuple(self._feed_item(row) for row in rows),
+            tuple(self._feed_item(row, zone) for row in rows),
             total,
             page,
             filters.page_size,
@@ -631,13 +634,19 @@ class WebRepository:
         value = os.environ.get("KR_FEED_SOFT_DEDUPE", "true").strip().lower()
         return value not in {"0", "false", "no", "off"}
 
-    def counts(self, selected_date: date) -> Mapping[str, Any]:
-        start_utc, end_utc = _eastern_day_bounds(selected_date)
+    def counts(
+        self,
+        selected_date: date,
+        timezone_name: Optional[str] = None,
+    ) -> Mapping[str, Any]:
+        zone = resolve_timezone(timezone_name)
+        start_utc, end_utc = local_day_bounds(selected_date, zone)
         today_filters = FeedFilters(
             information_type="filings",
             start_date=selected_date,
             end_date=selected_date,
             page_size=1,
+            timezone=zone.key,
         )
         today_total = self.query_feed(today_filters).total
         with self._connect() as connection:
@@ -650,6 +659,8 @@ class WebRepository:
             unread_total = self._count_unread(
                 connection,
                 None,
+                start_date=selected_date,
+                end_date=selected_date,
                 start_utc=start_utc,
                 end_utc=end_utc,
             )
@@ -660,6 +671,8 @@ class WebRepository:
                 row["slug"]: self._count_unread(
                     connection,
                     str(row["slug"]),
+                    start_date=selected_date,
+                    end_date=selected_date,
                     start_utc=start_utc,
                     end_utc=end_utc,
                 )
@@ -1313,12 +1326,34 @@ class WebRepository:
             conditions.append("i.document_type = ?")
             parameters.append(filters.form_type)
         if filters.start_date:
-            start_utc, _ = _eastern_day_bounds(filters.start_date)
-            conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
-            parameters.append(start_utc.isoformat())
-        if filters.end_date:
-            _, end_utc = _eastern_day_bounds(filters.end_date)
-            conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
+            if filters.end_date:
+                zone = resolve_timezone(filters.timezone)
+                start_utc, end_utc = local_day_bounds(
+                    filters.start_date,
+                    zone,
+                )
+                day_sql, day_parameters = _day_window_sql(
+                    self._effective_timestamp_sql(),
+                    filters.start_date,
+                    filters.end_date,
+                    start_utc,
+                    end_utc,
+                )
+                conditions.append(day_sql)
+                parameters.extend(day_parameters)
+            else:
+                zone = resolve_timezone(filters.timezone)
+                start_utc, _ = local_day_bounds(filters.start_date, zone)
+                conditions.append(
+                    f"{self._effective_timestamp_sql()} >= datetime(?)"
+                )
+                parameters.append(start_utc.isoformat())
+        elif filters.end_date:
+            zone = resolve_timezone(filters.timezone)
+            _, end_utc = local_day_bounds(filters.end_date, zone)
+            conditions.append(
+                f"{self._effective_timestamp_sql()} < datetime(?)"
+            )
             parameters.append(end_utc.isoformat())
         if filters.read_state == "read":
             conditions.append("COALESCE(r.is_read, 0) = 1")
@@ -1337,7 +1372,11 @@ class WebRepository:
             parameters.extend([like] * 5)
         return (" AND " + " AND ".join(conditions) if conditions else "", parameters)
 
-    def _feed_item(self, row: sqlite3.Row) -> Mapping[str, Any]:
+    def _feed_item(
+        self,
+        row: sqlite3.Row,
+        zone: ZoneInfo,
+    ) -> Mapping[str, Any]:
         raw_metadata = json.loads(row["raw_metadata"])
         effective = (
             row["effective_at"]
@@ -1361,7 +1400,8 @@ class WebRepository:
             "summary": row["summary"],
             "published_at": row["published_at"],
             "effective_at": effective_dt.isoformat(),
-            "effective_et": self._format_eastern_timestamp(effective_dt),
+            # Field name kept for UI compatibility; value is user-local now.
+            "effective_et": _format_local_timestamp(effective_dt, zone),
             "title": row["title"],
             "document_type": row["document_type"],
             "url": row["url"],
@@ -1373,20 +1413,16 @@ class WebRepository:
 
     @staticmethod
     def _format_eastern_timestamp(value: datetime) -> str:
-        """Format an Eastern timestamp without Unix-only strftime flags."""
-        local = value.astimezone(EASTERN)
-        hour12 = (local.hour % 12) or 12
-        meridiem = "AM" if local.hour < 12 else "PM"
-        return (
-            f"{local.strftime('%b')} {local.day}, {local.year} "
-            f"{hour12}:{local.minute:02d} {meridiem} ET"
-        )
+        """Legacy Eastern formatter; new code uses user-local zones."""
+        return _format_local_timestamp(value, EASTERN)
 
     def _count_unread(
         self,
         connection: sqlite3.Connection,
         list_slug: Optional[str],
         *,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
         start_utc: Optional[datetime] = None,
         end_utc: Optional[datetime] = None,
     ) -> int:
@@ -1397,8 +1433,24 @@ class WebRepository:
             list_sql = "AND l.slug = ?"
             parameters.append(list_slug)
         day_sql = ""
-        if start_utc is not None and end_utc is not None:
-            # Same Eastern-day semantics as the Today feed window.
+        if (
+            start_date is not None
+            and end_date is not None
+            and start_utc is not None
+            and end_utc is not None
+        ):
+            # Same user-local-day semantics as the Today feed window,
+            # including date-only calendar_date alignment.
+            window_sql, window_parameters = _day_window_sql(
+                self._effective_timestamp_sql(),
+                start_date,
+                end_date,
+                start_utc,
+                end_utc,
+            )
+            day_sql = f"AND {window_sql}"
+            parameters.extend(window_parameters)
+        elif start_utc is not None and end_utc is not None:
             day_sql = (
                 f"AND {self._effective_timestamp_sql()} >= datetime(?) "
                 f"AND {self._effective_timestamp_sql()} < datetime(?)"
@@ -1666,11 +1718,64 @@ def _parse_datetime(value: str) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+def _format_local_timestamp(value: datetime, zone: ZoneInfo) -> str:
+    """Format a timestamp in a user zone without Unix-only strftime flags."""
+    local = value.astimezone(zone)
+    hour12 = (local.hour % 12) or 12
+    meridiem = "AM" if local.hour < 12 else "PM"
+    return (
+        f"{local.strftime('%b')} {local.day}, {local.year} "
+        f"{hour12}:{local.minute:02d} {meridiem} {zone.key}"
+    )
+
+
+def _day_window_sql(
+    effective_sql: str,
+    start_date: date,
+    end_date: date,
+    start_utc: datetime,
+    end_utc: datetime,
+) -> Tuple[str, List[str]]:
+    """Calendar-day window that aligns date-only rows by calendar_date.
+
+    Three paths: explicit ``date_only`` + ``calendar_date`` metadata; a
+    legacy heuristic for old rows whose effective time is exactly 00:00 UTC
+    (their UTC date is treated as the disclosure date); and normal timed rows
+    matched against the user-local day bounds.
+    """
+    start_text = start_date.isoformat()
+    end_text = end_date.isoformat()
+    sql = (
+        "("
+        "json_extract(i.raw_metadata, '$.date_only') = 1 "
+        "AND json_extract(i.raw_metadata, '$.calendar_date') >= ? "
+        "AND json_extract(i.raw_metadata, '$.calendar_date') <= ? "
+        "OR "
+        "COALESCE(json_extract(i.raw_metadata, '$.date_only'), 0) = 0 "
+        f"AND substr({effective_sql}, 12, 8) = '00:00:00' "
+        f"AND substr({effective_sql}, 1, 10) >= ? "
+        f"AND substr({effective_sql}, 1, 10) <= ? "
+        "OR "
+        "COALESCE(json_extract(i.raw_metadata, '$.date_only'), 0) = 0 "
+        f"AND substr({effective_sql}, 12, 8) != '00:00:00' "
+        f"AND {effective_sql} >= datetime(?) "
+        f"AND {effective_sql} < datetime(?)"
+        ")"
+    )
+    parameters = [
+        start_text,
+        end_text,
+        start_text,
+        end_text,
+        start_utc.isoformat(),
+        end_utc.isoformat(),
+    ]
+    return sql, parameters
+
+
 def _eastern_day_bounds(day: date) -> Tuple[datetime, datetime]:
-    start_et = datetime.combine(day, time.min, tzinfo=EASTERN)
-    next_day = date.fromordinal(day.toordinal() + 1)
-    end_et = datetime.combine(next_day, time.min, tzinfo=EASTERN)
-    return start_et.astimezone(timezone.utc), end_et.astimezone(timezone.utc)
+    """Legacy Eastern bounds; new callers use user-local zones."""
+    return local_day_bounds(day, EASTERN)
 
 
 def _utc_now() -> str:
