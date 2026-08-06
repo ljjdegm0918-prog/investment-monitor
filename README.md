@@ -133,6 +133,11 @@ UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
 same-source only, so Companies House and Investegate are never cross-folded
 by title. News folds on ticker + London day + normalized title.
 
+Companies House mapping trust: a unique name search is **not** proof of the
+listed issuer. Search-only mappings are stored as `unverified` and do not
+collect CH filings until confirmed; seed tickers and explicit company numbers
+are verified (`mapped`) after a successful profile check.
+
 ### Hong Kong sources (HK)
 | Source | Type | Key | Boundaries |
 |---|---|---|---|

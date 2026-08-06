@@ -722,6 +722,91 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["added"][0]["market"], "hk")
         self.assertEqual(payload["added"][0]["mapping_status"], "unmapped")
 
+    def test_confirm_ch_mapping_promotes_to_mapped(self) -> None:
+        class FakeChResolver:
+            def confirm(self, ticker, company_number=None):
+                return {
+                    "ticker": ticker,
+                    "name": "EXAMPLE CO PLC",
+                    "cik": "01234567",
+                    "exchange": "LSE",
+                    "mapping_status": "mapped",
+                }
+
+        self.application.companies_house_resolver = FakeChResolver()
+        self.application.repository.set_company_mapping(
+            {
+                "ticker": "SOMECO",
+                "name": "EXAMPLE CO PLC",
+                "exchange": "Unverified",
+                "cik": "01234567",
+                "mapping_status": "unverified",
+            },
+            market="uk",
+        )
+
+        response = self.application.handle(
+            "POST",
+            "/api/companies/confirm-mapping",
+            json.dumps(
+                {
+                    "ticker": "SOMECO",
+                    "market": "uk",
+                    "company_number": "01234567",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+        companies = {
+            company["ticker"]: company
+            for company in self.application.repository.companies()
+        }
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["mapping_status"], "mapped")
+        self.assertEqual(
+            companies["SOMECO"]["mapping_status"],
+            "mapped",
+        )
+
+    def test_confirm_ch_mapping_failure_keeps_unverified(self) -> None:
+        class FailingChResolver:
+            def confirm(self, ticker, company_number=None):
+                return None
+
+        self.application.companies_house_resolver = FailingChResolver()
+        self.application.repository.set_company_mapping(
+            {
+                "ticker": "SOMECO",
+                "name": "EXAMPLE CO PLC",
+                "exchange": "Unverified",
+                "cik": "01234567",
+                "mapping_status": "unverified",
+            },
+            market="uk",
+        )
+
+        response = self.application.handle(
+            "POST",
+            "/api/companies/confirm-mapping",
+            json.dumps(
+                {
+                    "ticker": "SOMECO",
+                    "market": "uk",
+                    "company_number": "01234567",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+        companies = {
+            company["ticker"]: company
+            for company in self.application.repository.companies()
+        }
+
+        self.assertEqual(response.status, 409)
+        self.assertIn("unverified", payload["error"])
+        self.assertEqual(companies["SOMECO"]["mapping_status"], "unverified")
+
     def test_adding_uk_company_uses_universe_cache_for_name(self) -> None:
         cache_path = (
             self.project_root

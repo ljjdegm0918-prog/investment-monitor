@@ -322,6 +322,46 @@ class WebRepository:
             for row in rows
         )
 
+    def set_company_mapping_status(
+        self,
+        ticker: str,
+        market: str,
+        mapping_status: str,
+    ) -> bool:
+        """Update only the mapping status of an existing company row."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE companies
+                SET mapping_status = ?
+                WHERE ticker = ? AND market = ?
+                """,
+                (mapping_status, ticker, market),
+            )
+        return cursor.rowcount > 0
+
+    def set_company_mapping(
+        self,
+        identity: Mapping[str, Any],
+        market: str,
+    ) -> bool:
+        """Upsert a company row from a resolver identity (confirm path)."""
+        ticker = str(identity["ticker"])
+        with self._connect() as connection:
+            self._upsert_company(
+                connection,
+                ticker=ticker,
+                name=str(identity.get("name") or ticker),
+                exchange=str(identity.get("exchange") or ""),
+                cik=str(identity.get("cik") or ""),
+                mapping_status=str(
+                    identity.get("mapping_status") or "mapped"
+                ),
+                market=market,
+                now=_utc_now(),
+            )
+        return True
+
     def active_tickers_without_source_items(self, source: str) -> Tuple[str, ...]:
         """Return active tickers that have never stored an item from a source."""
         return tuple(

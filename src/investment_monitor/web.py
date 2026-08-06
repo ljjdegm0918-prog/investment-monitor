@@ -172,6 +172,12 @@ class WebApplication:
                     companies_house_cache_path
                 )
             )
+        try:
+            self.companies_house_resolver.revalidate_legacy(self.repository)
+        except Exception:
+            LOGGER.exception(
+                "Companies House legacy mapping revalidation failed"
+            )
         self.hkexnews_resolver = HKEXNewsCompanyResolver()
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
@@ -241,6 +247,32 @@ class WebApplication:
                         markets={ticker: market for ticker in added_tickers},
                     )
                 return self._json(result, 201)
+            if method == "POST" and parsed.path == "/api/companies/confirm-mapping":
+                payload = _decode_json(body)
+                ticker = str(payload.get("ticker") or "").strip()
+                market = str(payload.get("market") or MARKET_UK)
+                company_number = str(
+                    payload.get("company_number") or ""
+                ).strip() or None
+                resolver = self._resolver_for(market)
+                confirm = getattr(resolver, "confirm", None)
+                identity = (
+                    confirm(ticker, company_number=company_number)
+                    if confirm is not None
+                    else None
+                )
+                if identity is None:
+                    return self._json(
+                        {
+                            "error": (
+                                "Companies House verification failed; "
+                                "mapping stays unverified."
+                            )
+                        },
+                        409,
+                    )
+                self.repository.set_company_mapping(identity, market)
+                return self._json(dict(identity), 200)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
                 removed = self.repository.remove_membership(

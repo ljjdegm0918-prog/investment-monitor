@@ -95,6 +95,25 @@ class CompaniesHouseConnectorTests(unittest.TestCase):
         self.assertEqual(client.calls, [])
         self.assertEqual(cache.requests, ["ZZZZ"])
 
+    def test_unverified_mapping_not_in_cache_is_not_collected(self) -> None:
+        class ExplodingHistoryClient:
+            def get_filing_history(self, company_number):
+                raise AssertionError(
+                    "unverified mapping must not fetch filing history"
+                )
+
+        connector = CompaniesHouseConnector(
+            client=ExplodingHistoryClient(),
+            cache=FakeCache(),
+        )
+
+        items = connector.collect(
+            self.request(("SOMECO",), {"SOMECO": "uk"})
+        )
+
+        self.assertEqual(items, [])
+        self.assertEqual(connector.last_errors, ())
+
     def test_uk_mapped_company_maps_filings(self) -> None:
         client = FakeClient(
             records=[

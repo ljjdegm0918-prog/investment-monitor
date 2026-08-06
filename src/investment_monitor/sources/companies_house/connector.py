@@ -27,6 +27,8 @@ class CompaniesHouseConnector:
 
     Companies House filings are statutory company filings (accounts,
     confirmation statements, officers, charges), not RNS regulatory news.
+    The number cache only holds verified mappings, so unverified candidates
+    are skipped here without any filing-history request.
     """
 
     name = "companies_house"
@@ -100,7 +102,7 @@ class CompaniesHouseConnector:
             company_number = self._cache.number_for_ticker(raw)
             if not company_number:
                 LOGGER.info(
-                    "companies_house ticker=%s skipped no_company_number",
+                    "companies_house ticker=%s skipped no_trusted_company_number",
                     raw,
                 )
                 continue

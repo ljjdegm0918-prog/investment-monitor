@@ -1,4 +1,10 @@
-"""UK company-number normalization and small seed/cache helper."""
+"""UK company-number normalization and small seed/cache helper.
+
+The cache only ever holds **verified** (mapped) ticker -> company-number
+entries. Candidate numbers from a unique name search are kept in the company
+row (``mapping_status=unverified``) but never written here, so the connector
+cannot collect filings for unconfirmed mappings.
+"""
 
 from __future__ import annotations
 
@@ -58,6 +64,15 @@ class CompanyNumberCache:
         """Persist a verified ticker -> company_number mapping."""
         numbers = self._load()
         numbers[ticker.strip().upper()] = company_number.strip().upper()
+        self._write(numbers)
+
+    def forget(self, ticker: str) -> None:
+        """Remove a ticker from the trusted cache (legacy revalidation)."""
+        numbers = self._load()
+        numbers.pop(ticker.strip().upper(), None)
+        self._write(numbers)
+
+    def _write(self, numbers: Dict[str, str]) -> None:
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = self._cache_path.with_suffix(
             self._cache_path.suffix + ".tmp"
