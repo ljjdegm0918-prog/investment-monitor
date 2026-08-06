@@ -172,7 +172,7 @@ ticker + Hong Kong day + normalized title.
 ### Taiwan sources (TW)
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| twse_material | filings | none | TWSE OpenAPI material-information (`t187ap04_L`, 重大訊息) for **listed companies only**; key-free, not a paid MOPS push; TPEx/興櫃 disclosure left to TW-4; news comes from yahoo_tw / google_news_tw |
+| twse_material | filings | none | TWSE OpenAPI material-information (`t187ap04_L`, 重大訊息) for **listed companies only**; key-free, not a paid MOPS push; OTC (上櫃) disclosure comes from tpex_material; 興櫃 (Emerging) has no stable free feed and is not wired; news comes from yahoo_tw / google_news_tw |
 | tpex_material | filings | none | TPEx OpenAPI material-information (`mopsfin_t187ap04_O`, 重大訊息) for **OTC (上櫃) companies**; key-free, not a paid MOPS push; 興櫃 (Emerging) has no stable free feed and is not wired |
 | tw_universe | breadth cache | none | TWSE listed (`t187ap03_L`) + TPEx OTC (`mopsfin_t187ap03_O`) open company directories; emerging (興櫃) is an opt-in env hook because no stable free JSON was found; not an IBKR-complete universe; never enters the feed |
 | yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW` at request time (`.TWO` for TPEx/ESB boards from the universe cache); may be loosely related and break without notice |
@@ -182,6 +182,14 @@ ticker + Hong Kong day + normalized title.
 `2330.TW` all store as `2330`, board in `exchange` when available) and remain
 unmapped; `tw_universe_name_map()` backfills names and board (TWSE/TPEx/ESB)
 for add-company. Finnhub is **US only** and never queried for TW.
+
+TW feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as KR/UK/HK, default on): TWSE and TPEx material filings pair on a
+same-source title fallback (ticker + Taipei day + normalized title) and are
+**never** annotated against each other by title — the two boards stay
+separate. `yahoo_tw` / `google_news_tw` news pairs across sources on ticker +
+Taipei day + normalized title. Every row stays in the feed with an "Also seen
+on …" label; totals and page sizes are never shrunk.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

@@ -55,7 +55,7 @@ sources:
   - name: twse_material
     label: TWSE OpenAPI (material)
     source_type: filings
-    enabled: true          # key-free TWSE OpenAPI material-information; listed companies only, TPEx/興櫃 not covered yet
+    enabled: true          # key-free TWSE OpenAPI material-information; listed companies only; OTC (上櫃) via tpex_material; 興櫃 not wired
   - name: tpex_material
     label: TPEx OpenAPI (material)
     source_type: filings

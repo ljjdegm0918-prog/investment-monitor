@@ -9,7 +9,11 @@ RNS ids (Investegate), Companies House transaction ids, or a same-source
 title fallback; Companies House and Investegate are never paired by title
 alone. For HK, hkexnews filings use NEWS_ID and hkex_di form serial;
 hkexnews and hkex_di are never paired by title. News pairs on ticker + local
-day + normalized title.
+day + normalized title. For TW, TWSE and TPEx filings share no cross-source
+identity, so their title fallback is source-scoped and the two boards are
+never annotated against each other; same-source title fallback pairs on
+ticker + Taipei day + normalized title. TW news (yahoo_tw / google_news_tw)
+pairs across sources on ticker + Taipei day + normalized title.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from zoneinfo import ZoneInfo
 KST = ZoneInfo("Asia/Seoul")
 LONDON = ZoneInfo("Europe/London")
 HKT = ZoneInfo("Asia/Hong_Kong")
+TAIPEI = ZoneInfo("Asia/Taipei")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -32,6 +37,8 @@ FILING_SOURCE_PRIORITY = {
     "sec": 4,
     "hkexnews": 5,
     "hkex_di": 6,
+    "twse_material": 7,
+    "tpex_material": 8,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -40,6 +47,8 @@ NEWS_SOURCE_PRIORITY = {
     "hankyung": 3,
     "thebell": 4,
     "yahoo_hk": 5,
+    "yahoo_tw": 6,
+    "google_news_tw": 7,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -55,6 +64,10 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_hk": "Yahoo Finance HK",
     "hkexnews": "HKEXnews (HKEX)",
     "hkex_di": "Disclosure of Interests (HKEX)",
+    "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -65,7 +78,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk"}:
+    if market not in {"kr", "uk", "hk", "tw"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -150,6 +163,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return _kr_filing_key(item)
     if market == "hk":
         return _hk_filing_key(item)
+    if market == "tw":
+        return _tw_filing_key(item)
     return _uk_filing_key(item)
 
 
@@ -211,8 +226,35 @@ def _hk_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+def _tw_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """TW filings pair on a source-scoped title fallback only.
+
+    ``twse_material`` and ``tpex_material`` share no cross-source receipt or
+    NEWS_ID, and listing vs OTC boards should never be annotated against each
+    other by title, so the source is part of the key. Same source, same
+    ticker, same Taipei day and same normalized title share a key.
+    """
+    source = str(item.get("source") or "")
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, TAIPEI)
+    if title and day:
+        return (
+            f"tw:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
 def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
-    zone = KST if market == "kr" else (HKT if market == "hk" else LONDON)
+    zone = (
+        KST
+        if market == "kr"
+        else HKT
+        if market == "hk"
+        else TAIPEI
+        if market == "tw"
+        else LONDON
+    )
     title = normalize_title(item.get("title"))
     day = _local_day(item, zone)
     if title and day:

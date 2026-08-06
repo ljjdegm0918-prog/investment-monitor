@@ -1,0 +1,10 @@
+# Taiwan Market Hints (TW)
+
+- TW feed soft-dedupe (display only, all rows kept; `KR_FEED_SOFT_DEDUPE`,
+  default on): TWSE/TPEx material filings pair same-source only (ticker +
+  Taipei day + normalized title) — the two boards are never annotated against
+  each other by title. `yahoo_tw` / `google_news_tw` news pairs across sources
+  on ticker + Taipei day + normalized title.
+- 興櫃 (Emerging) is not wired: no stable free feed.
+- TWSE/TPEx material feeds are key-free, not a paid MOPS push.
+- Finnhub is US only and never queried for TW.
