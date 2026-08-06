@@ -56,6 +56,10 @@ sources:
     label: TWSE OpenAPI (material)
     source_type: filings
     enabled: true          # key-free TWSE OpenAPI material-information; listed companies only, TPEx/興櫃 not covered yet
+  - name: tpex_material
+    label: TPEx OpenAPI (material)
+    source_type: filings
+    enabled: true          # key-free TPEx OpenAPI material-information; OTC (上櫃) companies; 興櫃 not covered yet
   - name: yahoo_tw
     label: Yahoo Finance TW
     source_type: news

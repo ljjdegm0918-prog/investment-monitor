@@ -173,6 +173,7 @@ ticker + Hong Kong day + normalized title.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | twse_material | filings | none | TWSE OpenAPI material-information (`t187ap04_L`, 重大訊息) for **listed companies only**; key-free, not a paid MOPS push; TPEx/興櫃 disclosure left to TW-4; news comes from yahoo_tw / google_news_tw |
+| tpex_material | filings | none | TPEx OpenAPI material-information (`mopsfin_t187ap04_O`, 重大訊息) for **OTC (上櫃) companies**; key-free, not a paid MOPS push; 興櫃 (Emerging) has no stable free feed and is not wired |
 | tw_universe | breadth cache | none | TWSE listed (`t187ap03_L`) + TPEx OTC (`mopsfin_t187ap03_O`) open company directories; emerging (興櫃) is an opt-in env hook because no stable free JSON was found; not an IBKR-complete universe; never enters the feed |
 | yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW` at request time (`.TWO` for TPEx/ESB boards from the universe cache); may be loosely related and break without notice |
 | google_news_tw | news | none | Key-free Google News RSS search (`q={ticker}.TW`, zh-TW); may be loosely related and break without notice |

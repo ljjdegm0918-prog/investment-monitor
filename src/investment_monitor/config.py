@@ -29,6 +29,7 @@ DEFAULT_SOURCE_META = {
     "yahoo_uk": ("Yahoo Finance UK", "news"),
     "yahoo_hk": ("Yahoo Finance HK", "news"),
     "twse_material": ("TWSE OpenAPI (material)", "filings"),
+    "tpex_material": ("TPEx OpenAPI (material)", "filings"),
     "yahoo_tw": ("Yahoo Finance TW", "news"),
     "google_news_tw": ("Google News (TW)", "news"),
     "news": ("News", "news"),

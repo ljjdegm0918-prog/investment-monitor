@@ -143,6 +143,13 @@ from .sources.tw_news import (
     YahooTwNewsError,
     YahooTwNewsRequestError,
 )
+from .sources.tpex_material import (
+    TpexMaterialClient,
+    TpexMaterialConnector,
+    TpexMaterialDataError,
+    TpexMaterialError,
+    TpexMaterialRequestError,
+)
 from .tw_universe import (
     TwUniverseError,
     load_tw_universe,
@@ -267,6 +274,11 @@ __all__ = [
     "GoogleTwNewsDataError",
     "GoogleTwNewsError",
     "GoogleTwNewsRequestError",
+    "TpexMaterialClient",
+    "TpexMaterialConnector",
+    "TpexMaterialDataError",
+    "TpexMaterialError",
+    "TpexMaterialRequestError",
     "YahooTwNewsClient",
     "YahooTwNewsConnector",
     "YahooTwNewsDataError",

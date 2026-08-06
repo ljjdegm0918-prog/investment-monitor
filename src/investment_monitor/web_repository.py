@@ -51,6 +51,7 @@ SOURCE_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_hk": "Yahoo Finance HK",
     "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
     "news": "News",
@@ -71,6 +72,7 @@ PROVIDER_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_hk": "Yahoo Finance HK",
     "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
 }
@@ -108,6 +110,7 @@ STANDARD_SOURCE_DEFAULTS = (
     ("yahoo_uk", "Yahoo Finance UK", "news"),
     ("yahoo_hk", "Yahoo Finance HK", "news"),
     ("twse_material", "TWSE OpenAPI (material)", "filings"),
+    ("tpex_material", "TPEx OpenAPI (material)", "filings"),
     ("yahoo_tw", "Yahoo Finance TW", "news"),
     ("google_news_tw", "Google News (TW)", "news"),
     ("news", "News", "news"),

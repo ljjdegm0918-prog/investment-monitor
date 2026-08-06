@@ -31,6 +31,7 @@ from .sources.tw_news import (
     GoogleTwNewsConnector,
     YahooTwNewsConnector,
 )
+from .sources.tpex_material import TpexMaterialConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -151,4 +152,5 @@ def create_default_registry() -> SourceRegistry:
     registry.register(TwseMaterialConnector.name, TwseMaterialConnector)
     registry.register(YahooTwNewsConnector.name, YahooTwNewsConnector)
     registry.register(GoogleTwNewsConnector.name, GoogleTwNewsConnector)
+    registry.register(TpexMaterialConnector.name, TpexMaterialConnector)
     return registry
