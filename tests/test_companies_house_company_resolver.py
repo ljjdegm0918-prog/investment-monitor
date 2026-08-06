@@ -274,7 +274,10 @@ class CompaniesHouseRevalidationTests(unittest.TestCase):
                 cache=cache,
             )
 
-            changed = resolver.revalidate_legacy(repository)
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=Path(temporary_directory) / "scrub.sentinel",
+            )
             companies = {
                 company["ticker"]: company
                 for company in repository.companies()
@@ -308,7 +311,10 @@ class CompaniesHouseRevalidationTests(unittest.TestCase):
                 cache=cache,
             )
 
-            changed = resolver.revalidate_legacy(repository)
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=Path(temporary_directory) / "scrub.sentinel",
+            )
             companies = {
                 company["ticker"]: company
                 for company in repository.companies()
@@ -341,7 +347,10 @@ class CompaniesHouseRevalidationTests(unittest.TestCase):
                 cache=cache,
             )
 
-            changed = resolver.revalidate_legacy(repository)
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=Path(temporary_directory) / "scrub.sentinel",
+            )
             companies = {
                 company["ticker"]: company
                 for company in repository.companies()
@@ -353,6 +362,152 @@ class CompaniesHouseRevalidationTests(unittest.TestCase):
         self.assertEqual(changed, 0)
         self.assertEqual(companies["01234567"]["mapping_status"], "mapped")
         self.assertEqual(trusted, "01234567")
+
+    def test_confirmed_mapping_survives_second_revalidation(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            repository, cache, cache_path = self.make_repository_and_cache(
+                temporary_directory
+            )
+            sentinel = Path(temporary_directory) / "scrub.sentinel"
+            sentinel.write_text("done", encoding="utf-8")
+            repository.set_company_mapping(
+                {
+                    "ticker": "SOMECO",
+                    "name": "EXAMPLE CO PLC",
+                    "exchange": "Unverified",
+                    "cik": "01234567",
+                    "mapping_status": "unverified",
+                },
+                market="uk",
+            )
+            client = FakeClient(
+                companies={
+                    "01234567": {
+                        "company_name": "EXAMPLE CO PLC",
+                        "company_number": "01234567",
+                    }
+                }
+            )
+            resolver = CompaniesHouseCompanyResolver(
+                client=client,
+                cache=cache,
+            )
+            identity = resolver.confirm(
+                "SOMECO",
+                company_number="01234567",
+            )
+            self.assertEqual(identity["mapping_status"], "mapped")
+            repository.set_company_mapping(identity, market="uk")
+
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=sentinel,
+            )
+            companies = {
+                company["ticker"]: company
+                for company in repository.companies()
+            }
+            trusted = CompanyNumberCache(cache_path).number_for_ticker(
+                "SOMECO"
+            )
+            changed_again = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=sentinel,
+            )
+            companies_again = {
+                company["ticker"]: company
+                for company in repository.companies()
+            }
+
+        self.assertEqual(changed, 0)
+        self.assertEqual(companies["SOMECO"]["mapping_status"], "mapped")
+        self.assertEqual(trusted, "01234567")
+        self.assertEqual(changed_again, 0)
+        self.assertEqual(
+            companies_again["SOMECO"]["mapping_status"],
+            "mapped",
+        )
+
+    def test_first_scrub_downgrades_legacy_unique_and_writes_sentinel(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            repository, cache, cache_path = self.make_repository_and_cache(
+                temporary_directory
+            )
+            sentinel = Path(temporary_directory) / "scrub.sentinel"
+            self.assertFalse(sentinel.exists())
+            repository.set_company_mapping(
+                {
+                    "ticker": "SOMECO",
+                    "name": "EXAMPLE CO PLC",
+                    "exchange": "LSE",
+                    "cik": "01234567",
+                    "mapping_status": "mapped",
+                },
+                market="uk",
+            )
+            cache.remember("SOMECO", "01234567")
+            resolver = CompaniesHouseCompanyResolver(
+                client=None,
+                cache=cache,
+            )
+
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=sentinel,
+            )
+            companies = {
+                company["ticker"]: company
+                for company in repository.companies()
+            }
+            trusted = CompanyNumberCache(cache_path).number_for_ticker(
+                "SOMECO"
+            )
+            sentinel_written = sentinel.exists()
+
+        self.assertEqual(changed, 1)
+        self.assertEqual(companies["SOMECO"]["mapping_status"], "unverified")
+        self.assertIsNone(trusted)
+        self.assertTrue(sentinel_written)
+
+    def test_steady_state_mapped_without_trusted_cache_downgrades(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            repository, cache, cache_path = self.make_repository_and_cache(
+                temporary_directory
+            )
+            sentinel = Path(temporary_directory) / "scrub.sentinel"
+            sentinel.write_text("done", encoding="utf-8")
+            repository.set_company_mapping(
+                {
+                    "ticker": "SOMECO",
+                    "name": "EXAMPLE CO PLC",
+                    "exchange": "LSE",
+                    "cik": "01234567",
+                    "mapping_status": "mapped",
+                },
+                market="uk",
+            )
+            resolver = CompaniesHouseCompanyResolver(
+                client=None,
+                cache=cache,
+            )
+
+            changed = resolver.revalidate_legacy(
+                repository,
+                sentinel_path=sentinel,
+            )
+            companies = {
+                company["ticker"]: company
+                for company in repository.companies()
+            }
+            trusted = CompanyNumberCache(cache_path).number_for_ticker(
+                "SOMECO"
+            )
+
+        self.assertEqual(changed, 1)
+        self.assertEqual(companies["SOMECO"]["mapping_status"], "unverified")
+        self.assertIsNone(trusted)
 
 
 if __name__ == "__main__":
