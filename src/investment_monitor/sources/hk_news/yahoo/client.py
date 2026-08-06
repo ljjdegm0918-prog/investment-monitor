@@ -1,9 +1,14 @@
-"""Yahoo Finance UK stock news RSS client.
+"""Yahoo Finance HK stock news RSS client.
 
-Recon (verified live): ``GET https://feeds.finance.yahoo.com/rss/2.0/headline
-?s=VOD.L&region=GB&lang=en-GB`` returns an RSS 2.0 feed with real Yahoo
-article links and RFC822 pub dates. Symbols need the ``.L`` suffix at request
-time only. This is a key-free public RSS mirror; the feed may change without
+Recon (verified live 2026-08-06): ``GET https://feeds.finance.yahoo.com/
+rss/2.0/headline?s=0700.HK&region=HK&lang=zh-Hant-HK`` returns an RSS 2.0
+feed (channel "Yahoo! Finance: 0700.HK News") with RFC822 pub dates.
+``region=HK&lang=en-HK`` also returns a feed but currently with the same
+Chinese content, so the connector treats identical bilingual titles as a
+single-language result instead of pretending to have both languages.
+Symbols need the ``.HK`` suffix at request time only (``00700`` ->
+``0700.HK``); the stored ticker stays the canonical ``00700``. This is a
+key-free public RSS mirror; may be loosely related and may break without
 notice, so parse failures raise a data error instead of fake success.
 """
 
@@ -31,20 +36,20 @@ DEFAULT_BASE_URL = "https://feeds.finance.yahoo.com/rss/2.0/headline"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
-class YahooNewsError(Exception):
-    """Base error for Yahoo Finance UK news collection."""
+class YahooHkNewsError(Exception):
+    """Base error for Yahoo Finance HK news collection."""
 
 
-class YahooNewsRequestError(YahooNewsError):
+class YahooHkNewsRequestError(YahooHkNewsError):
     """Raised when the Yahoo request cannot be completed."""
 
 
-class YahooNewsDataError(YahooNewsError):
+class YahooHkNewsDataError(YahooHkNewsError):
     """Raised when Yahoo returns an unexpected feed."""
 
 
-class YahooNewsClient:
-    """Small stdlib RSS client for Yahoo Finance UK stock news."""
+class YahooHkNewsClient:
+    """Small stdlib RSS client for Yahoo Finance HK stock news."""
 
     def __init__(
         self,
@@ -58,14 +63,14 @@ class YahooNewsClient:
         sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         if not base_url.strip():
-            raise ValueError("Yahoo news base URL must not be empty.")
+            raise ValueError("Yahoo HK news base URL must not be empty.")
         if timeout <= 0:
-            raise ValueError("Yahoo news timeout must be greater than zero.")
+            raise ValueError("Yahoo HK news timeout must be greater than zero.")
         if max_retries < 0:
-            raise ValueError("Yahoo news max_retries must not be negative.")
+            raise ValueError("Yahoo HK news max_retries must not be negative.")
         if requests_per_second <= 0:
             raise ValueError(
-                "Yahoo news requests_per_second must be greater than zero."
+                "Yahoo HK news requests_per_second must be greater than zero."
             )
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
@@ -79,13 +84,19 @@ class YahooNewsClient:
         self._rate_limit_lock = threading.Lock()
 
     @classmethod
-    def from_environment(cls) -> "YahooNewsClient":
+    def from_environment(cls) -> "YahooHkNewsClient":
         return cls(
-            base_url=os.environ.get("YAHOO_UK_NEWS_URL", DEFAULT_BASE_URL),
-            timeout=_read_float_environment("YAHOO_UK_NEWS_TIMEOUT_SECONDS", 20.0),
-            max_retries=_read_int_environment("YAHOO_UK_NEWS_MAX_RETRIES", 1),
+            base_url=os.environ.get("YAHOO_HK_NEWS_URL", DEFAULT_BASE_URL),
+            timeout=_read_float_environment(
+                "YAHOO_HK_NEWS_TIMEOUT_SECONDS",
+                20.0,
+            ),
+            max_retries=_read_int_environment(
+                "YAHOO_HK_NEWS_MAX_RETRIES",
+                1,
+            ),
             requests_per_second=_read_float_environment(
-                "YAHOO_UK_NEWS_REQUESTS_PER_SECOND",
+                "YAHOO_HK_NEWS_REQUESTS_PER_SECOND",
                 1.0,
             ),
         )
@@ -95,10 +106,12 @@ class YahooNewsClient:
         symbol: str,
         start_date: date,
         end_date: date,
+        lang: str = "zh-Hant-HK",
     ) -> List[Mapping[str, Any]]:
-        """Fetch and parse stock news for a Yahoo UK symbol (e.g. VOD.L)."""
+        """Fetch and parse stock news for a Yahoo HK symbol (e.g. 0700.HK)."""
         url = (
-            f"{self._base_url}?s={_quote(symbol)}&region=GB&lang=en-GB"
+            f"{self._base_url}?s={_quote(symbol)}"
+            f"&region=HK&lang={_quote(lang)}"
         )
         body = self._get_xml(url)
         return _parse_rss(
@@ -114,7 +127,7 @@ class YahooNewsClient:
                 url,
                 headers={
                     "User-Agent": self._user_agent,
-                    "Accept-Language": "en-GB,en;q=0.9",
+                    "Accept-Language": "zh-HK,en;q=0.9",
                     "Accept": "application/rss+xml,application/xml,*/*;q=0.8",
                 },
                 method="GET",
@@ -127,24 +140,24 @@ class YahooNewsClient:
                     error.code not in RETRYABLE_STATUS_CODES
                     or attempt == self._max_retries
                 ):
-                    raise YahooNewsRequestError(
-                        f"Yahoo news request failed with HTTP "
+                    raise YahooHkNewsRequestError(
+                        f"Yahoo HK news request failed with HTTP "
                         f"{error.code}: {url}"
                     ) from error
             except URLError as error:
                 if attempt == self._max_retries:
-                    raise YahooNewsRequestError(
-                        f"Yahoo news request failed after "
+                    raise YahooHkNewsRequestError(
+                        f"Yahoo HK news request failed after "
                         f"{self._max_retries + 1} attempts: {url}"
                     ) from error
             except TimeoutError as error:
                 if attempt == self._max_retries:
-                    raise YahooNewsRequestError(
-                        f"Yahoo news request timed out after "
+                    raise YahooHkNewsRequestError(
+                        f"Yahoo HK news request timed out after "
                         f"{self._max_retries + 1} attempts: {url}"
                     ) from error
             self._sleeper(0.5 * (2**attempt))
-        raise YahooNewsRequestError(f"Yahoo news request failed: {url}")
+        raise YahooHkNewsRequestError(f"Yahoo HK news request failed: {url}")
 
     def _wait_for_rate_limit(self) -> None:
         with self._rate_limit_lock:
@@ -165,10 +178,10 @@ def _parse_rss(
     start_date: date,
     end_date: date,
 ) -> List[Mapping[str, Any]]:
-    """Parse a Yahoo RSS feed, raising the UK data error on malformed XML."""
+    """Parse a Yahoo RSS feed, raising the HK data error on malformed XML."""
     return _parse_rss_common(
         body,
         start_date=start_date,
         end_date=end_date,
-        data_error=YahooNewsDataError,
+        data_error=YahooHkNewsDataError,
     )

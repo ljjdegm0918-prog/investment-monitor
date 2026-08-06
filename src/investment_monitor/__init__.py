@@ -78,6 +78,13 @@ from .sources.hkexnews import (
     HkexNewsRequestError,
     HKEXNewsCompanyResolver,
 )
+from .sources.hk_news import (
+    YahooHkNewsClient,
+    YahooHkNewsConnector,
+    YahooHkNewsDataError,
+    YahooHkNewsError,
+    YahooHkNewsRequestError,
+)
 from .sources.kr_news import (
     HankyungClient,
     HankyungConnector,
@@ -210,6 +217,11 @@ __all__ = [
     "TheBellConnector",
     "UkUniverseError",
     "UniverseEntry",
+    "YahooHkNewsClient",
+    "YahooHkNewsConnector",
+    "YahooHkNewsDataError",
+    "YahooHkNewsError",
+    "YahooHkNewsRequestError",
     "WorkflowResult",
     "YahooNewsClient",
     "YahooNewsConnector",

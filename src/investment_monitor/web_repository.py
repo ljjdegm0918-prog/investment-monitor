@@ -47,6 +47,7 @@ SOURCE_LABELS = {
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -62,6 +63,7 @@ PROVIDER_LABELS = {
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -94,6 +96,7 @@ STANDARD_SOURCE_DEFAULTS = (
     ("hankyung", "Hankyung", "news"),
     ("thebell", "TheBell", "news"),
     ("yahoo_uk", "Yahoo Finance UK", "news"),
+    ("yahoo_hk", "Yahoo Finance HK", "news"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),

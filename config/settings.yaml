@@ -44,6 +44,10 @@ sources:
     label: Yahoo Finance UK
     source_type: news
     enabled: true          # key-free public RSS; may break without notice
+  - name: yahoo_hk
+    label: Yahoo Finance HK
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
   - name: community
     label: Community
     source_type: community

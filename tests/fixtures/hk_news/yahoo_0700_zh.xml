@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: 0700.HK News</title>
+    <item>
+      <title>騰訊控股季度業績公布</title>
+      <link>https://hk.finance.yahoo.com/news/tencent-quarterly-110000001.html</link>
+      <pubDate>Wed, 05 Aug 2026 09:30:00 +0000</pubDate>
+      <description>騰訊公布季度業績。</description>
+    </item>
+    <item>
+      <title>港股通淨流入</title>
+      <link>https://hk.finance.yahoo.com/news/southbound-inflow-110000002.html</link>
+      <pubDate>Tue, 04 Aug 2026 02:15:00 +0000</pubDate>
+      <description>南向資金淨流入。</description>
+    </item>
+    <item>
+      <title>舊聞</title>
+      <link>https://hk.finance.yahoo.com/news/old-story-109900003.html</link>
+      <pubDate>Mon, 20 Jul 2026 09:00:00 +0000</pubDate>
+      <description>窗口外舊聞。</description>
+    </item>
+  </channel>
+</rss>

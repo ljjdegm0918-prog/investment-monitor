@@ -13,6 +13,7 @@ from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
 from .sources.companies_house import CompaniesHouseConnector
 from .sources.dart import DARTConnector
+from .sources.hk_news import YahooHkNewsConnector
 from .sources.hkexnews import HkexNewsConnector
 from .sources.investegate import InvestegateConnector
 from .sources.kind import KindConnector
@@ -139,4 +140,5 @@ def create_default_registry() -> SourceRegistry:
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
     return registry

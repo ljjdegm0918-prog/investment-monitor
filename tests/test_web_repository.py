@@ -707,6 +707,38 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(news["status"], "connected")
         self.assertEqual(news["provider"], "Yahoo Finance UK")
 
+    def test_news_status_includes_yahoo_hk_provider(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("yahoo_hk",),
+            known_sources=(
+                SourceConfig(
+                    name="yahoo_hk",
+                    label="Yahoo Finance HK",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("yahoo_hk",),
+        )
+        self.items.save([
+            make_item(
+                "yahoo-hk-1",
+                source="yahoo_hk",
+                source_type="news",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertEqual(news["status"], "connected")
+        self.assertEqual(news["provider"], "Yahoo Finance HK")
+
     def test_list_unread_counts_only_today(self) -> None:
         self.add_company("AAPL", "holdings")
         self.items.save([

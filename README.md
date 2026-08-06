@@ -138,10 +138,12 @@ by title. News folds on ticker + London day + normalized title.
 |---|---|---|---|
 | hkexnews | filings | none | Unofficial HKEXnews title-search JSON (not an official HKEX API/IIS feed); may change without notice; HKEX stock-id mapped when a match exists, otherwise unmapped |
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; not an IBKR-complete universe (structured products / multi-counter cases may be partial); never enters the feed |
+| yahoo_hk | news | none | Yahoo Finance HK public RSS mirror; may be loosely related and break without notice; `.HK` symbol added at request time only |
 
 HK tickers are canonical five-digit codes (`700` / `0700` / `00700` /
 `0700.HK` all store as `00700`). The universe cache refreshes with
 `refresh_hk_universe()` (default path `.cache/investment_monitor/hk_universe.json`).
+Finnhub remains **US only** and is never queried for HK.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

@@ -26,6 +26,7 @@ DEFAULT_SOURCE_META = {
     "hankyung": ("Hankyung", "news"),
     "thebell": ("TheBell", "news"),
     "yahoo_uk": ("Yahoo Finance UK", "news"),
+    "yahoo_hk": ("Yahoo Finance HK", "news"),
     "news": ("News", "news"),
     "community": ("Community", "community"),
     "research": ("Research", "research"),
