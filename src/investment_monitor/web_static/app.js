@@ -5,13 +5,14 @@ const state = {
   path: document.body.dataset.path,
   bootstrap: null,
   filters: {},
+  items: [],
   currentFeed: null,
   controller: null,
 };
 
 const listLabels = { holdings: "Holdings", planned: "Planned Purchases", watchlist: "Watchlist" };
 const viewTitles = {
-  today: "Today", information: "All Information", search: "Search",
+  today: "Today",
   activity: "Activity & Logs", sources: "Data Sources", settings: "Settings",
   holdings: "Holdings", planned: "Planned Purchases", watchlist: "Watchlist",
 };
@@ -22,11 +23,6 @@ async function init() {
   document.getElementById("mobile-menu").addEventListener("click", event => {
     const open = document.querySelector(".sidebar").classList.toggle("open");
     event.currentTarget.setAttribute("aria-expanded", String(open));
-  });
-  document.getElementById("global-search").addEventListener("submit", event => {
-    event.preventDefault();
-    const q = document.getElementById("global-search-input").value.trim();
-    location.href = `/search${q ? `?q=${encodeURIComponent(q)}` : ""}`;
   });
   try {
     state.bootstrap = await api("/api/bootstrap");
@@ -49,20 +45,15 @@ function renderShell() {
   const svg = body => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
   const navIcons = {
     today: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 4.75V8l2.25 1.5"/>`),
-    information: svg(`<path d="M8 1.75l5.75 3L8 7.75 2.25 4.75 8 1.75z"/><path d="M2.25 8l5.75 3 5.75-3"/><path d="M2.25 11.25L8 14.25l5.75-3"/>`),
     holdings: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 2.25V8h5.5"/>`),
     planned: svg(`<circle cx="8" cy="8" r="5.75"/><path d="M8 5.5v5M5.5 8h5"/>`),
     watchlist: svg(`<path d="M1.75 8S4.25 3.75 8 3.75 14.25 8 14.25 8 11.75 12.25 8 12.25 1.75 8 1.75 8z"/><circle cx="8" cy="8" r="1.9"/>`),
-    search: svg(`<circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4L14 14"/>`),
-    activity: svg(`<path d="M1.75 8h2.75l1.75-4 3.25 8 1.75-4h2.75"/>`),
-    sources: svg(`<ellipse cx="8" cy="4.25" rx="5.5" ry="2.25"/><path d="M2.5 4.25v7.5c0 1.25 2.46 2.25 5.5 2.25s5.5-1 5.5-2.25v-7.5"/><path d="M2.5 8c0 1.25 2.46 2.25 5.5 2.25s5.5-1 5.5-2.25"/>`),
     settings: svg(`<path d="M2.25 4.75h11.5M2.25 11.25h11.5"/><circle cx="5.9" cy="4.75" r="1.7"/><circle cx="10.1" cy="11.25" r="1.7"/>`),
   };
   const nav = [
-    ["OVERVIEW", [["/today","today","Today"],["/information","information","All Information"]]],
+    ["OVERVIEW", [["/today","today","Today"]]],
     ["MY LISTS", [["/lists/holdings","holdings","Holdings",listBySlug.holdings.unread_count],["/lists/planned","planned","Planned Purchases",listBySlug.planned.unread_count],["/lists/watchlist","watchlist","Watchlist",listBySlug.watchlist.unread_count]]],
-    ["TOOLS", [["/search","search","Search"],["/activity","activity","Activity & Logs"]]],
-    ["SYSTEM", [["/sources","sources","Data Sources"],["/settings","settings","Settings"]]],
+    ["SYSTEM", [["/settings","settings","Settings"]]],
   ];
   document.getElementById("sidebar-nav").innerHTML = nav.map(([heading, links]) => `
     <section class="nav-section"><h2 class="nav-heading">${heading}</h2>
@@ -75,141 +66,99 @@ function isActive(href) {
 }
 
 async function renderPage() {
-  if (["today","information","search","holdings","planned","watchlist"].includes(state.view)) return renderInformationPage();
+  if (state.view === "today") return renderTodayPage();
+  if (["holdings","planned","watchlist"].includes(state.view)) return renderListPage();
   if (state.view === "activity") return renderActivity();
   if (state.view === "sources") return renderSources();
   if (state.view === "settings") return renderSettings();
+  location.replace("/today");
 }
 
-async function renderInformationPage() {
-  const isToday = state.view === "today";
-  const isList = ["holdings","planned","watchlist"].includes(state.view);
-  const isSearch = state.view === "search";
-  const title = viewTitles[state.view];
-  const companies = isList ? state.bootstrap.companies.filter(company => company.list_slugs.includes(state.view)) : state.bootstrap.companies;
-  const currentList = isList ? state.bootstrap.lists.find(list => list.slug === state.view) : null;
-  const params = new URLSearchParams(location.search);
+async function renderTodayPage() {
   state.filters = {
-    list: isList ? state.view : params.get("list") || "",
-    ticker: params.get("ticker") || "",
-    type: params.get("type") || "all",
-    form: params.get("form") || "",
-    start_date: isToday ? state.bootstrap.selected_date : params.get("start_date") || "",
-    end_date: isToday ? state.bootstrap.selected_date : params.get("end_date") || "",
-    read: params.get("read") || "all",
-    amendment: params.get("amendment") || "all",
-    q: isSearch ? params.get("q") || "" : "",
-    page: Number(params.get("page") || 1),
+    list: "",
+    ticker: "",
+    type: "all",
+    form: "",
+    start_date: state.bootstrap.selected_date,
+    end_date: state.bootstrap.selected_date,
+    read: "all",
+    amendment: "all",
+    q: "",
+    page: 1,
     page_size: state.bootstrap.settings.page_size,
   };
+  state.items = [];
+  document.getElementById("page").innerHTML = `
+    <header class="page-header"><div><h1>Today</h1><p>Everything new collected today across all tracked companies, newest first. No filters needed.</p></div><button class="button" id="refresh-feed" type="button">Refresh</button></header>
+    <section class="panel" aria-label="Today's new information">
+      <div class="results-toolbar"><span id="result-count">Loading results…</span><button class="button link" id="mark-all" type="button">Mark all as read</button></div>
+      <div id="feed-content"><div class="loading-state" role="status"><span class="spinner"></span> Loading information…</div></div>
+    </section>`;
+  document.getElementById("refresh-feed").addEventListener("click", () => loadFeed("replace"));
+  document.getElementById("mark-all").addEventListener("click", markAllRead);
+  await loadFeed("replace");
+}
+
+async function renderListPage() {
+  const companies = state.bootstrap.companies.filter(company => company.list_slugs.includes(state.view));
   const companyCount = companies.length;
   document.getElementById("page").innerHTML = `
-    <header class="page-header"><div><h1>${title}</h1><p>${isToday ? "Updates across your lists, grouped by filing acceptance time in Eastern Time." : isSearch ? "Metadata search across information already collected and stored." : isList ? `${companyCount} ${companyCount === 1 ? "company" : "companies"} · ${currentList.unread_count} unread items` : "Historical information across every company in at least one list."}</p></div>${isList ? `<button class="button primary" id="toggle-add">+ Add companies</button>` : ""}</header>
-    ${isToday ? summaryCards() : ""}
-    ${isSearch ? `<div class="notice"><strong>Metadata search only.</strong> Item bodies have not been downloaded or full-text indexed.</div>` : ""}
-    ${isList ? addCompanyPanel() : ""}
-    <section class="panel" aria-label="Information feed">
-      ${filterBar(companies, { advanced: !isToday })}
-      <div id="feed-content"><div class="loading-state" role="status"><span class="spinner"></span> Loading information…</div></div>
-    </section>
-    ${isList ? companyManagement(companies) : ""}`;
-  bindFeedControls();
-  if (isList) bindListControls();
-  await loadFeed();
-}
-
-function summaryCards() {
-  const c = state.bootstrap.counts;
-  const svgIcon = body => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
-  return `<div class="summary-grid">
-    ${summaryCard(svgIcon(`<path d="M8 1.75l5.75 3L8 7.75 2.25 4.75 8 1.75z"/><path d="M2.25 8l5.75 3 5.75-3"/><path d="M2.25 11.25L8 14.25l5.75-3"/>`), c.companies, "followed companies")}
-    ${summaryCard(svgIcon(`<circle cx="8" cy="8" r="5.75"/><path d="M5.5 8.25l1.75 1.75 3.25-3.5"/>`), c.unread, "unread items")}
-    ${summaryCard(svgIcon(`<path d="M4 1.75h5.5L12 4.25V14.25H4V1.75z"/><path d="M9.25 1.75v2.75H12"/><path d="M6 8h4M6 10.75h4"/>`), c.filings, "filings for selected date")}
-  </div>`;
-}
-function summaryCard(icon, number, label) { return `<div class="summary-card"><span class="summary-icon" aria-hidden="true">${icon}</span><div><div class="summary-number">${number}</div><div class="summary-label">${label}</div></div></div>`; }
-
-function filterBar(companies, options) {
-  const types = [["all","All"],["filings","Filings"],["news","News"],["community","Community"],["research","Research"]];
-  const searchInput = state.view === "search" ? `<div class="filter-field" style="min-width:260px"><label for="metadata-search">Metadata search</label><input id="metadata-search" value="${esc(state.filters.q)}" placeholder="Ticker, company, title, form, accession"></div>` : "";
-  return `<div class="filter-bar">
-    ${searchInput}
-    <div class="type-tabs" role="group" aria-label="Information type">${types.map(([value,label]) => `<button class="tab ${state.filters.type === value ? "active" : ""}" type="button" data-filter-type="${value}">${label}</button>`).join("")}</div>
-    <div class="company-chips" role="group" aria-label="Company"><button class="chip ${!state.filters.ticker ? "active" : ""}" data-ticker="" type="button">All Companies</button>${companies.map(company => `<button class="chip ${state.filters.ticker === company.ticker ? "active" : ""}" data-ticker="${company.ticker}" type="button">${company.ticker}</button>`).join("")}</div>
-    ${options.advanced ? advancedFilters() : ""}
-    <button class="button link" id="clear-filters" type="button">Clear all filters</button>
-  </div><div class="results-toolbar"><span id="result-count">Loading results…</span><button class="button link" id="mark-all" type="button">Mark all in scope as read</button></div>`;
-}
-
-function advancedFilters() {
-  return `<div class="filter-field"><label for="form-filter">Form / document type</label><input id="form-filter" value="${esc(state.filters.form)}" placeholder="10-K, 8-K…"></div>
-    <div class="filter-field"><label for="start-date">Start date</label><input id="start-date" type="date" value="${state.filters.start_date}"></div>
-    <div class="filter-field"><label for="end-date">End date</label><input id="end-date" type="date" value="${state.filters.end_date}"></div>
-    <div class="filter-field"><label for="read-filter">Read state</label><select id="read-filter"><option value="all">All</option><option value="unread" ${state.filters.read === "unread" ? "selected" : ""}>Unread</option><option value="read" ${state.filters.read === "read" ? "selected" : ""}>Read</option></select></div>
-    <div class="filter-field"><label for="amendment-filter">Amendment</label><select id="amendment-filter"><option value="all">All</option><option value="no" ${state.filters.amendment === "no" ? "selected" : ""}>Original only</option><option value="yes" ${state.filters.amendment === "yes" ? "selected" : ""}>Amendments only</option></select></div>`;
+    <header class="page-header"><div><h1>${viewTitles[state.view]}</h1><p>${companyCount} ${companyCount === 1 ? "company" : "companies"} tracked · new items appear on Today</p></div><button class="button primary" id="toggle-add">+ Add companies</button></header>
+    ${addCompanyPanel()}
+    ${companyManagement(companies)}`;
+  bindListControls();
 }
 
 function addCompanyPanel() {
-  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped. Korea (KR) news/disclosure sources are not connected yet in this phase.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
+  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="uk">UK (LSE/AIM)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped. UK Companies House filings, an Investegate RNS-class public mirror, and Yahoo Finance UK news are connected; not an official LSEG RNS feed.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
 }
 
 function companyManagement(companies) {
-  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete historical information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Market</th><th>Company</th><th>Exchange</th><th>CIK / Corp</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => { const idText = company.market === "kr" && company.cik ? `Corp ${esc(company.cik)}` : esc(company.cik || "Unmapped"); return `<tr><td><strong>${company.ticker}</strong></td><td>${marketLabel(company.market)}</td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${idText}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}" data-market="${company.market}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}" data-market="${company.market}">Remove from all lists</button></td></tr>`; }).join("") : `<tr><td colspan="7">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
+  return `<section class="panel" style="margin-top:16px"><div class="results-toolbar"><strong>Companies in ${listLabels[state.view]}</strong><span>Membership changes never delete stored information.</span></div><div style="overflow:auto"><table class="company-table"><thead><tr><th>Ticker</th><th>Market</th><th>Company</th><th>Exchange</th><th>Identifier</th><th>Lists</th><th>Actions</th></tr></thead><tbody>${companies.length ? companies.map(company => { const idText = company.market === "kr" && company.cik ? `Corp ${esc(company.cik)}` : company.market === "uk" && company.cik ? `Company ${esc(company.cik)}` : esc(company.cik || "Unmapped"); return `<tr><td><strong>${company.ticker}</strong></td><td>${marketLabel(company.market)}</td><td>${esc(company.name)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${idText}</td><td>${company.list_slugs.map(slug => badge(slug)).join("")}</td><td><button class="button link remove-current" data-ticker="${company.ticker}" data-market="${company.market}">Remove from this list</button><button class="button link remove-all" data-ticker="${company.ticker}" data-market="${company.market}">Remove from all lists</button></td></tr>`; }).join("") : `<tr><td colspan="7">No companies in this list.</td></tr>`}</tbody></table></div></section>`;
 }
 
-function bindFeedControls() {
-  document.querySelectorAll("[data-filter-type]").forEach(button => button.addEventListener("click", () => { state.filters.type = button.dataset.filterType; state.filters.page = 1; refreshFilterUI(); loadFeed(); }));
-  document.querySelectorAll("[data-ticker]").forEach(button => button.addEventListener("click", () => { state.filters.ticker = button.dataset.ticker; state.filters.page = 1; refreshFilterUI(); loadFeed(); }));
-  document.getElementById("clear-filters").addEventListener("click", () => {
-    const keepList = ["holdings","planned","watchlist"].includes(state.view) ? state.view : "";
-    state.filters = { ...state.filters, list: keepList, ticker:"", type:"all", form:"", start_date: state.view === "today" ? state.bootstrap.selected_date : "", end_date: state.view === "today" ? state.bootstrap.selected_date : "", read:"all", amendment:"all", q:"", page:1 };
-    renderInformationPage();
-  });
-  ["form-filter","start-date","end-date","read-filter","amendment-filter"].forEach(id => {
-    const element = document.getElementById(id); if (!element) return;
-    element.addEventListener("change", () => { const key = {"form-filter":"form","start-date":"start_date","end-date":"end_date","read-filter":"read","amendment-filter":"amendment"}[id]; state.filters[key] = element.value; state.filters.page = 1; loadFeed(); });
-  });
-  const search = document.getElementById("metadata-search");
-  if (search) { let timer; search.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { state.filters.q = search.value.trim(); state.filters.page = 1; loadFeed(); }, 300); }); }
-  document.getElementById("mark-all").addEventListener("click", markAllRead);
-}
-
-function refreshFilterUI() {
-  document.querySelectorAll("[data-filter-type]").forEach(button => button.classList.toggle("active", button.dataset.filterType === state.filters.type));
-  document.querySelectorAll("[data-ticker]").forEach(button => button.classList.toggle("active", button.dataset.ticker === state.filters.ticker));
-}
-
-async function loadFeed() {
+async function loadFeed(mode) {
   if (state.controller) state.controller.abort();
   state.controller = new AbortController();
-  document.getElementById("feed-content").innerHTML = `<div class="loading-state" role="status"><span class="spinner"></span> Loading information…</div>`;
+  if (mode === "append") state.filters.page += 1;
+  else {
+    state.filters.page = 1;
+    document.getElementById("feed-content").innerHTML = `<div class="loading-state" role="status"><span class="spinner"></span> Loading information…</div>`;
+  }
   try {
     const query = new URLSearchParams(Object.entries(state.filters).filter(([,value]) => value !== "" && value !== null));
     const response = await api(`/api/feed?${query}`, { signal: state.controller.signal });
     state.currentFeed = response;
-    renderFeed(response);
+    state.items = mode === "append" ? state.items.concat(response.items) : response.items;
+    renderFeed();
   } catch (error) {
     if (error.name === "AbortError") return;
     document.getElementById("feed-content").innerHTML = `<div class="error-state"><div><strong>Request failed</strong><p>${esc(error.message)}</p><button class="button" id="retry-feed">Retry</button></div></div>`;
-    document.getElementById("retry-feed").addEventListener("click", loadFeed);
+    document.getElementById("retry-feed").addEventListener("click", () => loadFeed("replace"));
   }
 }
 
-function renderFeed(response) {
+function renderFeed() {
+  const response = state.currentFeed;
   const container = document.getElementById("feed-content");
-  document.getElementById("result-count").textContent = `${response.pagination.total} ${response.pagination.total === 1 ? "result" : "results"}`;
-  document.getElementById("mark-all").disabled = response.pagination.total === 0;
+  const total = response.pagination.total;
+  document.getElementById("result-count").textContent = `${total} new ${total === 1 ? "item" : "items"} today`;
+  document.getElementById("mark-all").disabled = total === 0;
   if (response.disconnected_message) { container.innerHTML = `<div class="not-connected"><div><strong>${response.disconnected_message}</strong><p>This source is not configured. Connected sources remain available under All.</p></div></div>`; return; }
-  if (!response.items.length) { container.innerHTML = `<div class="empty-state"><div><strong>${state.view === "today" ? "No information for this date" : state.view === "search" ? "Search returned no results" : "No information matches these filters"}</strong><p>Change the active filters or date range and try again.</p></div></div>`; return; }
-  container.innerHTML = `<div class="feed">${response.items.map(feedItem).join("")}</div>${pagination(response.pagination)}`;
+  if (!state.items.length) { container.innerHTML = `<div class="empty-state"><div><strong>No information for this date</strong><p>New filings, disclosures and news will appear here as they are collected today.</p></div></div>`; return; }
+  const p = response.pagination;
+  const more = p.page < p.pages ? `<div class="pagination"><span>Showing ${state.items.length} of ${total}</span><div><button class="button" id="load-more" type="button">Load more</button></div></div>` : "";
+  container.innerHTML = `<div class="feed">${state.items.map(feedItem).join("")}</div>${more}`;
   container.querySelectorAll(".read-control").forEach(button => button.addEventListener("click", () => markRead(Number(button.dataset.id), button.dataset.read !== "true")));
   container.querySelectorAll(".open-link").forEach(link => link.addEventListener("click", async event => {
     event.preventDefault();
     const newWindow = window.open("about:blank", "_blank", "noopener,noreferrer");
-    try { await setRead([Number(link.dataset.id)], true); if (newWindow) newWindow.location = link.href; else location.href = link.href; await reloadWorkspaceCounts(); await loadFeed(); }
+    try { await setRead([Number(link.dataset.id)], true); if (newWindow) newWindow.location = link.href; else location.href = link.href; markLocalRead([Number(link.dataset.id)], true); await reloadWorkspaceCounts(); renderFeed(); }
     catch (error) { if (newWindow) newWindow.close(); toast(error.message, true); }
   }));
-  container.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => { state.filters.page = Number(button.dataset.page); loadFeed(); document.getElementById("main-content").focus(); }));
+  const loadMore = document.getElementById("load-more");
+  if (loadMore) loadMore.addEventListener("click", () => loadFeed("append"));
 }
 
 function feedItem(item, index) {
@@ -222,15 +171,18 @@ function feedItem(item, index) {
 }
 
 function badge(slug) { return `<span class="list-badge ${slug}">${listLabels[slug] || slug}</span>`; }
-function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
-function pagination(p) { return `<div class="pagination"><span>Page ${p.page} of ${p.pages}</span><div><button class="button" data-page="${p.page - 1}" ${p.page <= 1 ? "disabled" : ""}>Previous</button> <button class="button" data-page="${p.page + 1}" ${p.page >= p.pages ? "disabled" : ""}>Next</button></div></div>`; }
+function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", uk: "UK", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
 
-async function markRead(id, isRead) { try { await setRead([id], isRead); await reloadWorkspaceCounts(); await loadFeed(); toast(`Marked as ${isRead ? "read" : "unread"}.`); } catch (error) { toast(error.message, true); } }
+function markLocalRead(ids, isRead) {
+  state.items.forEach(item => { if (ids.includes(item.id)) item.is_read = isRead; });
+}
+
+async function markRead(id, isRead) { try { await setRead([id], isRead); markLocalRead([id], isRead); await reloadWorkspaceCounts(); renderFeed(); toast(`Marked as ${isRead ? "read" : "unread"}.`); } catch (error) { toast(error.message, true); } }
 async function setRead(itemIds, isRead) { return api("/api/read", { method:"POST", body: JSON.stringify({ item_ids:itemIds, is_read:isRead }) }); }
 async function markAllRead() {
   const count = state.currentFeed?.pagination.total || 0;
-  if (!count || !confirm(`Mark all ${count} items matching the active filters as read? This includes every result page.`)) return;
-  try { const result = await api("/api/read/bulk", { method:"POST", body: JSON.stringify({ filters: state.filters, is_read:true }) }); toast(`Marked ${result.updated} scoped items as read.`); await reloadWorkspaceCounts(); await loadFeed(); } catch (error) { toast(error.message, true); }
+  if (!count || !confirm(`Mark all ${count} items from today as read?`)) return;
+  try { const result = await api("/api/read/bulk", { method:"POST", body: JSON.stringify({ filters: state.filters, is_read:true }) }); markLocalRead(state.items.map(item => item.id), true); toast(`Marked ${result.updated} items as read.`); await reloadWorkspaceCounts(); renderFeed(); } catch (error) { toast(error.message, true); }
 }
 async function reloadWorkspaceCounts() { state.bootstrap = await api("/api/bootstrap"); renderShell(); }
 
@@ -240,7 +192,7 @@ function bindListControls() {
     event.preventDefault(); const button = event.submitter; button.disabled = true;
     const lists = [...document.querySelectorAll('[name="destination"]:checked')].map(input => input.value);
     const market = document.getElementById("market-select").value;
-    try { const result = await api("/api/companies/batch", { method:"POST", body: JSON.stringify({ tickers:document.getElementById("ticker-input").value, lists, market }) }); document.getElementById("batch-result").innerHTML = batchResult(result); await reloadWorkspaceCounts(); toast("Batch add completed."); }
+    try { const result = await api("/api/companies/batch", { method:"POST", body: JSON.stringify({ tickers:document.getElementById("ticker-input").value, lists, market }) }); document.getElementById("batch-result").innerHTML = batchResult(result) + `<p style="margin-top:10px"><a class="button" href="/today">← Back to Today</a></p>`; await reloadWorkspaceCounts(); toast("Batch add completed. New items will show up on Today."); }
     catch (error) { document.getElementById("batch-result").innerHTML = `<div class="batch-result">${esc(error.message)}</div>`; }
     finally { button.disabled = false; }
   });
@@ -249,13 +201,13 @@ function bindListControls() {
   if (marketSelect && marketHint) {
     marketSelect.addEventListener("change", () => { marketHint.hidden = marketSelect.value === "us"; });
   }
-  document.querySelectorAll(".remove-current").forEach(button => button.addEventListener("click", async () => { try { await api("/api/memberships/remove", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,list:state.view,market:button.dataset.market || "us"}) }); toast(`${button.dataset.ticker} removed from ${listLabels[state.view]}.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
-  document.querySelectorAll(".remove-all").forEach(button => button.addEventListener("click", async () => { if (!confirm(`Remove ${button.dataset.ticker} from all lists? Historical information will be preserved.`)) return; try { const result = await api("/api/companies/remove-all", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,market:button.dataset.market || "us"}) }); toast(`Removed ${result.removed_memberships} memberships. Historical information was preserved.`); await reloadWorkspaceCounts(); renderInformationPage(); } catch(error) { toast(error.message,true); } }));
+  document.querySelectorAll(".remove-current").forEach(button => button.addEventListener("click", async () => { try { await api("/api/memberships/remove", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,list:state.view,market:button.dataset.market || "us"}) }); toast(`${button.dataset.ticker} removed from ${listLabels[state.view]}.`); await reloadWorkspaceCounts(); renderListPage(); } catch(error) { toast(error.message,true); } }));
+  document.querySelectorAll(".remove-all").forEach(button => button.addEventListener("click", async () => { if (!confirm(`Remove ${button.dataset.ticker} from all lists? Stored information will be preserved.`)) return; try { const result = await api("/api/companies/remove-all", { method:"POST", body:JSON.stringify({ticker:button.dataset.ticker,market:button.dataset.market || "us"}) }); toast(`Removed ${result.removed_memberships} memberships. Stored information was preserved.`); await reloadWorkspaceCounts(); renderListPage(); } catch(error) { toast(error.message,true); } }));
 }
 
 function batchResult(result) {
   const sections = [];
-  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} ${marketLabel(item.market)} (${esc(item.name)}, ${item.market === "kr" && item.cik ? `Corp code ${esc(item.cik)}` : `CIK ${esc(item.cik)}`}${item.mapping_status === "unmapped" ? ", unmapped for SEC" : ""})`).join(", ")}`);
+  if (result.added.length) sections.push(`<strong>Added:</strong> ${result.added.map(item => `${item.ticker} ${marketLabel(item.market)} (${esc(item.name)}, ${item.market === "kr" && item.cik ? `Corp code ${esc(item.cik)}` : item.market === "uk" && item.cik ? `Company no ${esc(item.cik)}` : `CIK ${esc(item.cik)}`}${item.mapping_status === "unmapped" ? ", unmapped for SEC" : ""})`).join(", ")}`);
   if (result.already_present.length) sections.push(`<strong>Already present:</strong> ${result.already_present.map(item => `${item.ticker} ${marketLabel(item.market)}`).join(", ")}`);
   if (result.failed.length) sections.push(`<strong>Failed:</strong> ${result.failed.map(item => `${item.ticker} — ${esc(item.error)}`).join("; ")}`);
   if (result.collection) {
@@ -301,7 +253,7 @@ function renderSettings() {
       return `<article class="provider-credential"><h3>${esc(provider.label)}${provider.enabled ? "" : " (disabled in settings)"}</h3>${body}</article>`;
     }).join("");
     const extraRows = (data.extra_env || []).map(entry => extraEnvRow(entry.name, "", entry.hint)).join("");
-    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>Provider credentials</h2><p class="timestamp">Credential fields are declared by each implemented source; unimplemented sources cannot be configured here.</p>${providerSections}<button class="button primary" id="save-provider-credentials">Save provider credentials</button></section><section class="panel settings-card"><h2>Extra environment variables</h2><details id="advanced-env"><summary>Advanced: extra environment variables</summary><p class="timestamp">These variables are only used if a connector explicitly reads them; setting one does not connect any new source. Names must match <code>[A-Za-z_][A-Za-z0-9_]*</code>. Dangerous names (PATH, PYTHONPATH, LD_*, SSL*, HOME, USERPROFILE, ...) are rejected.</p><div id="extra-env-rows">${extraRows}</div><button class="button link" id="add-extra-env" type="button">+ Add variable</button><button class="button primary" id="save-extra-env" type="button">Save extra variables</button></details></section>`;
+    document.getElementById("page").innerHTML = `<header class="page-header"><div><h1>Settings</h1><p>Only settings that currently affect the product are shown.</p></div></header><section class="panel settings-card"><h2>Display</h2><div class="filter-field"><label for="page-size-setting">Information items per page</label><select id="page-size-setting"><option ${size===10?"selected":""}>10</option><option ${size===25?"selected":""}>25</option><option ${size===50?"selected":""}>50</option></select></div><p class="timestamp">Today grouping and displayed item timestamps use America/New_York (ET). Canonical stored timestamps remain UTC-compatible.</p><button class="button primary" id="save-settings">Save settings</button></section><section class="panel settings-card"><h2>Provider credentials</h2><p class="timestamp">Credential fields are declared by each implemented source; unimplemented sources cannot be configured here.</p>${providerSections}<button class="button primary" id="save-provider-credentials">Save provider credentials</button></section><section class="panel settings-card"><h2>System pages</h2><p class="timestamp">Operational detail lives outside the daily flow.</p><p><a href="/sources">Data Sources</a> · <a href="/activity">Activity &amp; Logs</a></p></section><section class="panel settings-card"><h2>Extra environment variables</h2><details id="advanced-env"><summary>Advanced: extra environment variables</summary><p class="timestamp">These variables are only used if a connector explicitly reads them; setting one does not connect any new source. Names must match <code>[A-Za-z_][A-Za-z0-9_]*</code>. Dangerous names (PATH, PYTHONPATH, LD_*, SSL*, HOME, USERPROFILE, ...) are rejected.</p><div id="extra-env-rows">${extraRows}</div><button class="button link" id="add-extra-env" type="button">+ Add variable</button><button class="button primary" id="save-extra-env" type="button">Save extra variables</button></details></section>`;
     document.getElementById("save-settings").addEventListener("click", async () => { try { await api("/api/settings", {method:"POST",body:JSON.stringify({key:"page_size",value:document.getElementById("page-size-setting").value})}); await reloadWorkspaceCounts(); toast("Settings saved."); } catch(error) { toast(error.message,true); } });
     document.getElementById("save-provider-credentials").addEventListener("click", saveProviderCredentials);
     document.querySelectorAll("[data-clear-credential]").forEach(button => button.addEventListener("click", () => clearCredential(button.dataset.clearCredential)));

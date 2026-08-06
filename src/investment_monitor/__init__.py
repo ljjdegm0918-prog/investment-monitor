@@ -26,6 +26,21 @@ from .kr_universe import (
     load_kr_universe,
     refresh_kr_universe,
 )
+from .uk_universe import (
+    UkUniverseError,
+    load_uk_universe,
+    refresh_uk_universe,
+    uk_universe_name_map,
+)
+from .sources.companies_house import (
+    CompaniesHouseClient,
+    CompaniesHouseCompanyResolver,
+    CompaniesHouseConnector,
+    CompaniesHouseDataError,
+    CompaniesHouseError,
+    CompaniesHouseRequestError,
+    CompanyNumberCache,
+)
 from .sources.dart import (
     CorpCodeCache,
     DARTCompanyResolver,
@@ -34,6 +49,13 @@ from .sources.dart import (
     DartDataError,
     DartError,
     DartRequestError,
+)
+from .sources.investegate import (
+    InvestegateClient,
+    InvestegateConnector,
+    InvestegateDataError,
+    InvestegateError,
+    InvestegateRequestError,
 )
 from .sources.kind import (
     KindClient,
@@ -66,6 +88,13 @@ from .sources.news import (
     FinnhubNewsError,
     FinnhubNewsRequestError,
 )
+from .sources.uk_news import (
+    YahooNewsClient,
+    YahooNewsConnector,
+    YahooNewsDataError,
+    YahooNewsError,
+    YahooNewsRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -82,6 +111,7 @@ from .models import (
     MARKET_CN,
     MARKET_HK,
     MARKET_KR,
+    MARKET_UK,
     MARKET_UNKNOWN,
     MARKET_US,
 )
@@ -102,6 +132,13 @@ __all__ = [
     "ConfigurationError",
     "ConfiguredCollectionResult",
     "ConnectorUnavailableError",
+    "CompaniesHouseClient",
+    "CompaniesHouseCompanyResolver",
+    "CompaniesHouseConnector",
+    "CompaniesHouseDataError",
+    "CompaniesHouseError",
+    "CompaniesHouseRequestError",
+    "CompanyNumberCache",
     "CorpCodeCache",
     "DARTCompanyResolver",
     "DARTConnector",
@@ -109,6 +146,11 @@ __all__ = [
     "DartDataError",
     "DartError",
     "DartRequestError",
+    "InvestegateClient",
+    "InvestegateConnector",
+    "InvestegateDataError",
+    "InvestegateError",
+    "InvestegateRequestError",
     "FinnhubClient",
     "FinnhubNewsConnector",
     "FinnhubNewsDataError",
@@ -126,6 +168,7 @@ __all__ = [
     "MARKET_CN",
     "MARKET_HK",
     "MARKET_KR",
+    "MARKET_UK",
     "MARKET_UNKNOWN",
     "MARKET_US",
     "MockConnector",
@@ -144,19 +187,28 @@ __all__ = [
     "SaveResult",
     "TickerCollectionFailure",
     "TheBellConnector",
+    "UkUniverseError",
     "UniverseEntry",
     "WorkflowResult",
+    "YahooNewsClient",
+    "YahooNewsConnector",
+    "YahooNewsDataError",
+    "YahooNewsError",
+    "YahooNewsRequestError",
     "WebRepository",
     "create_default_registry",
     "kr_universe_name_map",
     "load_kr_universe",
+    "load_uk_universe",
     "load_settings",
     "load_environment_file",
     "load_universe",
     "refresh_kr_universe",
+    "refresh_uk_universe",
     "generate_html_report",
     "run_configured_collection",
     "run_ticker_collection",
     "run_workflow",
+    "uk_universe_name_map",
     "ReportResult",
 ]

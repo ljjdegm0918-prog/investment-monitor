@@ -25,13 +25,15 @@ from .config import (
 )
 from .connectors.base import ConnectorUnavailableError
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_KR, MARKET_US
+from .models import MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
+from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
+from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
@@ -150,6 +152,24 @@ class WebApplication:
             )
         except ConnectorUnavailableError:
             self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
+        companies_house_cache_path = (
+            project_root
+            / ".cache"
+            / "investment_monitor"
+            / "companies_house_numbers.json"
+        )
+        try:
+            self.companies_house_resolver = (
+                CompaniesHouseCompanyResolver.from_environment(
+                    companies_house_cache_path
+                )
+            )
+        except ConnectorUnavailableError:
+            self.companies_house_resolver = (
+                CompaniesHouseCompanyResolver.offline(
+                    companies_house_cache_path
+                )
+            )
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -192,9 +212,11 @@ class WebApplication:
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
                 resolver = self._resolver_for(market)
-                name_fallback = (
-                    kr_universe_name_map() if market == MARKET_KR else None
-                )
+                name_fallback = None
+                if market == MARKET_KR:
+                    name_fallback = kr_universe_name_map()
+                elif market == MARKET_UK:
+                    name_fallback = uk_universe_name_map()
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
@@ -413,6 +435,10 @@ class WebApplication:
         """Pick the company resolver for a market (KR uses OpenDART)."""
         if market == MARKET_KR:
             return self.dart_resolver
+        if market == MARKET_UK:
+            # UK maps through Companies House; never let SEC map a UK ticker
+            # to a same-named US company.
+            return self.companies_house_resolver
         return self.resolver
 
     @staticmethod

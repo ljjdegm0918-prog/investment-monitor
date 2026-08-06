@@ -74,7 +74,6 @@ class WebApplicationTests(unittest.TestCase):
         for state_text in (
             b"Loading information",
             b"No information for this date",
-            b"Search returned no results",
             b"This source is not configured",
             b"Request failed",
         ):
@@ -561,6 +560,161 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["exchange"], "KRX")
         self.assertEqual(added["market"], "kr")
         self.assertEqual(added["mapping_status"], "unmapped")
+
+    def test_adding_uk_company_never_uses_sec_resolver(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "MSFT",
+                    "lists": ["holdings"],
+                    "market": "uk",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "MSFT")
+        self.assertEqual(added["market"], "uk")
+        # MSFT exists in the SEC cache; without the UK guard this would be
+        # mapped as the US company.
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(added["cik"], "")
+
+    def test_uk_resolver_is_companies_house(self) -> None:
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+
+        self.assertIs(
+            application._resolver_for("uk"),
+            application.companies_house_resolver,
+        )
+        self.assertIsNot(
+            application._resolver_for("uk"),
+            application.resolver,
+        )
+
+    def test_adding_uk_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "uk_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-08-06T00:00:00+00:00",
+                    "source": "firds",
+                    "items": [
+                        {
+                            "ticker": "VOD",
+                            "name": "VODAFONE GROUP PUBLIC LIMITED COMPANY",
+                            "isin": "GB00BH4HKS39",
+                            "exchange": "LSE",
+                            "instrument_kind": "equity",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"UK_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "VOD",
+                        "lists": ["holdings"],
+                        "market": "uk",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "VOD")
+        self.assertEqual(added["name"], "VODAFONE GROUP PUBLIC LIMITED COMPANY")
+        self.assertEqual(added["exchange"], "LSE")
+        self.assertEqual(added["mapping_status"], "unmapped")
+
+    def test_bootstrap_list_unread_counts_only_today(self) -> None:
+        self.items.save([
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="today-1",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+                title="Today filing",
+                document_type="8-K",
+                url="https://www.sec.gov/today-1",
+                collected_at=datetime(2026, 8, 2, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-02T12:00:00+00:00"
+                },
+            ),
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="today-2",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+                title="Today filing two",
+                document_type="8-K",
+                url="https://www.sec.gov/today-2",
+                collected_at=datetime(2026, 8, 2, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-02T13:00:00+00:00"
+                },
+            ),
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="old-1",
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                title="Old filing",
+                document_type="8-K",
+                url="https://www.sec.gov/old-1",
+                collected_at=datetime(2026, 8, 1, 13, tzinfo=timezone.utc),
+                raw_metadata={
+                    "acceptanceDateTime": "2026-08-01T12:00:00+00:00"
+                },
+            ),
+        ])
+
+        payload = self.payload(
+            self.application.handle("GET", "/api/bootstrap?date=2026-08-02")
+        )
+
+        holdings = next(
+            list_record
+            for list_record in payload["lists"]
+            if list_record["slug"] == "holdings"
+        )
+        self.assertEqual(holdings["unread_count"], 2)
+        self.assertEqual(payload["counts"]["unread"], 2)
+        self.assertNotEqual(holdings["unread_count"], 3)
 
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(

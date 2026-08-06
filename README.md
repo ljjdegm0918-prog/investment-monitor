@@ -120,6 +120,20 @@ A-share or HK resolution.
   sharing a 14-digit receipt number fold in the feed with an "Also from"
   label; all database rows are kept.
 
+### UK sources (UK)
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| companies_house | filings | `COMPANIES_HOUSE_API_KEY` — Test app keys authenticate only against `https://api-sandbox.company-information.service.gov.uk`; Live keys use the default live API | Statutory company filings (accounts, officers), **not RNS** |
+| investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
+| uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
+| yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
+| Finnhub | news | existing | **US only** — never queried for UK |
+
+UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+(Investegate) or Companies House transaction ids; title fallback is
+same-source only, so Companies House and Investegate are never cross-folded
+by title. News folds on ticker + London day + normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

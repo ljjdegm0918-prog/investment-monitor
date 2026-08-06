@@ -12,6 +12,14 @@ sources:
     label: KIND (KRX)
     source_type: filings
     enabled: true          # key-free public disclosure search
+  - name: companies_house
+    label: Companies House
+    source_type: filings
+    enabled: true          # requires COMPANIES_HOUSE_API_KEY; statutory filings, not RNS
+  - name: investegate
+    label: Investegate
+    source_type: filings
+    enabled: true          # RNS-class public mirror; page scrape, may break without notice
   - name: news
     label: News
     source_type: news
@@ -28,6 +36,10 @@ sources:
     label: TheBell
     source_type: news
     enabled: false         # stock news endpoint returned soft 404 from current network
+  - name: yahoo_uk
+    label: Yahoo Finance UK
+    source_type: news
+    enabled: true          # key-free public RSS; may break without notice
   - name: community
     label: Community
     source_type: community

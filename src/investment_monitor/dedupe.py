@@ -3,8 +3,10 @@
 Dedupe is display-only: every source row stays in the database, and only the
 feed assembly folds items that share a robust identity key. Keys prefer the
 14-digit Korean disclosure receipt number (rcept_no / acpt_no) shared by
-OpenDART and KIND; the title fallback is only used when neither item has a
-receipt number, so unrelated same-title disclosures are never mis-folded.
+OpenDART and KIND. For UK, filings fold on RNS ids (Investegate), Companies
+House transaction ids, or a same-source title fallback; Companies House and
+Investegate are never folded against each other by title alone. News folds on
+ticker + local day + normalized title.
 """
 
 from __future__ import annotations
@@ -15,23 +17,34 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
+LONDON = ZoneInfo("Europe/London")
 RECEIPT_LENGTH = 14
 
-FILING_SOURCE_PRIORITY = {"dart": 0, "kind": 1, "sec": 2}
+FILING_SOURCE_PRIORITY = {
+    "dart": 0,
+    "investegate": 1,
+    "companies_house": 2,
+    "kind": 3,
+    "sec": 4,
+}
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
-    "news": 1,
-    "hankyung": 2,
-    "thebell": 3,
+    "yahoo_uk": 1,
+    "news": 2,
+    "hankyung": 3,
+    "thebell": 4,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
+    "investegate": "Investegate",
+    "companies_house": "Companies House",
     "kind": "KIND (KRX)",
     "sec": "SEC EDGAR",
     "naver_news": "Naver Finance",
     "news": "Finnhub News",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
+    "yahoo_uk": "Yahoo Finance UK",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -41,13 +54,14 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
-    if str(item.get("market") or "") != "kr":
+    market = str(item.get("market") or "")
+    if market not in {"kr", "uk"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
-        return _filing_key(item)
+        return _filing_key(item, market)
     if source_type == "news":
-        return _news_key(item)
+        return _news_key(item, market)
     return None
 
 
@@ -106,26 +120,57 @@ def normalize_title(value: Any) -> str:
     text = str(value or "").replace(_FULLWIDTH_SPACE, " ").replace(
         _NBSP, " "
     )
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip().lower()
     return _TRAILING_ETC.sub("", text)
 
 
-def _filing_key(item: Mapping[str, Any]) -> Optional[str]:
+def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
+    if market == "kr":
+        return _kr_filing_key(item)
+    return _uk_filing_key(item)
+
+
+def _kr_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     receipt = _receipt_number(item)
     if receipt is not None:
         return f"kr-filing:{receipt}"
     title = normalize_title(item.get("title"))
-    day = _kst_day(item)
+    day = _local_day(item, KST)
     if title and day:
         return f"kr-filing:{item.get('ticker')}|{day}|{title}"
     return None
 
 
-def _news_key(item: Mapping[str, Any]) -> Optional[str]:
+def _uk_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    metadata = item.get("raw_metadata") or {}
+    rns_raw = metadata.get("rns_id") or (
+        item.get("external_id")
+        if str(item.get("source") or "") == "investegate"
+        else None
+    )
+    rns_digits = re.sub(r"\D", "", str(rns_raw or ""))
+    if rns_digits and len(rns_digits) >= 6:
+        return f"uk:filing:rns:{rns_digits}"
+    if str(item.get("source") or "") == "companies_house":
+        transaction_id = str(item.get("external_id") or "").strip()
+        if transaction_id:
+            return f"uk:filing:ch:{transaction_id}"
     title = normalize_title(item.get("title"))
-    day = _kst_day(item)
+    day = _local_day(item, LONDON)
     if title and day:
-        return f"kr-news:{item.get('ticker')}|{day}|{title}"
+        return (
+            f"uk:filing:title:{item.get('source')}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
+    zone = KST if market == "kr" else LONDON
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, zone)
+    if title and day:
+        return f"{market}-news:{item.get('ticker')}|{day}|{title}"
     return None
 
 
@@ -140,7 +185,10 @@ def _receipt_number(item: Mapping[str, Any]) -> Optional[str]:
     return digits if len(digits) == RECEIPT_LENGTH else None
 
 
-def _kst_day(item: Mapping[str, Any]) -> Optional[str]:
+def _local_day(
+    item: Mapping[str, Any],
+    zone: ZoneInfo,
+) -> Optional[str]:
     raw = item.get("effective_at") or item.get("published_at")
     if not raw:
         return None
@@ -150,7 +198,7 @@ def _kst_day(item: Mapping[str, Any]) -> Optional[str]:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(KST).date().isoformat()
+    return parsed.astimezone(zone).date().isoformat()
 
 
 def _pick_primary(group: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:

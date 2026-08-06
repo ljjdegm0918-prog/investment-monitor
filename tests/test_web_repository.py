@@ -675,6 +675,93 @@ class WebRepositoryTests(unittest.TestCase):
         )
         self.assertIsNotNone(news["latest_attempt"])
 
+    def test_news_status_includes_yahoo_uk_provider(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("yahoo_uk",),
+            known_sources=(
+                SourceConfig(
+                    name="yahoo_uk",
+                    label="Yahoo Finance UK",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("yahoo_uk",),
+        )
+        self.items.save([
+            make_item(
+                "yahoo-1",
+                source="yahoo_uk",
+                source_type="news",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertEqual(news["status"], "connected")
+        self.assertEqual(news["provider"], "Yahoo Finance UK")
+
+    def test_list_unread_counts_only_today(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            make_item("today-1", accepted_at="2026-08-02T12:00:00+00:00"),
+            make_item("today-2", accepted_at="2026-08-02T13:00:00+00:00"),
+            make_item("old-1", accepted_at="2026-08-01T12:00:00+00:00"),
+            make_item("old-read", accepted_at="2026-08-01T13:00:00+00:00"),
+        ])
+        old_read_id = next(
+            item["id"]
+            for item in self.repository.query_feed(FeedFilters()).items
+            if item["external_id"] == "old-read"
+        )
+        self.repository.set_read((old_read_id,), True)
+
+        counts = self.repository.counts(selected_date=date(2026, 8, 2))
+
+        self.assertEqual(counts["list_unread"]["holdings"], 2)
+        self.assertEqual(counts["unread"], 2)
+        # The older unread item must not inflate today's badge.
+        self.assertNotEqual(counts["list_unread"]["holdings"], 3)
+
+    def test_filings_status_can_be_driven_by_investegate_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("investegate",),
+            known_sources=(
+                SourceConfig(
+                    name="investegate",
+                    label="Investegate",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("investegate",),
+        )
+        self.items.save([
+            make_item(
+                "investegate-1",
+                source="investegate",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "Investegate")
+
 
 if __name__ == "__main__":
     unittest.main()

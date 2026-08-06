@@ -40,9 +40,12 @@ SOURCE_LABELS = {
     "sec": "SEC EDGAR",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
+    "companies_house": "Companies House",
+    "investegate": "Investegate",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
+    "yahoo_uk": "Yahoo Finance UK",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -51,9 +54,12 @@ PROVIDER_LABELS = {
     "news": "Finnhub News",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
+    "companies_house": "Companies House",
+    "investegate": "Investegate",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
+    "yahoo_uk": "Yahoo Finance UK",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -79,9 +85,12 @@ STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("dart", "OpenDART", "filings"),
     ("kind", "KIND (KRX)", "filings"),
+    ("companies_house", "Companies House", "filings"),
+    ("investegate", "Investegate", "filings"),
     ("naver_news", "Naver Finance", "news"),
     ("hankyung", "Hankyung", "news"),
     ("thebell", "TheBell", "news"),
+    ("yahoo_uk", "Yahoo Finance UK", "news"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
@@ -585,12 +594,22 @@ class WebRepository:
                     "FROM company_list_memberships"
                 ).fetchone()["count"]
             )
-            unread_total = self._count_unread(connection, None)
+            unread_total = self._count_unread(
+                connection,
+                None,
+                start_utc=start_utc,
+                end_utc=end_utc,
+            )
             list_rows = connection.execute(
                 "SELECT slug, name FROM system_lists ORDER BY position"
             ).fetchall()
             list_counts = {
-                row["slug"]: self._count_unread(connection, str(row["slug"]))
+                row["slug"]: self._count_unread(
+                    connection,
+                    str(row["slug"]),
+                    start_utc=start_utc,
+                    end_utc=end_utc,
+                )
                 for row in list_rows
             }
         return {
@@ -1314,6 +1333,9 @@ class WebRepository:
         self,
         connection: sqlite3.Connection,
         list_slug: Optional[str],
+        *,
+        start_utc: Optional[datetime] = None,
+        end_utc: Optional[datetime] = None,
     ) -> int:
         source_placeholders = ",".join("?" for _ in self._allowed_sources)
         parameters: List[Any] = list(self._allowed_sources)
@@ -1321,6 +1343,16 @@ class WebRepository:
         if list_slug:
             list_sql = "AND l.slug = ?"
             parameters.append(list_slug)
+        day_sql = ""
+        if start_utc is not None and end_utc is not None:
+            # Same Eastern-day semantics as the Today feed window.
+            day_sql = (
+                f"AND {self._effective_timestamp_sql()} >= datetime(?) "
+                f"AND {self._effective_timestamp_sql()} < datetime(?)"
+            )
+            parameters.extend(
+                [start_utc.isoformat(), end_utc.isoformat()]
+            )
         row = connection.execute(
             f"""
             SELECT COUNT(DISTINCT i.id) AS count
@@ -1335,6 +1367,7 @@ class WebRepository:
               AND COALESCE(json_extract(i.raw_metadata, '$.generated'), 0) != 1
               AND COALESCE(r.is_read, 0) = 0
               {list_sql}
+              {day_sql}
             """,
             parameters,
         ).fetchone()
