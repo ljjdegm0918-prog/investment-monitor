@@ -51,6 +51,8 @@ SOURCE_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_hk": "Yahoo Finance HK",
     "twse_material": "TWSE OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -69,6 +71,8 @@ PROVIDER_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_hk": "Yahoo Finance HK",
     "twse_material": "TWSE OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -104,6 +108,8 @@ STANDARD_SOURCE_DEFAULTS = (
     ("yahoo_uk", "Yahoo Finance UK", "news"),
     ("yahoo_hk", "Yahoo Finance HK", "news"),
     ("twse_material", "TWSE OpenAPI (material)", "filings"),
+    ("yahoo_tw", "Yahoo Finance TW", "news"),
+    ("google_news_tw", "Google News (TW)", "news"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),

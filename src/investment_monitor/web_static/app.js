@@ -184,7 +184,7 @@ const MARKET_HINTS = {
   hk: "HKEXnews announcement search is connected (not an official HKEX API/IIS feed; page may change without notice). HKEX DI public notice search is available but disabled by default (legacy archive 2003-2017; fragile, not DION/IIS). Yahoo Finance HK news is connected via public RSS (may be loosely related; may break without notice). HK symbols without a stock match are still added as unmapped.",
   kr: "KR tickers map through OpenDART when a corp code is found; otherwise they are added as unmapped.",
   uk: "UK Companies House filings, an Investegate RNS-class public mirror, and Yahoo Finance UK news are connected; not an official LSEG RNS feed. Unique name search is not proof of the listed issuer; unverified mappings need confirmation before Companies House filings are collected.",
-  tw: "TWSE OpenAPI material-information (重大訊息) is connected for listed companies (key-free; not a paid MOPS push). TPEx/興櫃 disclosure is not covered yet. A TWSE/TPEx universe cache can backfill company names and board for add-company. TW symbols without a match are added as unmapped. Finnhub is US-only and never queried for TW.",
+  tw: "TWSE OpenAPI material-information (重大訊息) is connected for listed companies (key-free; not a paid MOPS push). Yahoo Finance TW and Google News (TW) are connected via key-free public RSS (may be loosely related; may break without notice). TPEx/興櫃 disclosure is not covered yet. A TWSE/TPEx universe cache can backfill company names and board for add-company. Finnhub is US-only and never queried for TW.",
   unknown: "Unknown-market tickers are added as unmapped.",
 };
 

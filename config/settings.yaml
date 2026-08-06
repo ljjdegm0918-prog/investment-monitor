@@ -56,6 +56,14 @@ sources:
     label: TWSE OpenAPI (material)
     source_type: filings
     enabled: true          # key-free TWSE OpenAPI material-information; listed companies only, TPEx/興櫃 not covered yet
+  - name: yahoo_tw
+    label: Yahoo Finance TW
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_tw
+    label: Google News (TW)
+    source_type: news
+    enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
   - name: community
     label: Community
     source_type: community
