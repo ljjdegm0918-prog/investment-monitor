@@ -78,6 +78,13 @@ from .sources.hkexnews import (
     HkexNewsRequestError,
     HKEXNewsCompanyResolver,
 )
+from .sources.hkex_di import (
+    HkexDiClient,
+    HkexDiConnector,
+    HkexDiDataError,
+    HkexDiError,
+    HkexDiRequestError,
+)
 from .sources.hk_news import (
     YahooHkNewsClient,
     YahooHkNewsConnector,
@@ -184,6 +191,11 @@ __all__ = [
     "HkexNewsError",
     "HkexNewsRequestError",
     "HKEXNewsCompanyResolver",
+    "HkexDiClient",
+    "HkexDiConnector",
+    "HkexDiDataError",
+    "HkexDiError",
+    "HkexDiRequestError",
     "HkUniverseError",
     "InformationRepository",
     "InformationItem",

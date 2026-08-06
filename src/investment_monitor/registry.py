@@ -14,6 +14,7 @@ from .connectors.mock_community import MockCommunityConnector
 from .sources.companies_house import CompaniesHouseConnector
 from .sources.dart import DARTConnector
 from .sources.hk_news import YahooHkNewsConnector
+from .sources.hkex_di import HkexDiConnector
 from .sources.hkexnews import HkexNewsConnector
 from .sources.investegate import InvestegateConnector
 from .sources.kind import KindConnector
@@ -136,6 +137,7 @@ def create_default_registry() -> SourceRegistry:
     )
     registry.register(InvestegateConnector.name, InvestegateConnector)
     registry.register(HkexNewsConnector.name, HkexNewsConnector)
+    registry.register(HkexDiConnector.name, HkexDiConnector)
     registry.register(NaverNewsConnector.name, NaverNewsConnector)
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)

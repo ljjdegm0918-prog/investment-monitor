@@ -24,6 +24,10 @@ sources:
     label: HKEXnews (HKEX)
     source_type: filings
     enabled: true          # key-free HKEXnews announcement search; unofficial page API, may change without notice
+  - name: hkex_di
+    label: Disclosure of Interests (HKEX)
+    source_type: filings
+    enabled: true          # key-free public DI notice search; legacy archive 2003-2017, fragile ASP.NET page
   - name: news
     label: News
     source_type: news

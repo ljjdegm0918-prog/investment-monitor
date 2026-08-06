@@ -139,6 +139,7 @@ by title. News folds on ticker + London day + normalized title.
 | hkexnews | filings | none | Unofficial HKEXnews title-search JSON (not an official HKEX API/IIS feed); may change without notice; HKEX stock-id mapped when a match exists, otherwise unmapped |
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; not an IBKR-complete universe (structured products / multi-counter cases may be partial); never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS mirror; may be loosely related and break without notice; `.HK` symbol added at request time only |
+| hkex_di | filings | none | Public DI notice search under SFO Part XV on the legacy archive (2003-04-01 to 2017-10-02); not HKEXnews title-search, not DION/IIS; fragile ASP.NET page, may break without notice |
 
 HK tickers are canonical five-digit codes (`700` / `0700` / `00700` /
 `0700.HK` all store as `00700`). The universe cache refreshes with

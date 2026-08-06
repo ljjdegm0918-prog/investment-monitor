@@ -175,7 +175,7 @@ function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR",
 
 const MARKET_HINTS = {
   cn: "CN tickers cannot be mapped through SEC; they are added as unmapped.",
-  hk: "HKEXnews announcement search is connected (not an official HKEX API/IIS feed; page may change without notice). Yahoo Finance HK news is connected via public RSS (may be loosely related; may break without notice). HK symbols without a stock match are still added as unmapped.",
+  hk: "HKEXnews announcement search is connected (not an official HKEX API/IIS feed; page may change without notice). HKEX DI public notice search is connected (legacy archive 2003-2017; fragile, not DION/IIS). Yahoo Finance HK news is connected via public RSS (may be loosely related; may break without notice). HK symbols without a stock match are still added as unmapped.",
   kr: "KR tickers map through OpenDART when a corp code is found; otherwise they are added as unmapped.",
   uk: "UK Companies House filings, an Investegate RNS-class public mirror, and Yahoo Finance UK news are connected; not an official LSEG RNS feed.",
   unknown: "Unknown-market tickers are added as unmapped.",

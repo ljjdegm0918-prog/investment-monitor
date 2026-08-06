@@ -22,6 +22,7 @@ DEFAULT_SOURCE_META = {
     "companies_house": ("Companies House", "filings"),
     "investegate": ("Investegate", "filings"),
     "hkexnews": ("HKEXnews (HKEX)", "filings"),
+    "hkex_di": ("Disclosure of Interests (HKEX)", "filings"),
     "naver_news": ("Naver Finance", "news"),
     "hankyung": ("Hankyung", "news"),
     "thebell": ("TheBell", "news"),
