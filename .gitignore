@@ -33,5 +33,11 @@ build/
 dist/
 *.egg-info/
 
+# Local campaign / planning notes (not product source)
+docs/
+
+# Lockfiles generated outside the stdlib packaging path
+uv.lock
+
 # JavaScript dependencies
 node_modules/
