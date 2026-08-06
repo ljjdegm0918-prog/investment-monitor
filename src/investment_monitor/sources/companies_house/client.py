@@ -28,6 +28,8 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://api.company-information.service.gov.uk"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 AUTH_PATTERN = re.compile(r"(?i)(authorization:\s*basic\s*)[^\s]+")
+FILING_HISTORY_PAGE_SIZE = 100
+DEFAULT_FILING_HISTORY_MAX_ITEMS = 1000
 
 
 class CompaniesHouseError(Exception):
@@ -63,6 +65,7 @@ class CompaniesHouseClient:
         opener: Callable[..., Any] = urlopen,
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
+        filing_history_max_items: int = DEFAULT_FILING_HISTORY_MAX_ITEMS,
     ) -> None:
         if not api_key.strip():
             raise ConnectorUnavailableError(
@@ -83,6 +86,10 @@ class CompaniesHouseClient:
             raise ValueError(
                 "Companies House requests_per_second must be greater than zero."
             )
+        if filing_history_max_items < 1:
+            raise ValueError(
+                "Companies House filing_history_max_items must be at least 1."
+            )
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
@@ -91,6 +98,7 @@ class CompaniesHouseClient:
         self._opener = opener
         self._clock = clock
         self._sleeper = sleeper
+        self._filing_history_max_items = filing_history_max_items
         self._last_request_at: Optional[float] = None
         self._rate_limit_lock = threading.Lock()
         self._authorization = "Basic " + base64.b64encode(
@@ -124,6 +132,10 @@ class CompaniesHouseClient:
                 "COMPANIES_HOUSE_REQUESTS_PER_SECOND",
                 2.0,
             ),
+            filing_history_max_items=_read_int_environment(
+                "COMPANIES_HOUSE_FILING_HISTORY_MAX_ITEMS",
+                DEFAULT_FILING_HISTORY_MAX_ITEMS,
+            ),
         )
 
     def get_company(self, company_number: str) -> Mapping[str, Any]:
@@ -138,18 +150,56 @@ class CompaniesHouseClient:
         return payload
 
     def get_filing_history(self, company_number: str) -> List[Mapping[str, Any]]:
-        """Fetch one page of filing history for a company number."""
-        payload = self.get_json(
-            "/company/"
-            + _safe_company_number(company_number)
-            + "/filing-history?items_per_page=100"
-        )
-        items = payload.get("items") if isinstance(payload, dict) else None
-        if not isinstance(items, list):
-            raise CompaniesHouseDataError(
-                "Companies House filing history must contain an items list."
+        """Fetch filing history up to the configured item cap.
+
+        Pages of 100 items are requested with an increasing ``start_index``
+        until the cumulative cap (1000 by default), an empty page, or a page
+        shorter than the page size. Items are deduplicated by
+        ``transaction_id``, keeping the first occurrence. On reaching the
+        cap the collected list is truncated and a warning is logged instead
+        of raising.
+        """
+        number = _safe_company_number(company_number)
+        collected: List[Mapping[str, Any]] = []
+        seen: set = set()
+        start_index = 0
+        while start_index < self._filing_history_max_items:
+            payload = self.get_json(
+                "/company/"
+                + number
+                + "/filing-history"
+                + f"?items_per_page={FILING_HISTORY_PAGE_SIZE}"
+                + f"&start_index={start_index}"
             )
-        return items
+            items = payload.get("items") if isinstance(payload, dict) else None
+            if not isinstance(items, list):
+                raise CompaniesHouseDataError(
+                    "Companies House filing history must contain an items list."
+                )
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                transaction_id = str(
+                    item.get("transaction_id") or ""
+                ).strip()
+                if transaction_id and transaction_id in seen:
+                    continue
+                if transaction_id:
+                    seen.add(transaction_id)
+                collected.append(item)
+            if len(collected) >= self._filing_history_max_items:
+                collected = collected[: self._filing_history_max_items]
+                LOGGER.warning(
+                    "Companies House filing history for %s capped at %d "
+                    "items; hyper-active companies may be incomplete",
+                    number,
+                    self._filing_history_max_items,
+                )
+                break
+            if not items or len(items) < FILING_HISTORY_PAGE_SIZE:
+                break
+            start_index += FILING_HISTORY_PAGE_SIZE
+        return collected
 
     def search_companies(self, query: str) -> List[Mapping[str, Any]]:
         """Search companies by name/number."""

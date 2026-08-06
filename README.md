@@ -142,6 +142,9 @@ Companies House mapping trust: a unique name search is **not** proof of the
 listed issuer. Search-only mappings are stored as `unverified` and do not
 collect CH filings until confirmed; seed tickers and explicit company numbers
 are verified (`mapped`) after a successful profile check.
+Filing history is paginated via `start_index` up to 1000 items
+(`COMPANIES_HOUSE_FILING_HISTORY_MAX_ITEMS`); beyond that cap is not
+guaranteed for hyper-active companies.
 
 ### Hong Kong sources (HK)
 | Source | Type | Key | Boundaries |

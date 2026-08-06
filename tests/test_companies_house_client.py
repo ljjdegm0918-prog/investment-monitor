@@ -87,7 +87,7 @@ class CompaniesHouseClientTests(unittest.TestCase):
     def test_get_filing_history_returns_items(self) -> None:
         history_url = (
             "https://api.company-information.service.gov.uk/company/"
-            "00102498/filing-history?items_per_page=100"
+            "00102498/filing-history?items_per_page=100&start_index=0"
         )
         opener = FakeOpener(
             responses={
@@ -113,7 +113,7 @@ class CompaniesHouseClientTests(unittest.TestCase):
     def test_invalid_filing_history_payload_raises_data_error(self) -> None:
         history_url = (
             "https://api.company-information.service.gov.uk/company/"
-            "00102498/filing-history?items_per_page=100"
+            "00102498/filing-history?items_per_page=100&start_index=0"
         )
         opener = FakeOpener(responses={history_url: {"items": {}}})
         client = self.make_client(opener)
@@ -198,6 +198,113 @@ class CompaniesHouseClientTests(unittest.TestCase):
 
         self.assertNotIn("c2VjcmV0", redacted)
         self.assertIn("Authorization: Basic REDACTED", redacted)
+
+
+class CompaniesHouseFilingHistoryPaginationTests(unittest.TestCase):
+    HISTORY_BASE = (
+        "https://api.company-information.service.gov.uk/company/"
+        "00102498/filing-history?items_per_page=100&start_index="
+    )
+
+    def make_client(self, opener, **kwargs) -> CompaniesHouseClient:
+        return CompaniesHouseClient(
+            api_key="test-ch-key",
+            opener=opener,
+            requests_per_second=1000,
+            **kwargs,
+        )
+
+    def page(self, start_index: int, count: int, prefix: str = "txn"):
+        return {
+            "items": [
+                {
+                    "transaction_id": f"{prefix}-{start_index + i}",
+                    "description": f"filing {start_index + i}",
+                    "date": "2026-08-01",
+                    "type": "AP01",
+                }
+                for i in range(count)
+            ]
+        }
+
+    def requested_indexes(self, opener) -> list:
+        indexes = []
+        for request in opener.requested:
+            url = request.full_url
+            indexes.append(int(url.split("start_index=")[1]))
+        return indexes
+
+    def test_paginates_until_short_page(self) -> None:
+        opener = FakeOpener(
+            responses={
+                self.HISTORY_BASE + "0": self.page(0, 100),
+                self.HISTORY_BASE + "100": self.page(100, 100),
+                self.HISTORY_BASE + "200": self.page(200, 50),
+            }
+        )
+        client = self.make_client(opener)
+
+        items = client.get_filing_history("00102498")
+
+        self.assertEqual(len(items), 250)
+        self.assertEqual(
+            self.requested_indexes(opener),
+            [0, 100, 200],
+        )
+
+    def test_cap_stops_at_1000_without_next_page(self) -> None:
+        opener = FakeOpener(
+            responses={
+                self.HISTORY_BASE + str(index): self.page(index, 100)
+                for index in range(0, 1100, 100)
+            }
+        )
+        client = self.make_client(opener)
+
+        with self.assertLogs(
+            "investment_monitor.sources.companies_house.client",
+            level="WARNING",
+        ) as captured:
+            items = client.get_filing_history("00102498")
+
+        self.assertEqual(len(items), 1000)
+        self.assertEqual(
+            self.requested_indexes(opener),
+            list(range(0, 1000, 100)),
+        )
+        self.assertTrue(
+            any("capped at 1000" in line for line in captured.output)
+        )
+
+    def test_empty_first_page_returns_empty(self) -> None:
+        opener = FakeOpener(
+            responses={self.HISTORY_BASE + "0": {"items": []}}
+        )
+        client = self.make_client(opener)
+
+        items = client.get_filing_history("00102498")
+
+        self.assertEqual(items, [])
+        self.assertEqual(self.requested_indexes(opener), [0])
+
+    def test_cross_page_duplicates_kept_once(self) -> None:
+        opener = FakeOpener(
+            responses={
+                self.HISTORY_BASE + "0": self.page(0, 100, prefix="dup"),
+                self.HISTORY_BASE + "100": self.page(50, 100, prefix="dup"),
+                self.HISTORY_BASE + "200": self.page(200, 50, prefix="dup"),
+            }
+        )
+        client = self.make_client(opener)
+
+        items = client.get_filing_history("00102498")
+
+        self.assertEqual(len(items), 200)
+        self.assertEqual(
+            [item["transaction_id"] for item in items[:51]],
+            [f"dup-{i}" for i in range(51)],
+        )
+        self.assertEqual(self.requested_indexes(opener), [0, 100, 200])
 
 
 if __name__ == "__main__":
