@@ -3,7 +3,10 @@
 The cache only ever holds **verified** (mapped) ticker -> company-number
 entries. Candidate numbers from a unique name search are kept in the company
 row (``mapping_status=unverified``) but never written here, so the connector
-cannot collect filings for unconfirmed mappings.
+cannot collect filings for unconfirmed mappings. Verified/confirmed entries
+are a persistent trusted store and are NOT subject to a soft time-to-live:
+once ``remember``ed they stay readable until explicitly ``forget``ten, so a
+confirmed mapping survives restarts and quiet periods.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from typing import Any, Dict, Optional
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_CACHE_TTL_SECONDS = 24 * 60 * 60
+DEFAULT_NUMBER_CACHE_PATH = ".cache/investment_monitor/companies_house_numbers.json"
 
 # Verified on 2026-08-06 through the public Companies House web search
 # (find-and-update.company-information.service.gov.uk). Runtime profile
@@ -46,6 +50,8 @@ class CompanyNumberCache:
         clock: Any = time.time,
     ) -> None:
         self._cache_path = Path(cache_path)
+        # Kept for constructor compatibility; verified mappings never expire
+        # (see _cached), so ttl_seconds is intentionally unused.
         self._ttl_seconds = ttl_seconds
         self._clock = clock
         self._numbers: Optional[Dict[str, str]] = None
@@ -90,17 +96,7 @@ class CompanyNumberCache:
 
     def _cached(self, ticker: str) -> Optional[str]:
         numbers = self._load()
-        number = numbers.get(ticker)
-        if number is None:
-            return None
-        try:
-            age = float(self._clock()) - self._cache_path.stat().st_mtime
-        except OSError:
-            return number
-        # A just-written file can report mtime slightly ahead of the clock.
-        if -1 <= age <= self._ttl_seconds:
-            return number
-        return None
+        return numbers.get(ticker)
 
     def _load(self) -> Dict[str, str]:
         if self._numbers is not None:
@@ -115,3 +111,17 @@ class CompanyNumberCache:
         except (OSError, json.JSONDecodeError):
             self._numbers = {}
         return self._numbers
+
+
+def number_cache_path() -> Path:
+    """Return the shared Companies House number cache path.
+
+    Environment override first, otherwise the same default relative path used
+    by both the web resolver and the collector connector.
+    """
+    return Path(
+        os.environ.get(
+            "COMPANIES_HOUSE_NUMBER_CACHE_PATH",
+            DEFAULT_NUMBER_CACHE_PATH,
+        )
+    )

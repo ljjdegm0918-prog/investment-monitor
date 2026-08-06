@@ -1,10 +1,13 @@
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from investment_monitor import CompanyNumberCache
 from investment_monitor.sources.companies_house.company_cache import (
     SEED_COMPANIES,
+    number_cache_path,
 )
 
 
@@ -44,6 +47,37 @@ class CompanyNumberCacheTests(unittest.TestCase):
 
             reopened = CompanyNumberCache(cache_path)
             self.assertEqual(reopened.number_for_ticker("zzzz"), "01234567")
+
+    def test_cached_number_is_not_expired_by_age(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "numbers.json"
+            cache = CompanyNumberCache(cache_path)
+            cache.remember("SOMECO", "01234567")
+
+            aged = CompanyNumberCache(
+                cache_path,
+                clock=lambda: 10**12,
+            )
+
+            self.assertEqual(
+                aged.number_for_ticker("SOMECO"),
+                "01234567",
+            )
+
+    def test_number_cache_path_shared_default_and_env(self) -> None:
+        self.assertEqual(
+            number_cache_path(),
+            Path(".cache/investment_monitor/companies_house_numbers.json"),
+        )
+        with patch.dict(
+            os.environ,
+            {"COMPANIES_HOUSE_NUMBER_CACHE_PATH": "custom/numbers.json"},
+            clear=False,
+        ):
+            self.assertEqual(
+                number_cache_path(),
+                Path("custom/numbers.json"),
+            )
 
 
 if __name__ == "__main__":

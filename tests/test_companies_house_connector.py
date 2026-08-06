@@ -10,6 +10,7 @@ from investment_monitor import (
 )
 from investment_monitor.sources.companies_house.company_cache import (
     CompanyNumberCache,
+    number_cache_path,
 )
 
 
@@ -113,6 +114,39 @@ class CompaniesHouseConnectorTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+    def test_collects_after_cache_age_would_have_expired_ttl(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "numbers.json"
+            cache = CompanyNumberCache(cache_path)
+            cache.remember("SOMECO", "01234567")
+            aged = CompanyNumberCache(
+                cache_path,
+                clock=lambda: 10**12,
+            )
+            client = FakeClient(records=[filing()])
+
+            connector = CompaniesHouseConnector(
+                client=client,
+                cache=aged,
+            )
+            items = connector.collect(
+                self.request(("SOMECO",), {"SOMECO": "uk"})
+            )
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(client.calls, ["01234567"])
+
+    def test_default_cache_path_matches_shared_helper(self) -> None:
+        connector = CompaniesHouseConnector(
+            client=FakeClient(),
+            cache=None,
+        )
+
+        self.assertEqual(
+            connector._cache._cache_path,
+            number_cache_path(),
+        )
 
     def test_uk_mapped_company_maps_filings(self) -> None:
         client = FakeClient(

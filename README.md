@@ -145,6 +145,9 @@ are verified (`mapped`) after a successful profile check.
 Filing history is paginated via `start_index` up to 1000 items
 (`COMPANIES_HOUSE_FILING_HISTORY_MAX_ITEMS`); beyond that cap is not
 guaranteed for hyper-active companies.
+Verified/confirmed CH mappings are not subject to the old 24h soft-cache
+expiry: the trusted number cache persists until explicitly removed, so
+confirmations stay collectible across restarts and quiet periods.
 
 ### Hong Kong sources (HK)
 | Source | Type | Key | Boundaries |

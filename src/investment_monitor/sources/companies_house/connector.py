@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, datetime, timezone
-from pathlib import Path
 from typing import Any, List, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -17,7 +16,7 @@ from .client import (
     CompaniesHouseRequestError,
     redact_secrets,
 )
-from .company_cache import CompanyNumberCache
+from .company_cache import CompanyNumberCache, number_cache_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -57,12 +56,7 @@ class CompaniesHouseConnector:
     ) -> None:
         self._client = client or CompaniesHouseClient.from_environment()
         self._cache = cache or CompanyNumberCache(
-            cache_path=Path(
-                os.environ.get(
-                    "COMPANIES_HOUSE_NUMBER_CACHE_PATH",
-                    ".cache/investment_monitor/companies_house_numbers.json",
-                )
-            )
+            cache_path=number_cache_path()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 

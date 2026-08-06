@@ -141,11 +141,12 @@ class CompaniesHouseCompanyResolver:
 
         Later runs (sentinel exists) use steady-state rules:
         1. seed match or explicit company-number ticker -> ``mapped``
-        2. ``mapped`` AND trusted cache number equals the row cik -> keep
-           ``mapped`` (user-confirmed mappings survive restarts)
+        2. ``mapped`` with a non-empty cik -> keep ``mapped`` and refill the
+           trusted cache (user-confirmed mappings survive restarts and
+           quiet periods; cache is a persistent store, not a TTL view)
         3. ``unverified`` -> stay ``unverified`` (idempotent forget)
-        4. ``mapped`` without a matching trusted-cache entry -> legacy dirty
-           mapping, downgrade to ``unverified`` + forget
+           (legacy dirty unique-search mappings were already scrubbed once
+           by the first run)
 
         Existing companies and stored filings are never deleted.
         """
@@ -181,10 +182,7 @@ class CompaniesHouseCompanyResolver:
                 current = str(company.get("mapping_status") or "")
                 if current == "unverified":
                     status = "unverified"
-                elif (
-                    current == "mapped"
-                    and self._cache.number_for_ticker(ticker) == cik
-                ):
+                elif current == "mapped" and cik:
                     status = "mapped"
                 else:
                     status = "unverified"
