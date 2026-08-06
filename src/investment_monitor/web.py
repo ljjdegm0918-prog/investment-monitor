@@ -30,6 +30,7 @@ from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
+from .sources.hkexnews import HKEXNewsCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -170,6 +171,7 @@ class WebApplication:
                     companies_house_cache_path
                 )
             )
+        self.hkexnews_resolver = HKEXNewsCompanyResolver()
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -440,10 +442,9 @@ class WebApplication:
             # to a same-named US company.
             return self.companies_house_resolver
         if market == MARKET_HK:
-            # HK disclosure mapping is not connected yet; never let SEC map a
-            # Hong Kong code to a same-named US company. HK symbols are added
-            # honestly as unmapped until a disclosure source exists.
-            return None
+            # HK maps through the HKEXnews active stock list; never let SEC
+            # map a Hong Kong code to a same-named US company.
+            return self.hkexnews_resolver
         return self.resolver
 
     @staticmethod

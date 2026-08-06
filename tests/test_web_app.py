@@ -42,6 +42,13 @@ class WebApplicationTests(unittest.TestCase):
             self.project_root,
             collection_runner=self.noop_collection_runner,
         )
+        # HKEXnews resolution fetches a live stock list; tests keep batch-add
+        # paths offline with a stub that resolves nothing.
+        class NoOpHkResolver:
+            def resolve(self, ticker):
+                return None
+
+        self.application.hkexnews_resolver = NoOpHkResolver()
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -622,13 +629,16 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(added["cik"], "")
 
-    def test_hk_resolver_is_none(self) -> None:
+    def test_hk_resolver_is_hkexnews(self) -> None:
         application = WebApplication(
             self.project_root,
             collection_runner=self.noop_collection_runner,
         )
 
-        self.assertIsNone(application._resolver_for("hk"))
+        self.assertIs(
+            application._resolver_for("hk"),
+            application.hkexnews_resolver,
+        )
         self.assertIsNot(application._resolver_for("hk"), application.resolver)
 
     def test_hk_ticker_input_normalizes_to_five_digits(self) -> None:

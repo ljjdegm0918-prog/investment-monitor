@@ -64,6 +64,14 @@ from .sources.kind import (
     KindError,
     KindRequestError,
 )
+from .sources.hkexnews import (
+    HkexNewsClient,
+    HkexNewsConnector,
+    HkexNewsDataError,
+    HkexNewsError,
+    HkexNewsRequestError,
+    HKEXNewsCompanyResolver,
+)
 from .sources.kr_news import (
     HankyungClient,
     HankyungConnector,
@@ -157,6 +165,12 @@ __all__ = [
     "FinnhubNewsError",
     "FinnhubNewsRequestError",
     "HankyungConnector",
+    "HkexNewsClient",
+    "HkexNewsConnector",
+    "HkexNewsDataError",
+    "HkexNewsError",
+    "HkexNewsRequestError",
+    "HKEXNewsCompanyResolver",
     "InformationRepository",
     "InformationItem",
     "KindClient",

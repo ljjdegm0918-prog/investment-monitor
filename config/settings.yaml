@@ -20,6 +20,10 @@ sources:
     label: Investegate
     source_type: filings
     enabled: true          # RNS-class public mirror; page scrape, may break without notice
+  - name: hkexnews
+    label: HKEXnews (HKEX)
+    source_type: filings
+    enabled: true          # key-free HKEXnews announcement search; unofficial page API, may change without notice
   - name: news
     label: News
     source_type: news
