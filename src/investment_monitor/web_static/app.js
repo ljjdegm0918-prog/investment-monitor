@@ -171,8 +171,8 @@ function feedItem(item, index) {
   const readControl = item.is_read ? `<span class="read-check">✓</span><span class="read-label">Read</span>` : `<span class="unread-dot"></span><span class="sr-only">Unread</span>`;
   const summaryHtml = item.summary ? `<p class="item-summary">${esc(item.summary)}</p>` : "";
   const identityLabel = item.source === "sec" ? `Accession ${esc(item.external_id)}` : `ID ${esc(item.external_id)}`;
-  const alsoFrom = (item.also_from_labels || []).map(label => `Also from ${esc(label)}`).join(", ");
-  const alsoHtml = alsoFrom ? `<span class="timestamp">${alsoFrom}</span>` : "";
+  const alsoSeen = (item.also_seen_on_labels || []).map(label => `Also seen on ${esc(label)}`).join(", ");
+  const alsoHtml = alsoSeen ? `<span class="timestamp">${alsoSeen}</span>` : "";
   return `<article class="feed-item ${item.is_read ? "is-read" : "is-unread"}" style="--i:${index}"><button class="read-control" data-id="${item.id}" data-read="${item.is_read}" aria-label="Mark ${item.ticker} ${item.document_type} as ${item.is_read ? "unread" : "read"}">${readControl}</button><div class="company-cell"><strong>${item.ticker}</strong><span>${esc(item.company_name || item.issuer)}</span></div><span class="form-badge">${esc(item.document_type || "Information")}${item.is_amendment ? " · Amended" : ""}</span><time class="timestamp" datetime="${item.effective_at}">${esc(item.effective_et)}</time><div class="item-title"><strong>${esc(item.title)}</strong><span>${esc(item.source_label)} · ${marketLabel(item.market)} · Live · ${identityLabel}</span>${alsoHtml}</div>${summaryHtml}<div class="list-badges">${item.list_slugs.map(slug => badge(slug)).join("")}</div><a class="open-link" data-id="${item.id}" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open original →</a></article>`;
 }
 

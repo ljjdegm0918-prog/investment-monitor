@@ -1,14 +1,15 @@
 """Cross-source soft dedupe for the information feed.
 
-Dedupe is display-only: every source row stays in the database, and only the
-feed assembly folds items that share a robust identity key. Keys prefer the
-14-digit Korean disclosure receipt number (rcept_no / acpt_no) shared by
-OpenDART and KIND. For UK, filings fold on RNS ids (Investegate), Companies
-House transaction ids, or a same-source title fallback; Companies House and
-Investegate are never folded against each other by title alone. For HK,
-hkexnews filings fold on NEWS_ID and hkex_di on form serial; hkexnews and
-hkex_di are never folded against each other by title. News folds on ticker +
-local day + normalized title.
+Dedupe is display-only and annotate-only: every database row stays in the
+database AND in the feed list (1:1, totals untouched). Items that share a
+robust identity key each get an "Also seen on …" annotation listing the other
+members of their group. Keys prefer the 14-digit Korean disclosure receipt
+number (rcept_no / acpt_no) shared by OpenDART and KIND. For UK, filings use
+RNS ids (Investegate), Companies House transaction ids, or a same-source
+title fallback; Companies House and Investegate are never paired by title
+alone. For HK, hkexnews filings use NEWS_ID and hkex_di form serial;
+hkexnews and hkex_di are never paired by title. News pairs on ticker + local
+day + normalized title.
 """
 
 from __future__ import annotations
@@ -74,54 +75,65 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
-def fold_feed_items(
+def annotate_feed_items(
     items: Sequence[Mapping[str, Any]],
     *,
     enabled: bool = True,
 ) -> List[Mapping[str, Any]]:
-    """Fold deduplicated groups into a primary item with also_from fields."""
+    """Keep every row and annotate cross-source duplicates as "also seen on".
+
+    Soft dedupe never drops rows and never changes totals: rows sharing a
+    ``dedupe_key`` each get ``also_seen_on`` / ``also_seen_on_labels`` for the
+    other members of their group. Annotation is based on the raw rows of the
+    current page only; the same key split across pages may not see each other
+    (totals and page sizes stay correct either way).
+    """
     if not enabled:
         return [dict(item) for item in items]
 
     groups: Dict[str, List[Mapping[str, Any]]] = {}
-    order: List[Tuple[str, Optional[str], Optional[Mapping[str, Any]]]] = []
     for item in items:
         key = dedupe_key(item)
         if key is None:
-            order.append(("single", None, item))
             continue
-        if key not in groups:
-            groups[key] = []
-            order.append(("group", key, None))
-        groups[key].append(item)
+        groups.setdefault(key, []).append(item)
 
-    folded: List[Mapping[str, Any]] = []
-    for kind, key, single in order:
-        if kind == "single":
-            folded.append(dict(single or {}))
-            continue
+    annotated: List[Mapping[str, Any]] = []
+    for item in items:
+        entry = dict(item)
+        key = dedupe_key(item)
         if key is None:
+            annotated.append(entry)
             continue
         group = groups[key]
-        primary = _pick_primary(group)
-        if len(group) > 1:
-            others = [other for other in group if other is not primary]
-            primary = dict(primary)
-            primary["also_from"] = [
+        others = [other for other in group if other is not item]
+        entry["dedupe_count"] = len(group)
+        if others:
+            entry["also_seen_on"] = [
                 str(other["source"]) for other in others
             ]
-            primary["also_from_labels"] = [
+            entry["also_seen_on_labels"] = [
                 SOURCE_DISPLAY_LABELS.get(
                     str(other["source"]),
                     str(other["source"]),
                 )
                 for other in others
             ]
-            primary["dedupe_count"] = len(group)
-        else:
-            primary = dict(primary)
-        folded.append(primary)
-    return folded
+        annotated.append(entry)
+    return annotated
+
+
+def fold_feed_items(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    enabled: bool = True,
+) -> List[Mapping[str, Any]]:
+    """Deprecated alias for :func:`annotate_feed_items`.
+
+    The old "fold to one primary" behavior is gone: every row is kept and
+    duplicates are annotated instead of collapsed.
+    """
+    return annotate_feed_items(items, enabled=enabled)
 
 
 def normalize_title(value: Any) -> str:

@@ -9,7 +9,7 @@ from investment_monitor import (
     WebRepository,
 )
 from investment_monitor.config import SourceConfig
-from investment_monitor.dedupe import dedupe_key, fold_feed_items
+from investment_monitor.dedupe import annotate_feed_items, dedupe_key
 from investment_monitor.web_repository import FeedFilters
 
 
@@ -87,7 +87,7 @@ class HkDedupeKeyTests(unittest.TestCase):
         di = feed_item("hkex_di", "", title=title)
 
         self.assertNotEqual(dedupe_key(hkexnews), dedupe_key(di))
-        self.assertEqual(len(fold_feed_items([hkexnews, di])), 2)
+        self.assertEqual(len(annotate_feed_items([hkexnews, di])), 2)
 
     def test_same_source_title_fallback_folds(self) -> None:
         first = feed_item("hkexnews", "", title="Board Meeting Date")
@@ -131,7 +131,7 @@ class HkDedupeKeyTests(unittest.TestCase):
 
 
 class HkFoldFeedItemsTests(unittest.TestCase):
-    def test_same_news_id_folds_with_also_from(self) -> None:
+    def test_same_news_id_keeps_both_rows_annotated(self) -> None:
         first = feed_item(
             "hkexnews",
             "20260303001234",
@@ -143,24 +143,29 @@ class HkFoldFeedItemsTests(unittest.TestCase):
             news_id="20260303001234",
         )
 
-        folded = fold_feed_items([first, second])
+        annotated = annotate_feed_items([first, second])
 
-        self.assertEqual(len(folded), 1)
-        self.assertEqual(folded[0]["source"], "hkexnews")
-        self.assertEqual(folded[0]["also_from"], ["hkexnews"])
-        self.assertEqual(folded[0]["also_from_labels"], ["HKEXnews (HKEX)"])
-        self.assertEqual(folded[0]["dedupe_count"], 2)
+        self.assertEqual(len(annotated), 2)
+        self.assertEqual(annotated[0]["source"], "hkexnews")
+        self.assertEqual(annotated[0]["also_seen_on"], ["hkexnews"])
+        self.assertEqual(
+            annotated[0]["also_seen_on_labels"],
+            ["HKEXnews (HKEX)"],
+        )
+        self.assertEqual(annotated[1]["also_seen_on"], ["hkexnews"])
+        self.assertEqual(annotated[0]["dedupe_count"], 2)
+        self.assertEqual(annotated[1]["dedupe_count"], 2)
 
     def test_cross_source_same_title_is_not_folded(self) -> None:
         title = "Acquisition of shares"
         hkexnews = feed_item("hkexnews", "", title=title)
         di = feed_item("hkex_di", "", title=title)
 
-        folded = fold_feed_items([hkexnews, di])
+        annotated = annotate_feed_items([hkexnews, di])
 
-        self.assertEqual(len(folded), 2)
-        self.assertNotIn("also_from", folded[0])
-        self.assertNotIn("also_from", folded[1])
+        self.assertEqual(len(annotated), 2)
+        self.assertNotIn("also_seen_on", annotated[0])
+        self.assertNotIn("also_seen_on", annotated[1])
 
     def test_switch_off_returns_all_rows(self) -> None:
         first = feed_item(
@@ -174,10 +179,10 @@ class HkFoldFeedItemsTests(unittest.TestCase):
             news_id="20260303001234",
         )
 
-        folded = fold_feed_items([first, second], enabled=False)
+        annotated = annotate_feed_items([first, second], enabled=False)
 
-        self.assertEqual(len(folded), 2)
-        self.assertNotIn("also_from", folded[0])
+        self.assertEqual(len(annotated), 2)
+        self.assertNotIn("also_seen_on", annotated[0])
 
 
 class WebRepositoryHkDedupeTests(unittest.TestCase):
@@ -248,8 +253,11 @@ class WebRepositoryHkDedupeTests(unittest.TestCase):
             display = repository.query_feed_display(FeedFilters())
 
             self.assertEqual(raw.total, 2)
-            self.assertEqual(len(display.items), 1)
-            self.assertEqual(display.items[0]["also_from"], ["hkexnews"])
+            self.assertEqual(len(display.items), 2)
+            self.assertEqual(
+                display.items[0]["also_seen_on"],
+                ["hkexnews"],
+            )
 
 
 if __name__ == "__main__":

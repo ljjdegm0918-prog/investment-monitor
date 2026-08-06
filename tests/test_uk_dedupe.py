@@ -10,7 +10,7 @@ from investment_monitor import (
     WebRepository,
 )
 from investment_monitor.config import SourceConfig
-from investment_monitor.dedupe import dedupe_key, fold_feed_items
+from investment_monitor.dedupe import annotate_feed_items, dedupe_key
 from investment_monitor.web_repository import FeedFilters
 
 
@@ -149,25 +149,28 @@ class UkFoldFeedItemsTests(unittest.TestCase):
     def test_single_strong_id_item_stays_single(self) -> None:
         item = feed_item("investegate", "9707019", rns_id="9707019")
 
-        folded = fold_feed_items([item])
+        annotated = annotate_feed_items([item])
 
-        self.assertEqual(len(folded), 1)
-        self.assertNotIn("also_from", folded[0])
+        self.assertEqual(len(annotated), 1)
+        self.assertNotIn("also_seen_on", annotated[0])
 
-    def test_same_source_title_fold_picks_primary_and_lists_also_from(
+    def test_same_source_title_rows_are_both_kept_and_annotated(
         self,
     ) -> None:
         first = feed_item("investegate", "hash-a", title="Director Dealings")
         second = feed_item("investegate", "hash-b", title="Director Dealings")
 
-        folded = fold_feed_items([first, second])
+        annotated = annotate_feed_items([first, second])
 
-        self.assertEqual(len(folded), 1)
-        self.assertEqual(folded[0]["source"], "investegate")
-        self.assertEqual(folded[0]["also_from"], ["investegate"])
-        self.assertEqual(folded[0]["dedupe_count"], 2)
+        self.assertEqual(len(annotated), 2)
+        self.assertEqual(annotated[0]["source"], "investegate")
+        self.assertEqual(annotated[0]["also_seen_on"], ["investegate"])
+        self.assertEqual(annotated[0]["also_seen_on_labels"], ["Investegate"])
+        self.assertEqual(annotated[1]["also_seen_on"], ["investegate"])
+        self.assertEqual(annotated[0]["dedupe_count"], 2)
+        self.assertEqual(annotated[1]["dedupe_count"], 2)
 
-    def test_news_items_fold(self) -> None:
+    def test_news_items_are_both_kept_and_annotated(self) -> None:
         first = feed_item(
             "yahoo_uk",
             "110000619",
@@ -181,11 +184,12 @@ class UkFoldFeedItemsTests(unittest.TestCase):
             title="Vodafone news",
         )
 
-        folded = fold_feed_items([first, second])
+        annotated = annotate_feed_items([first, second])
 
-        self.assertEqual(len(folded), 1)
-        self.assertEqual(folded[0]["source"], "yahoo_uk")
-        self.assertEqual(folded[0]["also_from"], ["yahoo_uk"])
+        self.assertEqual(len(annotated), 2)
+        self.assertEqual(annotated[0]["source"], "yahoo_uk")
+        self.assertEqual(annotated[0]["also_seen_on"], ["yahoo_uk"])
+        self.assertEqual(annotated[1]["also_seen_on"], ["yahoo_uk"])
 
 
 class WebRepositoryUkDedupeTests(unittest.TestCase):
@@ -246,7 +250,7 @@ class WebRepositoryUkDedupeTests(unittest.TestCase):
 
             self.assertEqual(raw.total, 2)
             self.assertEqual(len(display.items), 2)
-            self.assertNotIn("also_from", display.items[0])
+            self.assertNotIn("also_seen_on", display.items[0])
 
 
 if __name__ == "__main__":

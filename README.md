@@ -116,8 +116,9 @@ used to fake A-share or HK resolution.
   coverage is partial. FSC/data.go.kr is skipped because registration
   requires Korean identity.
 - Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
-  sharing a 14-digit receipt number fold in the feed with an "Also from"
-  label; all database rows are kept.
+  sharing a 14-digit receipt number are annotated "Also seen on …" while
+  every row stays in the feed (1:1 with the database; totals and page sizes
+  are never shrunk). Annotation covers the raw rows of the current page only.
 
 ### UK sources (UK)
 | Source | Type | Key | Boundaries |
@@ -128,10 +129,12 @@ used to fake A-share or HK resolution.
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
-UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+UK feed soft-dedupe (display only, all rows kept): filings pair on RNS ids
 (Investegate) or Companies House transaction ids; title fallback is
-same-source only, so Companies House and Investegate are never cross-folded
-by title. News folds on ticker + London day + normalized title.
+same-source only, so Companies House and Investegate are never annotated
+against each other by title. Each row stays in the feed with an "Also seen
+on …" label; totals and page sizes are never shrunk. News pairs on ticker +
+London day + normalized title.
 
 Companies House mapping trust: a unique name search is **not** proof of the
 listed issuer. Search-only mappings are stored as `unverified` and do not
@@ -152,10 +155,11 @@ HK tickers are canonical five-digit codes (`700` / `0700` / `00700` /
 Finnhub remains **US only** and is never queried for HK.
 
 HK feed soft-dedupe (display only, all rows kept; same
-`KR_FEED_SOFT_DEDUPE` switch as KR/UK, default on): hkexnews filings fold on
-NEWS_ID, hkex_di on form serial; hkexnews and hkex_di are **never** folded
-against each other by title; yahoo_hk news folds on ticker + Hong Kong day +
-normalized title.
+`KR_FEED_SOFT_DEDUPE` switch as KR/UK, default on): hkexnews filings pair on
+NEWS_ID, hkex_di on form serial; hkexnews and hkex_di are **never** annotated
+against each other by title. Every row stays in the feed with an "Also seen
+on …" label; totals and page sizes are never shrunk. yahoo_hk news pairs on
+ticker + Hong Kong day + normalized title.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

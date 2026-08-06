@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .daily import local_day_bounds, resolve_timezone
-from .dedupe import fold_feed_items
+from .dedupe import annotate_feed_items
 from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
@@ -618,7 +618,7 @@ class WebRepository:
     def query_feed_display(self, filters: FeedFilters) -> PageResult:
         """Return a feed page with cross-source soft dedupe applied."""
         result = self.query_feed(filters)
-        items = fold_feed_items(
+        items = annotate_feed_items(
             result.items,
             enabled=self._kr_soft_dedupe_enabled(),
         )
