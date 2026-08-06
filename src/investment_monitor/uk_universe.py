@@ -219,10 +219,17 @@ def _enrich_tickers_with_openfigi(
     for offset in range(0, len(pending), OPENFIGI_BATCH_SIZE):
         chunk = pending[offset : offset + OPENFIGI_BATCH_SIZE]
         body = json.dumps(
-            [{"idType": "ISIN", "idValue": isin} for isin in chunk]
+            [
+                {
+                    "idType": "ID_ISIN",
+                    "idValue": isin,
+                    "exchCode": "LN",
+                }
+                for isin in chunk
+            ]
         ).encode("utf-8")
         request = Request(
-            OPENFIGI_MAPPING_URL,
+            _openfigi_url(),
             data=body,
             headers={
                 "User-Agent": "InvestmentMonitor/0.1 (internal workspace)",
@@ -240,10 +247,16 @@ def _enrich_tickers_with_openfigi(
                     "OpenFIGI mapping response was not a JSON list."
                 )
             for isin, row in zip(chunk, rows):
-                if isinstance(row, dict) and row.get("ticker"):
-                    ticker = str(row["ticker"]).strip()
-                    if ticker:
-                        mapping[isin] = ticker
+                if not isinstance(row, dict):
+                    continue
+                if "error" in row or "warning" in row:
+                    continue
+                data = row.get("data")
+                if not isinstance(data, list):
+                    continue
+                ticker = _pick_openfigi_ticker(data)
+                if ticker:
+                    mapping[isin] = ticker
         except Exception as error:
             LOGGER.warning(
                 "OpenFIGI ticker enrichment failed at offset %d: %s",
@@ -254,6 +267,26 @@ def _enrich_tickers_with_openfigi(
         if offset + OPENFIGI_BATCH_SIZE < len(pending):
             sleeper(OPENFIGI_REQUEST_SLEEP_SECONDS)
     return mapping
+
+
+def _pick_openfigi_ticker(data: List[Any]) -> str:
+    """Prefer an LN/LSE listing, then the first entry with a ticker."""
+    fallback: List[str] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        ticker = str(entry.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        exchange = str(entry.get("exchCode") or "").upper()
+        if exchange in {"LN", "LSE"}:
+            return ticker
+        fallback.append(ticker)
+    return fallback[0] if fallback else ""
+
+
+def _openfigi_url() -> str:
+    return os.environ.get("UK_UNIVERSE_OPENFIGI_URL", OPENFIGI_MAPPING_URL)
 
 
 def uk_universe_name_map(

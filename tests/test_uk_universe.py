@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -138,8 +139,9 @@ class FakeResponse:
 
 
 class FakeOpenFigiOpener:
-    def __init__(self, tickers_by_isin) -> None:
+    def __init__(self, tickers_by_isin, row_overrides=None) -> None:
         self.tickers_by_isin = tickers_by_isin
+        self.row_overrides = row_overrides or {}
         self.calls: list = []
 
     def __call__(self, request, timeout=None):
@@ -148,8 +150,16 @@ class FakeOpenFigiOpener:
         rows = []
         for entry in body:
             isin = entry["idValue"]
+            if isin in self.row_overrides:
+                rows.append(self.row_overrides[isin])
+                continue
             ticker = self.tickers_by_isin.get(isin)
-            rows.append({"ticker": ticker} if ticker else {"error": "not found"})
+            if ticker:
+                rows.append(
+                    {"data": [{"ticker": ticker, "exchCode": "LN"}]}
+                )
+            else:
+                rows.append({"warning": "not found"})
         return FakeResponse(json.dumps(rows))
 
 
@@ -356,6 +366,88 @@ class UkUniverseRefreshTests(unittest.TestCase):
             for item in payload["items"]
         }
         self.assertEqual(by_isin["GB00TEST000042"]["ticker"], "T0042")
+
+    def test_openfigi_prefers_ln_exchange(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            tickers_by_isin = {
+                f"GB00TEST{i:06d}": f"T{i:04d}"
+                for i in range(300)
+            }
+            opener = FakeOpenFigiOpener(
+                tickers_by_isin,
+                row_overrides={
+                    "GB00TEST000042": {
+                        "data": [
+                            {"ticker": "T9999", "exchCode": "ET"},
+                            {"ticker": "T0042", "exchCode": "LN"},
+                        ]
+                    }
+                },
+            )
+
+            payload = self.refresh_many(
+                cache_path,
+                count=300,
+                opener=opener,
+            )
+
+        by_isin = {
+            item["isin"]: item
+            for item in payload["items"]
+        }
+        self.assertEqual(by_isin["GB00TEST000042"]["ticker"], "T0042")
+
+    def test_openfigi_warning_rows_do_not_break_other_isins(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            tickers_by_isin = {
+                f"GB00TEST{i:06d}": f"T{i:04d}"
+                for i in range(300)
+            }
+            opener = FakeOpenFigiOpener(
+                tickers_by_isin,
+                row_overrides={
+                    "GB00TEST000000": {"warning": "not found"},
+                    "GB00TEST000001": {"error": "invalid isin"},
+                },
+            )
+
+            payload = self.refresh_many(
+                cache_path,
+                count=300,
+                opener=opener,
+            )
+
+        by_isin = {
+            item["isin"]: item
+            for item in payload["items"]
+        }
+        self.assertEqual(by_isin["GB00TEST000000"]["ticker"], "")
+        self.assertEqual(by_isin["GB00TEST000001"]["ticker"], "")
+        self.assertEqual(by_isin["GB00TEST000042"]["ticker"], "T0042")
+
+    def test_openfigi_url_reads_environment_override(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            opener = FakeOpenFigiOpener(
+                {f"GB00TEST{i:06d}": f"T{i:04d}" for i in range(300)}
+            )
+            with patch.dict(
+                os.environ,
+                {"UK_UNIVERSE_OPENFIGI_URL": "https://example.test/openfigi"},
+                clear=False,
+            ):
+                self.refresh_many(
+                    cache_path,
+                    count=300,
+                    opener=opener,
+                )
+
+        self.assertTrue(opener.calls)
+        self.assertTrue(
+            opener.calls[0].startswith("https://example.test/openfigi")
+        )
 
     def test_search_matches_name_and_degrades_without_cache(self) -> None:
         with TemporaryDirectory() as temporary_directory:
