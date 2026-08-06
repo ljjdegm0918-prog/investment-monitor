@@ -146,6 +146,12 @@ HK tickers are canonical five-digit codes (`700` / `0700` / `00700` /
 `refresh_hk_universe()` (default path `.cache/investment_monitor/hk_universe.json`).
 Finnhub remains **US only** and is never queried for HK.
 
+HK feed soft-dedupe (display only, all rows kept; same
+`KR_FEED_SOFT_DEDUPE` switch as KR/UK, default on): hkexnews filings fold on
+NEWS_ID, hkex_di on form serial; hkexnews and hkex_di are **never** folded
+against each other by title; yahoo_hk news folds on ticker + Hong Kong day +
+normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

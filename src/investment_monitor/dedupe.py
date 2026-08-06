@@ -5,8 +5,10 @@ feed assembly folds items that share a robust identity key. Keys prefer the
 14-digit Korean disclosure receipt number (rcept_no / acpt_no) shared by
 OpenDART and KIND. For UK, filings fold on RNS ids (Investegate), Companies
 House transaction ids, or a same-source title fallback; Companies House and
-Investegate are never folded against each other by title alone. News folds on
-ticker + local day + normalized title.
+Investegate are never folded against each other by title alone. For HK,
+hkexnews filings fold on NEWS_ID and hkex_di on form serial; hkexnews and
+hkex_di are never folded against each other by title. News folds on ticker +
+local day + normalized title.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
 LONDON = ZoneInfo("Europe/London")
+HKT = ZoneInfo("Asia/Hong_Kong")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -26,6 +29,8 @@ FILING_SOURCE_PRIORITY = {
     "companies_house": 2,
     "kind": 3,
     "sec": 4,
+    "hkexnews": 5,
+    "hkex_di": 6,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -33,6 +38,7 @@ NEWS_SOURCE_PRIORITY = {
     "news": 2,
     "hankyung": 3,
     "thebell": 4,
+    "yahoo_hk": 5,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -45,6 +51,9 @@ SOURCE_DISPLAY_LABELS = {
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
+    "hkexnews": "HKEXnews (HKEX)",
+    "hkex_di": "Disclosure of Interests (HKEX)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -55,7 +64,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk"}:
+    if market not in {"kr", "uk", "hk"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -127,6 +136,8 @@ def normalize_title(value: Any) -> str:
 def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     if market == "kr":
         return _kr_filing_key(item)
+    if market == "hk":
+        return _hk_filing_key(item)
     return _uk_filing_key(item)
 
 
@@ -165,8 +176,31 @@ def _uk_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
+def _hk_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    if source == "hkexnews":
+        news_id = str(
+            metadata.get("news_id") or item.get("external_id") or ""
+        ).strip()
+        if news_id:
+            return f"hk:filing:news_id:{news_id}"
+    if source == "hkex_di":
+        serial = str(item.get("external_id") or "").strip()
+        if serial:
+            return f"hk:filing:di:{serial}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, HKT)
+    if title and day:
+        return (
+            f"hk:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
 def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
-    zone = KST if market == "kr" else LONDON
+    zone = KST if market == "kr" else (HKT if market == "hk" else LONDON)
     title = normalize_title(item.get("title"))
     day = _local_day(item, zone)
     if title and day:
