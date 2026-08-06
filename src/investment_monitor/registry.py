@@ -26,6 +26,7 @@ from .sources.kr_news import (
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.twse_material import TwseMaterialConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -143,4 +144,5 @@ def create_default_registry() -> SourceRegistry:
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
     registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
+    registry.register(TwseMaterialConnector.name, TwseMaterialConnector)
     return registry

@@ -28,6 +28,7 @@ DEFAULT_SOURCE_META = {
     "thebell": ("TheBell", "news"),
     "yahoo_uk": ("Yahoo Finance UK", "news"),
     "yahoo_hk": ("Yahoo Finance HK", "news"),
+    "twse_material": ("TWSE OpenAPI (material)", "filings"),
     "news": ("News", "news"),
     "community": ("Community", "community"),
     "research": ("Research", "research"),

@@ -124,6 +124,13 @@ from .sources.uk_news import (
     YahooNewsError,
     YahooNewsRequestError,
 )
+from .sources.twse_material import (
+    TwseMaterialClient,
+    TwseMaterialConnector,
+    TwseMaterialDataError,
+    TwseMaterialError,
+    TwseMaterialRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -230,6 +237,11 @@ __all__ = [
     "SaveResult",
     "TickerCollectionFailure",
     "TheBellConnector",
+    "TwseMaterialClient",
+    "TwseMaterialConnector",
+    "TwseMaterialDataError",
+    "TwseMaterialError",
+    "TwseMaterialRequestError",
     "UkUniverseError",
     "UniverseEntry",
     "YahooHkNewsClient",
