@@ -37,6 +37,7 @@ from .sources.hkexnews import HKEXNewsCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
+from .tw_universe import tw_universe_name_map
 from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
@@ -242,6 +243,8 @@ class WebApplication:
                     name_fallback = uk_universe_name_map()
                 elif market == MARKET_HK:
                     name_fallback = hk_universe_name_map()
+                elif market == MARKET_TW:
+                    name_fallback = tw_universe_name_map()
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),

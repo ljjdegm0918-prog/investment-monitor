@@ -173,10 +173,12 @@ ticker + Hong Kong day + normalized title.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | twse_material | filings | none | TWSE OpenAPI material-information (`t187ap04_L`, 重大訊息) for **listed companies only**; key-free, not a paid MOPS push; TPEx/興櫃 disclosure left to TW-4; news connectors not implemented yet |
+| tw_universe | breadth cache | none | TWSE listed (`t187ap03_L`) + TPEx OTC (`mopsfin_t187ap03_O`) open company directories; emerging (興櫃) is an opt-in env hook because no stable free JSON was found; not an IBKR-complete universe; never enters the feed |
 
 `market=tw` companies use canonical four-digit tickers (`2330` / `02330` /
 `2330.TW` all store as `2330`, board in `exchange` when available) and remain
-unmapped. Finnhub is **US only** and never queried for TW.
+unmapped; `tw_universe_name_map()` backfills names and board (TWSE/TPEx/ESB)
+for add-company. Finnhub is **US only** and never queried for TW.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
