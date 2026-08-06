@@ -599,6 +599,58 @@ class WebApplicationTests(unittest.TestCase):
             application.resolver,
         )
 
+    def test_adding_hk_company_never_uses_sec_resolver(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "MSFT",
+                    "lists": ["holdings"],
+                    "market": "hk",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "MSFT")
+        self.assertEqual(added["market"], "hk")
+        # MSFT exists in the SEC cache; without the HK guard this would be
+        # mapped as the US company.
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(added["cik"], "")
+
+    def test_hk_resolver_is_none(self) -> None:
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+
+        self.assertIsNone(application._resolver_for("hk"))
+        self.assertIsNot(application._resolver_for("hk"), application.resolver)
+
+    def test_hk_ticker_input_normalizes_to_five_digits(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "700, 0700.HK",
+                    "lists": ["holdings"],
+                    "market": "hk",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(len(payload["added"]), 1)
+        self.assertEqual(payload["added"][0]["ticker"], "00700")
+        self.assertEqual(payload["added"][0]["market"], "hk")
+        self.assertEqual(payload["added"][0]["mapping_status"], "unmapped")
+
     def test_adding_uk_company_uses_universe_cache_for_name(self) -> None:
         cache_path = (
             self.project_root

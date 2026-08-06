@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import fold_feed_items
-from .models import ALLOWED_MARKETS, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -378,6 +378,10 @@ class WebRepository:
         if market not in ALLOWED_MARKETS:
             raise ValueError(
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
+            )
+        if market == MARKET_HK:
+            tickers = tuple(
+                dict.fromkeys(normalize_hk_ticker(ticker) for ticker in tickers)
             )
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
@@ -1570,6 +1574,24 @@ def _normalize_tickers(raw: str) -> Tuple[str, ...]:
         if ticker and ticker not in normalized:
             normalized.append(ticker)
     return tuple(normalized)
+
+
+def normalize_hk_ticker(ticker: str) -> str:
+    """Normalize a Hong Kong stock code to its canonical five-digit form.
+
+    Accepts 700, 0700, 00700 and 0700.HK (also with a space or dash before
+    HK) and stores the stable form 00700. Non-numeric input is preserved
+    unchanged rather than silently dropped.
+    """
+    cleaned = str(ticker).strip().upper()
+    core = (
+        cleaned.removesuffix(".HK")
+        .removesuffix(" HK")
+        .removesuffix("-HK")
+    )
+    if core.isdigit():
+        return core.zfill(5)
+    return cleaned
 
 
 def _company_dict(row: sqlite3.Row) -> Mapping[str, Any]:

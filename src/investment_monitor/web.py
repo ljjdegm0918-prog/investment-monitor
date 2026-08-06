@@ -25,7 +25,7 @@ from .config import (
 )
 from .connectors.base import ConnectorUnavailableError
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_KR, MARKET_UK, MARKET_US
+from .models import MARKET_HK, MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -439,6 +439,11 @@ class WebApplication:
             # UK maps through Companies House; never let SEC map a UK ticker
             # to a same-named US company.
             return self.companies_house_resolver
+        if market == MARKET_HK:
+            # HK disclosure mapping is not connected yet; never let SEC map a
+            # Hong Kong code to a same-named US company. HK symbols are added
+            # honestly as unmapped until a disclosure source exists.
+            return None
         return self.resolver
 
     @staticmethod
