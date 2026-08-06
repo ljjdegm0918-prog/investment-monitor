@@ -25,8 +25,6 @@ from ...connectors.base import ConnectorUnavailableError, SecretField
 from ...models import (
     CollectionRequest,
     InformationItem,
-    MARKET_CN,
-    MARKET_HK,
     MARKET_UNKNOWN,
     MARKET_US,
 )
@@ -231,8 +229,8 @@ class FinnhubNewsConnector:
         for ticker in request.tickers:
             market = request.market_for(ticker)
             # Finnhub company-news is treated as a US coverage source only.
-            # HK / A-share markets need dedicated connectors later.
-            if market in (MARKET_HK, MARKET_CN):
+            # HK / A-share / Korea markets need dedicated connectors later.
+            if market not in (MARKET_US, MARKET_UNKNOWN):
                 LOGGER.info(
                     "news ticker=%s market=%s skipped unsupported_for_finnhub",
                     ticker,

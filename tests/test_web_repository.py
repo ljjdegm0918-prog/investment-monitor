@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 
+from investment_monitor.config import SourceConfig
 from investment_monitor.models import InformationItem
 from investment_monitor.sqlite_repository import SQLiteInformationRepository
 from investment_monitor.web_repository import FeedFilters, WebRepository
@@ -313,6 +314,171 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(sec["status"], "stale")
         self.assertTrue(sec["is_stale"])
 
+    def test_filings_status_is_driven_by_regulatory_filing_items(self) -> None:
+        self.add_company("AAPL", "holdings")
+        self.items.save([
+            make_item("fresh-sec-item", accepted_at="2026-08-04T12:00:00+00:00")
+        ])
+
+        statuses = self.repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "SEC EDGAR")
+
+    def test_filings_status_can_be_driven_by_dart_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("dart",),
+            known_sources=(
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("dart",),
+        )
+        self.items.save([
+            make_item(
+                "dart-1",
+                source="dart",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "OpenDART")
+
+    def test_filings_status_combines_sec_and_dart_providers(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "dart"),
+            known_sources=(
+                SourceConfig(
+                    name="sec",
+                    label="SEC EDGAR",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("sec", "dart"),
+        )
+        self.items.save([
+            make_item("sec-1", accepted_at="2026-08-04T12:00:00+00:00"),
+            make_item(
+                "dart-1",
+                source="dart",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:30:00+00:00",
+            ),
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "SEC EDGAR, OpenDART")
+
+    def test_filings_status_can_be_driven_by_kind_items(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("kind",),
+            known_sources=(
+                SourceConfig(
+                    name="kind",
+                    label="KIND (KRX)",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("kind",),
+        )
+        self.items.save([
+            make_item(
+                "kind-1",
+                source="kind",
+                source_type="regulatory_filing",
+                accepted_at="2026-08-04T12:00:00+00:00",
+            )
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(filings["provider"], "KIND (KRX)")
+
+    def test_filings_status_combines_sec_dart_and_kind_providers(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "dart", "kind"),
+            known_sources=(
+                SourceConfig(
+                    name="sec",
+                    label="SEC EDGAR",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="dart",
+                    label="OpenDART",
+                    source_type="filings",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="kind",
+                    label="KIND (KRX)",
+                    source_type="filings",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("sec", "dart", "kind"),
+        )
+        self.items.save([
+            make_item("kind-1", source="kind", source_type="regulatory_filing")
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+        self.assertEqual(
+            filings["provider"],
+            "SEC EDGAR, OpenDART, KIND (KRX)",
+        )
+
     def test_collection_activity_is_persisted_without_invented_metrics(self) -> None:
         started = datetime(2026, 8, 2, 12, tzinfo=timezone.utc)
         finished = datetime(2026, 8, 2, 12, 0, 2, tzinfo=timezone.utc)
@@ -426,6 +592,88 @@ class WebRepositoryTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError, msg=bad_name):
                 self.repository.set_setting(f"extra_env:{bad_name}", "x")
+
+    def test_news_status_aggregates_multiple_news_sources(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("news", "naver_news"),
+            known_sources=(
+                SourceConfig(
+                    name="news",
+                    label="News",
+                    source_type="news",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="naver_news",
+                    label="Naver Finance",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("news", "naver_news"),
+        )
+        self.items.save([
+            make_item("news-1", source="news", source_type="news"),
+            make_item(
+                "naver-1",
+                source="naver_news",
+                source_type="news",
+            ),
+        ])
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertEqual(news["status"], "connected")
+        self.assertEqual(news["provider"], "Finnhub News, Naver Finance")
+
+    def test_news_status_latest_attempt_covers_any_news_source(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("news", "naver_news"),
+            known_sources=(
+                SourceConfig(
+                    name="news",
+                    label="News",
+                    source_type="news",
+                    enabled=True,
+                ),
+                SourceConfig(
+                    name="naver_news",
+                    label="Naver Finance",
+                    source_type="news",
+                    enabled=True,
+                ),
+            ),
+            implemented_sources=("news", "naver_news"),
+        )
+        repository.record_collection_events((SimpleNamespace(
+            source="naver_news",
+            ticker="005930",
+            started_at=datetime(2026, 8, 2, 12, tzinfo=timezone.utc),
+            finished_at=datetime(2026, 8, 2, 12, 0, 1, tzinfo=timezone.utc),
+            status="success",
+            records_read=1,
+            records_written=1,
+            records_inserted=1,
+            records_updated=0,
+            duplicate_records=0,
+            error_message=None,
+        ),))
+
+        statuses = repository.source_statuses(
+            now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+        )
+
+        news = next(
+            record for record in statuses if record["type"] == "News"
+        )
+        self.assertIsNotNone(news["latest_attempt"])
 
 
 if __name__ == "__main__":

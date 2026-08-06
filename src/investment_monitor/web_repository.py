@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -24,6 +25,7 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
+from .dedupe import fold_feed_items
 from .models import ALLOWED_MARKETS, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
@@ -36,12 +38,22 @@ FIXED_LISTS = (
 PRODUCTION_SOURCES = ("sec",)
 SOURCE_LABELS = {
     "sec": "SEC EDGAR",
+    "dart": "OpenDART",
+    "kind": "KIND (KRX)",
+    "naver_news": "Naver Finance",
+    "hankyung": "Hankyung",
+    "thebell": "TheBell",
     "news": "News",
     "community": "Community",
     "research": "Research",
 }
 PROVIDER_LABELS = {
     "news": "Finnhub News",
+    "dart": "OpenDART",
+    "kind": "KIND (KRX)",
+    "naver_news": "Naver Finance",
+    "hankyung": "Hankyung",
+    "thebell": "TheBell",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -65,6 +77,11 @@ EXTRA_ENV_BLOCKED_EXACT = frozenset(
 EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
+    ("dart", "OpenDART", "filings"),
+    ("kind", "KIND (KRX)", "filings"),
+    ("naver_news", "Naver Finance", "news"),
+    ("hankyung", "Hankyung", "news"),
+    ("thebell", "TheBell", "news"),
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
@@ -344,6 +361,7 @@ class WebRepository:
         list_slugs: Sequence[str],
         resolver: CompanyResolver,
         market: str = MARKET_US,
+        name_fallback: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> Mapping[str, Any]:
         tickers = _normalize_tickers(raw_tickers)
         if not tickers:
@@ -361,9 +379,12 @@ class WebRepository:
         already_present: List[Mapping[str, Any]] = []
         failed: List[Mapping[str, str]] = []
         now = _utc_now()
+        fallback = name_fallback or {}
         with self._connect() as connection:
             for ticker in tickers:
-                mapping = resolver.resolve(ticker)
+                mapping = (
+                    resolver.resolve(ticker) if resolver is not None else None
+                )
                 existing = connection.execute(
                     """
                     SELECT * FROM companies
@@ -384,9 +405,19 @@ class WebRepository:
                         continue
                     # Non-US markets are added honestly without pretending the
                     # SEC resolver can map them; mapping_status stays unmapped.
+                    entry = fallback.get(ticker, {})
+                    if not entry:
+                        entry = fallback.get(
+                            (
+                                ticker.zfill(6)
+                                if ticker.isdigit()
+                                else ticker
+                            ),
+                            {},
+                        )
                     identity = {
-                        "name": ticker,
-                        "exchange": "Unavailable",
+                        "name": str(entry.get("name") or ticker),
+                        "exchange": str(entry.get("exchange") or "Unavailable"),
                         "cik": "",
                         "mapping_status": "unmapped",
                     }
@@ -519,6 +550,25 @@ class WebRepository:
             filters.page_size,
         )
 
+    def query_feed_display(self, filters: FeedFilters) -> PageResult:
+        """Return a feed page with cross-source soft dedupe applied."""
+        result = self.query_feed(filters)
+        items = fold_feed_items(
+            result.items,
+            enabled=self._kr_soft_dedupe_enabled(),
+        )
+        return PageResult(
+            tuple(items),
+            result.total,
+            result.page,
+            result.page_size,
+        )
+
+    @staticmethod
+    def _kr_soft_dedupe_enabled() -> bool:
+        value = os.environ.get("KR_FEED_SOFT_DEDUPE", "true").strip().lower()
+        return value not in {"0", "false", "no", "off"}
+
     def counts(self, selected_date: date) -> Mapping[str, Any]:
         start_utc, end_utc = _eastern_day_bounds(selected_date)
         today_filters = FeedFilters(
@@ -604,8 +654,7 @@ class WebRepository:
             source.source_type: source for source in self._source_catalog
         }
         statuses: List[Mapping[str, Any]] = [
-            self._sec_source_status(
-                catalog_by_type.get("filings"),
+            self._filings_source_status(
                 current_time=current_time,
                 stale_after=stale_after,
             )
@@ -622,39 +671,66 @@ class WebRepository:
             )
         return statuses
 
-    def _sec_source_status(
+    def _filings_source_status(
         self,
-        source: Optional[SourceConfig],
         *,
         current_time: datetime,
         stale_after: timedelta,
     ) -> Mapping[str, Any]:
+        filings_sources = self._enabled_filings_sources()
+        filings_enabled = bool(filings_sources)
+        if not filings_enabled:
+            return {
+                "type": "Filings",
+                "provider": None,
+                "status": "not_connected",
+                "latest_success": None,
+                "latest_attempt": None,
+                "last_failure": None,
+                "is_stale": False,
+                "stale_after_hours": int(stale_after.total_seconds() // 3600),
+            }
+        placeholders = ",".join("?" for _ in filings_sources)
+        parameters = tuple(filings_sources)
         with self._connect() as connection:
-            sec_row = connection.execute(
-                "SELECT MAX(collected_at) AS latest "
-                "FROM information_items WHERE source = 'sec'"
+            items_row = connection.execute(
+                f"""
+                SELECT MAX(collected_at) AS latest
+                FROM information_items
+                WHERE source IN ({placeholders})
+                  AND source_type = 'regulatory_filing'
+                """,
+                parameters,
             ).fetchone()
             run_row = connection.execute(
-                "SELECT * FROM ingestion_runs WHERE source = 'sec' "
-                "ORDER BY started_at DESC LIMIT 1"
+                f"""
+                SELECT * FROM ingestion_runs
+                WHERE source IN ({placeholders})
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                parameters,
             ).fetchone()
             success_row = connection.execute(
-                """
+                f"""
                 SELECT MAX(finished_at) AS latest
                 FROM ingestion_runs
-                WHERE source = 'sec' AND status IN ('success', 'partial')
-                """
+                WHERE source IN ({placeholders})
+                  AND status IN ('success', 'partial')
+                """,
+                parameters,
             ).fetchone()
             failure_row = connection.execute(
-                """
+                f"""
                 SELECT error_summary
                 FROM ingestion_runs
-                WHERE source = 'sec' AND status IN ('failure', 'partial')
+                WHERE source IN ({placeholders})
+                  AND status IN ('failure', 'partial')
                 ORDER BY started_at DESC LIMIT 1
-                """
+                """,
+                parameters,
             ).fetchone()
         latest = (success_row["latest"] if success_row else None) or (
-            sec_row["latest"] if sec_row else None
+            items_row["latest"] if items_row else None
         )
         is_stale = bool(
             latest
@@ -662,19 +738,27 @@ class WebRepository:
             - _parse_datetime(str(latest)).astimezone(timezone.utc)
             > stale_after
         )
-        sec_enabled = "sec" in self._allowed_sources
-        if not sec_enabled:
-            sec_status = "not_connected"
-        elif run_row and run_row["status"] == "failure":
-            sec_status = "temporarily_unavailable"
+        if run_row and run_row["status"] == "failure":
+            filings_status = "temporarily_unavailable"
         elif latest and is_stale:
-            sec_status = "stale"
+            filings_status = "stale"
         else:
-            sec_status = "connected" if latest else "unavailable"
+            filings_status = "connected" if latest else "unavailable"
+        label_by_name = {
+            catalog_source.name: catalog_source.label
+            for catalog_source in self._source_catalog
+        }
+        provider = (
+            "SEC EDGAR"
+            if filings_sources == ("sec",)
+            else ", ".join(
+                label_by_name.get(name, name) for name in filings_sources
+            )
+        )
         return {
             "type": "Filings",
-            "provider": "SEC EDGAR" if sec_enabled else None,
-            "status": sec_status,
+            "provider": provider,
+            "status": filings_status,
             "latest_success": latest,
             "latest_attempt": (
                 (run_row["finished_at"] or run_row["started_at"])
@@ -688,6 +772,15 @@ class WebRepository:
             "stale_after_hours": int(stale_after.total_seconds() // 3600),
         }
 
+    def _enabled_filings_sources(self) -> Tuple[str, ...]:
+        """Return enabled catalog sources whose content type is filings."""
+        return tuple(
+            source.name
+            for source in self._source_catalog
+            if source.source_type == "filings" and source.enabled
+            and source.name not in self._unavailable_sources
+        )
+
     def _content_type_status(
         self,
         label: str,
@@ -699,15 +792,33 @@ class WebRepository:
     ) -> Mapping[str, Any]:
         providers, latest = self._content_type_data(source_type)
         connected = bool(providers)
-        enabled = bool(source and source.enabled)
-        implemented = bool(
-            source and source.name in self._implemented_sources
+        type_sources = [
+            catalog_source
+            for catalog_source in self._source_catalog
+            if catalog_source.source_type == source_type
+        ]
+        enabled = any(
+            catalog_source.name in self._allowed_sources
+            for catalog_source in type_sources
         )
+        implemented = any(
+            catalog_source.name in self._implemented_sources
+            for catalog_source in type_sources
+        )
+        active_sources = [
+            catalog_source
+            for catalog_source in type_sources
+            if catalog_source.name in self._allowed_sources
+            and catalog_source.name in self._implemented_sources
+            and catalog_source.name not in self._unavailable_sources
+        ]
+        unavailable_reasons = [
+            self._unavailable_sources[catalog_source.name]
+            for catalog_source in type_sources
+            if catalog_source.name in self._unavailable_sources
+        ]
         run_row, failure_row = self._source_run_status(
-            source.name if source else None
-        )
-        unavailable_reason = (
-            self._unavailable_sources.get(source.name) if source else None
+            [active_source.name for active_source in active_sources]
         )
         is_stale = bool(
             connected
@@ -718,7 +829,7 @@ class WebRepository:
         )
         if connected:
             status = "stale" if is_stale else "connected"
-        elif unavailable_reason:
+        elif unavailable_reasons:
             status = "not_connected"
         elif enabled and implemented:
             status = (
@@ -728,12 +839,14 @@ class WebRepository:
             )
         else:
             status = "not_connected"
-        if source and PROVIDER_LABELS.get(source.name):
-            provider = (
-                PROVIDER_LABELS[source.name] if connected else None
+        if connected and active_sources:
+            provider = ", ".join(
+                PROVIDER_LABELS.get(
+                    active_source.name,
+                    active_source.label,
+                )
+                for active_source in active_sources
             )
-        elif source and enabled:
-            provider = source.label if connected else None
         else:
             provider = str(providers) if connected else None
         return {
@@ -747,35 +860,39 @@ class WebRepository:
                 else None
             ),
             "last_failure": (
-                unavailable_reason
-                or (failure_row["error_summary"] if failure_row else None)
+                "; ".join(unavailable_reasons)
+                if unavailable_reasons
+                else (failure_row["error_summary"] if failure_row else None)
             ),
             "is_stale": is_stale,
         }
 
     def _source_run_status(
         self,
-        source_name: Optional[str],
+        source_names: Sequence[str],
     ) -> Tuple[Optional[sqlite3.Row], Optional[sqlite3.Row]]:
-        if not source_name:
+        unique_names = tuple(dict.fromkeys(source_names))
+        if not unique_names:
             return None, None
+        placeholders = ",".join("?" for _ in unique_names)
         with self._connect() as connection:
             run_row = connection.execute(
-                """
+                f"""
                 SELECT * FROM ingestion_runs
-                WHERE source = ?
+                WHERE source IN ({placeholders})
                 ORDER BY started_at DESC LIMIT 1
                 """,
-                (source_name,),
+                unique_names,
             ).fetchone()
             failure_row = connection.execute(
-                """
+                f"""
                 SELECT error_summary
                 FROM ingestion_runs
-                WHERE source = ? AND status IN ('failure', 'partial')
+                WHERE source IN ({placeholders})
+                  AND status IN ('failure', 'partial')
                 ORDER BY started_at DESC LIMIT 1
                 """,
-                (source_name,),
+                unique_names,
             ).fetchone()
         return run_row, failure_row
 

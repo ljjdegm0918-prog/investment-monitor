@@ -23,9 +23,12 @@ from .config import (
     load_settings,
     load_universe,
 )
-from .models import MARKET_US
+from .connectors.base import ConnectorUnavailableError
+from .kr_universe import kr_universe_name_map
+from .models import MARKET_KR, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
+from .sources.dart import DARTCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -135,6 +138,18 @@ class WebApplication:
             self.resolver = SECCompanyResolver.from_environment(cache_path)
         except SECConfigurationError:
             self.resolver = SECCompanyResolver(cache_path)
+        dart_cache_path = (
+            project_root
+            / ".cache"
+            / "investment_monitor"
+            / "dart_corp_codes.json"
+        )
+        try:
+            self.dart_resolver = DARTCompanyResolver.from_environment(
+                dart_cache_path
+            )
+        except ConnectorUnavailableError:
+            self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -176,11 +191,16 @@ class WebApplication:
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
+                resolver = self._resolver_for(market)
+                name_fallback = (
+                    kr_universe_name_map() if market == MARKET_KR else None
+                )
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
-                    self.resolver,
+                    resolver,
                     market=market,
+                    name_fallback=name_fallback,
                 ))
                 added_tickers = tuple(
                     str(record["ticker"]) for record in result["added"]
@@ -389,6 +409,12 @@ class WebApplication:
         if events:
             self.repository.record_collection_events(events)
 
+    def _resolver_for(self, market: str) -> Any:
+        """Pick the company resolver for a market (KR uses OpenDART)."""
+        if market == MARKET_KR:
+            return self.dart_resolver
+        return self.resolver
+
     @staticmethod
     def _detect_unavailable_sources(
         registry: Any,
@@ -503,7 +529,7 @@ class WebApplication:
 
     def _feed(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         filters = _filters_from_mapping({key: values[-1] for key, values in query.items()})
-        result = self.repository.query_feed(filters)
+        result = self.repository.query_feed_display(filters)
         disconnected = None
         available_types = set(self.repository.available_source_types())
         if filters.information_type == "news" and "news" not in available_types:

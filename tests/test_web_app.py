@@ -81,12 +81,24 @@ class WebApplicationTests(unittest.TestCase):
             self.assertIn(state_text, script.body)
 
     def test_bootstrap_uses_fixed_lists_and_truthful_source_status(self) -> None:
-        response = self.application.handle("GET", "/api/bootstrap")
-        payload = self.payload(response)
+        with patch.dict(
+            os.environ,
+            {"SEC_USER_AGENT": ""},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle("GET", "/api/bootstrap")
+            payload = self.payload(response)
 
         self.assertEqual(response.status, 200)
-        self.assertEqual([record["slug"] for record in payload["lists"]], ["holdings", "planned", "watchlist"])
-        self.assertEqual(payload["sources"][0]["status"], "unavailable")
+        self.assertEqual(
+            [record["slug"] for record in payload["lists"]],
+            ["holdings", "planned", "watchlist"],
+        )
+        self.assertEqual(payload["sources"][0]["status"], "not_connected")
         self.assertEqual(payload["sources"][1]["status"], "not_connected")
         self.assertEqual(payload["sources"][2]["status"], "not_connected")
         self.assertEqual(payload["sources"][3]["status"], "not_connected")
@@ -414,6 +426,141 @@ class WebApplicationTests(unittest.TestCase):
         self.assertTrue(catalog[0]["implemented"])
         self.assertEqual(catalog[0]["fields"][0]["env"], "RESEARCH_API_KEY")
         self.assertEqual(catalog[0]["fields"][0]["kind"], "password")
+
+    def test_dart_enabled_without_key_keeps_filings_provider_sec(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n  - dart\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"DART_API_KEY": "", "SEC_USER_AGENT": "test-user-agent"},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            settings = self.payload(
+                application.handle("GET", "/api/settings")
+            )
+            statuses = application.repository.source_statuses()
+
+        providers = {
+            provider["name"]: provider
+            for provider in settings["providers"]
+        }
+        self.assertTrue(providers["dart"]["implemented"])
+        self.assertEqual(
+            [field["env"] for field in providers["dart"]["fields"]],
+            ["DART_API_KEY"],
+        )
+        filings = next(
+            record for record in statuses if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["provider"], "SEC EDGAR")
+
+    def test_adding_kr_company_with_dart_cache_maps_corp_code(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - sec\n  - news\n  - dart\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "dart_corp_codes.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps({"005930": ["00593000", "삼성전자"]}),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"DART_API_KEY": "test-key"},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "005930",
+                        "lists": ["holdings"],
+                        "market": "kr",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+            companies = application.repository.companies()
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(payload["added"][0]["market"], "kr")
+        self.assertEqual(payload["added"][0]["mapping_status"], "mapped")
+        self.assertEqual(payload["added"][0]["cik"], "00593000")
+        self.assertEqual(companies[0]["cik"], "00593000")
+
+    def test_adding_kr_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "kr_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-08-05T00:00:00+00:00",
+                    "source": "dart_corpcode",
+                    "items": [
+                        {
+                            "stock_code": "005930",
+                            "name": "삼성전자",
+                            "market_hint": "KRX",
+                            "instrument_kind": "equity",
+                            "exchange": "KRX",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"KR_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "005930",
+                        "lists": ["holdings"],
+                        "market": "kr",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["name"], "삼성전자")
+        self.assertEqual(added["exchange"], "KRX")
+        self.assertEqual(added["market"], "kr")
+        self.assertEqual(added["mapping_status"], "unmapped")
 
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(
