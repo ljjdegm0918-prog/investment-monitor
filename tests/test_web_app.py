@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from investment_monitor.application import ConfiguredCollectionResult
+from investment_monitor.web import _topbar_summary
 from investment_monitor.web import DailyCollectionScheduler, WebApplication
 from investment_monitor.models import InformationItem
 from investment_monitor.repository import SaveResult
@@ -954,6 +955,145 @@ class WebApplicationTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status, 200)
+
+    def test_bootstrap_topbar_summary_uses_multi_source_providers(self) -> None:
+        with patch.object(
+            self.application.repository,
+            "source_statuses",
+            return_value=[
+                {
+                    "type": "Filings",
+                    "provider": "OpenDART, KIND (KRX)",
+                    "status": "connected",
+                },
+                {
+                    "type": "News",
+                    "provider": None,
+                    "status": "not_connected",
+                },
+                {
+                    "type": "Community",
+                    "provider": None,
+                    "status": "not_connected",
+                },
+                {
+                    "type": "Research",
+                    "provider": None,
+                    "status": "not_connected",
+                },
+            ],
+        ):
+            payload = self.payload(
+                self.application.handle(
+                    "GET",
+                    "/api/bootstrap?date=2026-08-06",
+                )
+            )
+
+        self.assertEqual(
+            payload["topbar_summary"],
+            {
+                "text": "Sources up to date · OpenDART, KIND (KRX)",
+                "level": "connected",
+            },
+        )
+        self.assertNotIn("SEC Up to date", payload["topbar_summary"]["text"])
+
+    def test_bootstrap_topbar_summary_mixed_stale(self) -> None:
+        with patch.object(
+            self.application.repository,
+            "source_statuses",
+            return_value=[
+                {
+                    "type": "Filings",
+                    "provider": "OpenDART, KIND (KRX)",
+                    "status": "connected",
+                },
+                {
+                    "type": "News",
+                    "provider": "Naver Finance",
+                    "status": "stale",
+                },
+            ],
+        ):
+            payload = self.payload(
+                self.application.handle(
+                    "GET",
+                    "/api/bootstrap?date=2026-08-06",
+                )
+            )
+
+        self.assertEqual(
+            payload["topbar_summary"],
+            {
+                "text": (
+                    "Sources: OpenDART, KIND (KRX) up to date"
+                    " · Naver Finance stale"
+                ),
+                "level": "stale",
+            },
+        )
+
+    def test_bootstrap_topbar_summary_all_down(self) -> None:
+        with patch.object(
+            self.application.repository,
+            "source_statuses",
+            return_value=[
+                {
+                    "type": "Filings",
+                    "provider": "OpenDART",
+                    "status": "unavailable",
+                },
+                {
+                    "type": "News",
+                    "provider": None,
+                    "status": "not_connected",
+                },
+            ],
+        ):
+            payload = self.payload(
+                self.application.handle(
+                    "GET",
+                    "/api/bootstrap?date=2026-08-06",
+                )
+            )
+
+        self.assertEqual(
+            payload["topbar_summary"],
+            {"text": "Sources unavailable / Not connected", "level": "failed"},
+        )
+
+    def test_topbar_summary_single_sec_uses_generic_wording(self) -> None:
+        summary = _topbar_summary(
+            [
+                {
+                    "type": "Filings",
+                    "provider": "SEC EDGAR",
+                    "status": "connected",
+                },
+            ]
+        )
+
+        self.assertEqual(
+            summary,
+            {"text": "Sources up to date · SEC EDGAR", "level": "connected"},
+        )
+        self.assertNotIn("SEC Up to date", summary["text"])
+
+    def test_app_js_has_no_sec_only_topbar_copy(self) -> None:
+        app_js = (
+            Path(__file__).resolve().parents[1]
+            / "src"
+            / "investment_monitor"
+            / "web_static"
+            / "app.js"
+        )
+        text = app_js.read_text(encoding="utf-8")
+
+        self.assertNotIn("SEC Up to date", text)
+        self.assertNotIn("SEC Data stale", text)
+        self.assertNotIn("SEC Unavailable", text)
+        self.assertIn("topbar_summary", text)
 
     def test_page_size_setting_still_works(self) -> None:
         response = self.application.handle(

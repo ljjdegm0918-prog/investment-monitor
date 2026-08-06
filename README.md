@@ -238,6 +238,8 @@ These defaults can be adjusted in `.env`.
   previous day through a UTC-midnight conversion; legacy rows at exactly
   `00:00 UTC` are treated as date-only with their UTC date as the disclosure
   day. Stored timestamps remain UTC-compatible.
+- The top status bar shows a multi-source health summary (not SEC-only);
+  the worst enabled-source status drives its color.
 - **All Information** provides historical server-side filters and stable
   pagination.
 - **Holdings, Planned Purchases, Watchlist** manage many-to-many company-list

@@ -42,10 +42,10 @@ function renderShell() {
   const b = state.bootstrap;
   document.getElementById("topbar-title").textContent = viewTitles[state.view] || "Investment Monitor";
   document.getElementById("current-date").textContent = `${b.display_date} · ${b.timezone_label}`;
-  const sec = b.sources.find(source => source.type === "Filings");
+  const summary = b.topbar_summary || { text: "Sources unavailable", level: "failed" };
   const status = document.getElementById("top-source-status");
-  status.textContent = sec.status === "connected" ? "SEC Up to date" : sec.status === "stale" ? "SEC Data stale" : "SEC Unavailable";
-  status.className = `status-line ${sec.status === "connected" ? "connected" : sec.status === "stale" ? "stale" : "failed"}`;
+  status.textContent = summary.text;
+  status.className = `status-line ${summary.level}`;
   const listBySlug = Object.fromEntries(b.lists.map(list => [list.slug, list]));
   const svg = body => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
   const navIcons = {

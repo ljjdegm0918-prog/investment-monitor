@@ -41,6 +41,23 @@ from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
+
+TOPBAR_STATUS_LEVELS = {
+    "not_connected": 1,
+    "connected": 2,
+    "stale": 3,
+    "unavailable": 4,
+    "temporarily_unavailable": 4,
+    "failed": 5,
+}
+TOPBAR_STATUS_WORDS = {
+    "connected": "up to date",
+    "stale": "stale",
+    "unavailable": "unavailable",
+    "not_connected": "not connected",
+    "temporarily_unavailable": "temporarily unavailable",
+    "failed": "failed",
+}
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
 
 
@@ -588,6 +605,7 @@ class WebApplication:
             slug = str(list_record["slug"])
             list_record["company_count"] = sum(slug in company["list_slugs"] for company in companies)
             list_record["unread_count"] = counts["list_unread"].get(slug, 0)
+        statuses = self.repository.source_statuses()
         return {
             "selected_date": selected_date.isoformat(),
             "display_date": f"{selected_date.strftime('%b')} {selected_date.day}, {selected_date.year}",
@@ -596,7 +614,8 @@ class WebApplication:
             "lists": lists,
             "companies": companies,
             "counts": counts,
-            "sources": self.repository.source_statuses(),
+            "sources": statuses,
+            "topbar_summary": _topbar_summary(statuses),
             "settings": {"page_size": int(self.repository.setting("page_size", "25"))},
         }
 
@@ -808,6 +827,64 @@ def _required_bool(payload: Mapping[str, Any], key: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a JSON boolean")
     return value
+
+
+def _topbar_summary(
+    statuses: Sequence[Mapping[str, Any]],
+) -> Mapping[str, str]:
+    """Build a short multi-source health summary for the top bar.
+
+    Cards cover enabled/implemented content types; disabled placeholders
+    (``not_connected`` without a provider) are ignored. Worst-status level
+    drives the CSS class: failed/unavailable/temporarily_unavailable (4-5) >
+    stale (3) > connected (2) > not_connected (1, renders failed since no
+    source is usable).
+    """
+    cards = [
+        status
+        for status in statuses
+        if status.get("type") in {"Filings", "News", "Community", "Research"}
+        and (
+            status.get("provider")
+            or status.get("status") != "not_connected"
+        )
+    ]
+    if not cards:
+        return {"text": "Sources unavailable", "level": "failed"}
+    level = max(
+        TOPBAR_STATUS_LEVELS.get(str(card.get("status")), 4)
+        for card in cards
+    )
+
+    def label(card: Mapping[str, Any]) -> str:
+        return str(card.get("provider") or card.get("type") or "")
+    if all(str(card.get("status")) == "connected" for card in cards):
+        text = "Sources up to date · " + ", ".join(label(card) for card in cards)
+    elif all(
+        str(card.get("status"))
+        in {
+            "not_connected",
+            "unavailable",
+            "temporarily_unavailable",
+            "failed",
+        }
+        for card in cards
+    ):
+        text = "Sources unavailable / Not connected"
+    else:
+        text = "Sources: " + " · ".join(
+            f"{label(card)} "
+            f"{TOPBAR_STATUS_WORDS.get(str(card.get('status')), str(card.get('status')))}"
+            for card in cards
+        )
+    level_class = (
+        "failed"
+        if level >= 4 or level <= 1
+        else "stale"
+        if level == 3
+        else "connected"
+    )
+    return {"text": text, "level": level_class}
 
 
 def _filters_from_mapping(values: Mapping[str, Any]) -> FeedFilters:
