@@ -246,6 +246,16 @@ def _enrich_tickers_with_openfigi(
                 raise UkUniverseError(
                     "OpenFIGI mapping response was not a JSON list."
                 )
+            if len(rows) != len(chunk):
+                LOGGER.warning(
+                    "OpenFIGI returned %d rows for %d jobs; "
+                    "skipping this batch",
+                    len(rows),
+                    len(chunk),
+                )
+                if offset + OPENFIGI_BATCH_SIZE < len(pending):
+                    sleeper(OPENFIGI_REQUEST_SLEEP_SECONDS)
+                continue
             for isin, row in zip(chunk, rows):
                 if not isinstance(row, dict):
                     continue

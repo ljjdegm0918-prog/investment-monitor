@@ -486,6 +486,16 @@ class WebRepository:
                         "mapping_status": "unmapped",
                     }
                 else:
+                    if (
+                        existing is not None
+                        and str(existing["mapping_status"]) == "mapped"
+                        and existing["cik"]
+                        and mapping is not None
+                        and str(mapping.get("mapping_status")) != "mapped"
+                    ):
+                        # A weaker candidate (unique-search unverified) must
+                        # never downgrade an already verified mapping.
+                        mapping = None
                     identity = mapping or dict(existing)
                 company_id = self._upsert_company(
                     connection,

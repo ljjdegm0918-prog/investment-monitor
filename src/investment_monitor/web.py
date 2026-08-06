@@ -31,6 +31,7 @@ from .models import MARKET_HK, MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
+from .sources.companies_house.company_cache import number_cache_path
 from .sources.dart import DARTCompanyResolver
 from .sources.hkexnews import HKEXNewsCompanyResolver
 from .sources.sec.client import SECConfigurationError
@@ -172,12 +173,7 @@ class WebApplication:
             )
         except ConnectorUnavailableError:
             self.dart_resolver = DARTCompanyResolver.offline(dart_cache_path)
-        companies_house_cache_path = (
-            project_root
-            / ".cache"
-            / "investment_monitor"
-            / "companies_house_numbers.json"
-        )
+        companies_house_cache_path = number_cache_path()
         try:
             self.companies_house_resolver = (
                 CompaniesHouseCompanyResolver.from_environment(

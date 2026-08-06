@@ -331,6 +331,29 @@ class NaverNewsPaginationTests(unittest.TestCase):
         )
         self.assertEqual(records[0]["title"], "News A")
 
+    def test_empty_message_page_without_table_stops_pagination(self) -> None:
+        pages = {
+            1: make_page([
+                ("008", "100", "News A", "2026.08.05 15:40"),
+            ]),
+            2: (
+                "<html><body><p>뉴스가 없습니다</p></body></html>"
+            ).encode("euc-kr"),
+        }
+        client = self.make_client(pages)
+
+        records = client.fetch_news(
+            "005930",
+            date(2026, 8, 1),
+            date(2026, 8, 5),
+        )
+
+        self.assertEqual(
+            [record["article_id"] for record in records],
+            ["100"],
+        )
+        self.assertEqual(len(client._opener.requested), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

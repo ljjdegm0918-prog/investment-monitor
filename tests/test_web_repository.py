@@ -31,6 +31,17 @@ class FakeResolver:
         return records.get(ticker)
 
 
+class UnverifiedResolver:
+    def resolve(self, ticker: str):
+        return {
+            "ticker": ticker,
+            "name": "EXAMPLE CO PLC",
+            "exchange": "Unverified",
+            "cik": "01234567",
+            "mapping_status": "unverified",
+        }
+
+
 def make_item(
     external_id: str,
     *,
@@ -909,6 +920,32 @@ class WebRepositoryTests(unittest.TestCase):
 
         self.assertEqual(invalid["list_unread"], fallback["list_unread"])
         self.assertEqual(invalid["filings"], fallback["filings"])
+
+    def test_add_batch_does_not_downgrade_existing_mapped(self) -> None:
+        self.repository.set_company_mapping(
+            {
+                "ticker": "SOMECO",
+                "name": "EXAMPLE CO PLC",
+                "exchange": "LSE",
+                "cik": "01234567",
+                "mapping_status": "mapped",
+            },
+            market="uk",
+        )
+
+        result = self.repository.add_companies_batch(
+            "SOMECO",
+            ("watchlist",),
+            UnverifiedResolver(),
+            market="uk",
+        )
+        company = next(
+            row for row in self.repository.companies() if row["ticker"] == "SOMECO"
+        )
+
+        self.assertEqual(len(result["added"]), 1)
+        self.assertEqual(company["mapping_status"], "mapped")
+        self.assertEqual(company["cik"], "01234567")
 
     def test_filings_status_can_be_driven_by_investegate_items(self) -> None:
         repository = WebRepository(

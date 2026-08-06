@@ -119,6 +119,8 @@ class NaverNewsClient:
                 f"?code={normalized}&page={page}"
             )
             body = self._get_html(url, normalized)
+            if _is_empty_news_page(body):
+                break
             rows = _parse_news_rows(body)
             if not rows:
                 break
@@ -239,6 +241,15 @@ def _parse_news_rows(html: str) -> List[Mapping[str, Any]]:
             }
         )
     return records
+
+
+def _is_empty_news_page(html: str) -> bool:
+    """True when Naver's 'no news' message is present.
+
+    The empty page may lack the usual ``type5`` table, so this check must
+    run before table parsing to stop pagination cleanly.
+    """
+    return "뉴스가 없습니다" in html
 
 
 def _parse_news_html(

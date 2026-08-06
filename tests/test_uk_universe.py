@@ -449,6 +449,37 @@ class UkUniverseRefreshTests(unittest.TestCase):
             opener.calls[0].startswith("https://example.test/openfigi")
         )
 
+    def test_openfigi_short_response_skips_batch_with_warning(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+
+            def short_opener(request, timeout=None):
+                return FakeResponse(
+                    json.dumps(
+                        [{"data": [{"ticker": "T0000", "exchCode": "LN"}]}]
+                    )
+                )
+
+            with self.assertLogs(
+                "investment_monitor.uk_universe",
+                level="WARNING",
+            ) as captured:
+                payload = self.refresh_many(
+                    cache_path,
+                    count=3,
+                    opener=short_opener,
+                )
+
+        self.assertTrue(
+            any("skipping this batch" in line for line in captured.output)
+        )
+        self.assertTrue(
+            all(
+                not item.get("ticker")
+                for item in payload["items"]
+            )
+        )
+
     def test_search_matches_name_and_degrades_without_cache(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             cache_path = Path(temporary_directory) / "uk_universe.json"
