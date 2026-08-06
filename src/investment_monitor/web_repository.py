@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 from .config import SourceConfig, UniverseEntry
 from .daily import local_day_bounds, resolve_timezone
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -433,6 +433,10 @@ class WebRepository:
         if market == MARKET_HK:
             tickers = tuple(
                 dict.fromkeys(normalize_hk_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_TW:
+            tickers = tuple(
+                dict.fromkeys(normalize_tw_ticker(ticker) for ticker in tickers)
             )
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
@@ -1702,6 +1706,20 @@ def normalize_hk_ticker(ticker: str) -> str:
     )
     if core.isdigit():
         return core.zfill(5)
+    return cleaned
+
+
+def normalize_tw_ticker(ticker: str) -> str:
+    """Normalize a Taiwan stock code to its canonical four-digit form.
+
+    Accepts 2330, 02330, 2330.TW and 2330.TWO and stores the stable form
+    2330. Non-numeric input is preserved unchanged rather than silently
+    dropped (a non-numeric ``VOD.TW`` stays as typed).
+    """
+    cleaned = str(ticker).strip().upper()
+    core = cleaned.removesuffix(".TW").removesuffix(".TWO")
+    if core.isdigit():
+        return core.lstrip("0").zfill(4)
     return cleaned
 
 

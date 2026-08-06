@@ -117,7 +117,7 @@ async function renderListPage() {
 }
 
 function addCompanyPanel() {
-  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="uk">UK (LSE/AIM)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
+  return `<section class="panel add-panel" id="add-panel" hidden><form class="add-form" id="add-form"><div class="filter-field"><label for="ticker-input">Ticker symbols</label><textarea id="ticker-input" placeholder="AAPL, MSFT NVDA&#10;One or many tickers"></textarea></div><div class="filter-field"><label for="market-select">Market</label><select id="market-select"><option value="us" selected>US</option><option value="cn">CN (A-share)</option><option value="hk">HK</option><option value="kr">KR (Korea)</option><option value="uk">UK (LSE/AIM)</option><option value="tw">TW (Taiwan)</option><option value="unknown">Unknown</option></select><p class="timestamp" id="market-hint" hidden>Non-US tickers cannot be mapped through SEC; they are added as unmapped.</p></div><div class="filter-field"><label>Destination lists</label><div class="checkboxes">${state.bootstrap.lists.map(list => `<label><input type="checkbox" name="destination" value="${list.slug}" ${list.slug === state.view ? "checked" : ""}> ${list.name}</label>`).join("")}</div></div><button class="button primary" type="submit">Resolve and add</button></form><div id="batch-result"></div></section>`;
 }
 
 function companyManagement(companies) {
@@ -177,13 +177,14 @@ function feedItem(item, index) {
 }
 
 function badge(slug) { return `<span class="list-badge ${slug}">${listLabels[slug] || slug}</span>`; }
-function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", uk: "UK", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
+function marketLabel(market) { return ({ us: "US", cn: "CN", hk: "HK", kr: "KR", uk: "UK", tw: "TW", unknown: "Market unknown" })[market] || esc(market || "Unknown"); }
 
 const MARKET_HINTS = {
   cn: "CN tickers cannot be mapped through SEC; they are added as unmapped.",
   hk: "HKEXnews announcement search is connected (not an official HKEX API/IIS feed; page may change without notice). HKEX DI public notice search is available but disabled by default (legacy archive 2003-2017; fragile, not DION/IIS). Yahoo Finance HK news is connected via public RSS (may be loosely related; may break without notice). HK symbols without a stock match are still added as unmapped.",
   kr: "KR tickers map through OpenDART when a corp code is found; otherwise they are added as unmapped.",
   uk: "UK Companies House filings, an Investegate RNS-class public mirror, and Yahoo Finance UK news are connected; not an official LSEG RNS feed. Unique name search is not proof of the listed issuer; unverified mappings need confirmation before Companies House filings are collected.",
+  tw: "Taiwan disclosure and news sources are not connected yet in this phase; TW symbols can be added and tracked as unmapped. Finnhub is US-only and never queried for TW.",
   unknown: "Unknown-market tickers are added as unmapped.",
 };
 

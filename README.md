@@ -169,6 +169,13 @@ against each other by title. Every row stays in the feed with an "Also seen
 on …" label; totals and page sizes are never shrunk. yahoo_hk news pairs on
 ticker + Hong Kong day + normalized title.
 
+### Taiwan sources (TW)
+TW-0 foundation only: `market=tw` companies are tracked with canonical
+four-digit tickers (`2330` / `02330` / `2330.TW` all store as `2330`, board in
+`exchange` when available) and remain unmapped. Disclosure (MOPS) and news
+connectors are not implemented yet; no paid MOPS push is used. Finnhub is
+**US only** and never queried for TW.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
