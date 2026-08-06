@@ -24,6 +24,7 @@ from .config import (
     load_universe,
 )
 from .connectors.base import ConnectorUnavailableError
+from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
 from .models import MARKET_HK, MARKET_KR, MARKET_UK, MARKET_US
 from .pipeline import CollectionEvent
@@ -219,6 +220,8 @@ class WebApplication:
                     name_fallback = kr_universe_name_map()
                 elif market == MARKET_UK:
                     name_fallback = uk_universe_name_map()
+                elif market == MARKET_HK:
+                    name_fallback = hk_universe_name_map()
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),

@@ -101,9 +101,8 @@ sources:
 
 The News source is Finnhub company news. Set `FINNHUB_API_KEY` in `.env` (see
 `.env.example`) to enable it; without a key the source stays Not connected
-and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
-symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
-A-share or HK resolution.
+and is skipped by collection. Finnhub is **US only**; SEC mapping is never
+used to fake A-share or HK resolution.
 
 ### Korea sources (KR)
 - OpenDART (`DART_API_KEY`): official disclosure API; corp_code mapping and
@@ -133,6 +132,16 @@ UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
 (Investegate) or Companies House transaction ids; title fallback is
 same-source only, so Companies House and Investegate are never cross-folded
 by title. News folds on ticker + London day + normalized title.
+
+### Hong Kong sources (HK)
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| hkexnews | filings | none | Unofficial HKEXnews title-search JSON (not an official HKEX API/IIS feed); may change without notice; HKEX stock-id mapped when a match exists, otherwise unmapped |
+| hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; not an IBKR-complete universe (structured products / multi-counter cases may be partial); never enters the feed |
+
+HK tickers are canonical five-digit codes (`700` / `0700` / `00700` /
+`0700.HK` all store as `00700`). The universe cache refreshes with
+`refresh_hk_universe()` (default path `.cache/investment_monitor/hk_universe.json`).
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

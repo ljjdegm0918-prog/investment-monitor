@@ -629,6 +629,67 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(added["cik"], "")
 
+    def test_adding_hk_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "hk_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "source": "hkexnews_activestock",
+                    "refreshed_at": "2026-08-06T00:00:00+00:00",
+                    "entries": {
+                        "00700": {
+                            "ticker": "00700",
+                            "stock_id": "15157",
+                            "name": "TENCENT",
+                            "name_zh": "騰訊控股",
+                            "exchange": "SEHK",
+                            "status": "active",
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"HK_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            class NoOpHkResolver:
+                def resolve(self, ticker):
+                    return None
+
+            application.hkexnews_resolver = NoOpHkResolver()
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "00700",
+                        "lists": ["holdings"],
+                        "market": "hk",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["name"], "TENCENT")
+        self.assertEqual(added["exchange"], "SEHK")
+        self.assertEqual(added["market"], "hk")
+        self.assertEqual(added["mapping_status"], "unmapped")
+
     def test_hk_resolver_is_hkexnews(self) -> None:
         application = WebApplication(
             self.project_root,

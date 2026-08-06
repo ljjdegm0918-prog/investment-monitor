@@ -26,6 +26,12 @@ from .kr_universe import (
     load_kr_universe,
     refresh_kr_universe,
 )
+from .hk_universe import (
+    HkUniverseError,
+    hk_universe_name_map,
+    load_hk_universe,
+    refresh_hk_universe,
+)
 from .uk_universe import (
     UkUniverseError,
     load_uk_universe,
@@ -171,6 +177,7 @@ __all__ = [
     "HkexNewsError",
     "HkexNewsRequestError",
     "HKEXNewsCompanyResolver",
+    "HkUniverseError",
     "InformationRepository",
     "InformationItem",
     "KindClient",
@@ -211,13 +218,16 @@ __all__ = [
     "YahooNewsRequestError",
     "WebRepository",
     "create_default_registry",
+    "hk_universe_name_map",
     "kr_universe_name_map",
+    "load_hk_universe",
     "load_kr_universe",
     "load_uk_universe",
     "load_settings",
     "load_environment_file",
     "load_universe",
     "refresh_kr_universe",
+    "refresh_hk_universe",
     "refresh_uk_universe",
     "generate_html_report",
     "run_configured_collection",

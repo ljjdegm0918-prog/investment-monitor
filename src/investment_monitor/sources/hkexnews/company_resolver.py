@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping, Optional
 
 from .client import HkexNewsClient, normalize_hk_ticker
+
+LOGGER = logging.getLogger(__name__)
 
 
 class HKEXNewsCompanyResolver:
@@ -19,7 +22,15 @@ class HKEXNewsCompanyResolver:
 
     def resolve(self, ticker: str) -> Optional[Mapping[str, Any]]:
         code = normalize_hk_ticker(ticker)
-        stock = self._client.stock_for(code)
+        try:
+            stock = self._client.stock_for(code)
+        except Exception as error:
+            LOGGER.warning(
+                "hkexnews resolver ticker=%s unavailable error=%s",
+                code,
+                error,
+            )
+            return None
         if stock is None:
             return None
         return {

@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
 import unittest
+from urllib.parse import urlsplit
 
 from investment_monitor.sources.hkexnews.client import (
     HkexNewsClient,
@@ -33,24 +34,36 @@ class FakeOpener:
     def __call__(self, request, timeout=None):
         url = request.full_url if hasattr(request, "full_url") else str(request)
         self.calls.append(url)
+        path = urlsplit(url).path
         for marker, payload in self.fixtures.items():
-            if marker in url:
+            if path == marker:
                 return FakeResponse(payload)
         raise AssertionError(f"unexpected url: {url}")
 
 
 def opener_for(*markers: str) -> FakeOpener:
     url_markers = {
-        "activestock_e": "activestock_sehk_e.json",
-        "activestock_c": "activestock_sehk_c.json",
-        "titlesearch_en": "titleSearchServlet.do",
-        "titlesearch_zh": "titleSearchServlet.do",
-        "titlesearch_empty": "titleSearchServlet.do",
+        "activestock_e": "/ncms/script/eds/activestock_sehk_e.json",
+        "activestock_c": "/ncms/script/eds/activestock_sehk_c.json",
+        "inactivestock_e": "/ncms/script/eds/inactivestock_sehk_e.json",
+        "inactivestock_c": "/ncms/script/eds/inactivestock_sehk_c.json",
+        "titlesearch_en": "/search/titleSearchServlet.do",
+        "titlesearch_zh": "/search/titleSearchServlet.do",
+        "titlesearch_empty": "/search/titleSearchServlet.do",
+    }
+    file_names = {
+        "activestock_e": "activestock_e.json",
+        "activestock_c": "activestock_c.json",
+        "inactivestock_e": "inactivestock_sehk_e.json",
+        "inactivestock_c": "inactivestock_sehk_c.json",
+        "titlesearch_en": "titlesearch_en.json",
+        "titlesearch_zh": "titlesearch_zh.json",
+        "titlesearch_empty": "titlesearch_empty.json",
     }
     fixtures = {}
     for marker in markers:
         fixtures[url_markers[marker]] = (
-            FIXTURES / f"{marker}.json"
+            FIXTURES / file_names[marker]
         ).read_bytes()
     return FakeOpener(fixtures)
 
@@ -87,6 +100,40 @@ class HkexNewsClientTests(unittest.TestCase):
         self.assertEqual(stock["stock_id"], "15157")
         self.assertEqual(stock["stock_name"], "TENCENT")
         self.assertEqual(stock["stock_code"], "00700")
+
+    def test_fetch_stock_list_parses_active_and_inactive_lists(self) -> None:
+        opener = opener_for(
+            "activestock_e",
+            "activestock_c",
+            "inactivestock_e",
+            "inactivestock_c",
+        )
+        client = make_client(opener)
+
+        active = client.fetch_stock_list("active", "e")
+        active_zh = client.fetch_stock_list("active", "c")
+        inactive = client.fetch_stock_list("inactive", "e")
+        inactive_zh = client.fetch_stock_list("inactive", "c")
+
+        self.assertEqual(
+            active[0],
+            {
+                "stock_code": "00001",
+                "stock_id": "3749",
+                "stock_name": "CKH HOLDINGS",
+            },
+        )
+        self.assertEqual(active_zh[1]["stock_name"], "騰訊控股")
+        self.assertEqual(inactive[0]["stock_code"], "00010")
+        self.assertEqual(inactive_zh[0]["stock_name"], "恒生銀行")
+
+    def test_fetch_stock_list_rejects_unknown_status_or_lang(self) -> None:
+        client = make_client(opener_for("activestock_e"))
+
+        with self.assertRaises(ValueError):
+            client.fetch_stock_list("bogus", "e")
+        with self.assertRaises(ValueError):
+            client.fetch_stock_list("active", "x")
 
     def test_search_disclosures_parses_rows_into_utc_records(self) -> None:
         opener = opener_for("titlesearch_en")
@@ -136,7 +183,11 @@ class HkexNewsClientTests(unittest.TestCase):
         )
         envelope["result"] = json.loads(envelope["result"])
         opener = FakeOpener(
-            {"titleSearchServlet.do": json.dumps(envelope).encode("utf-8")}
+            {
+                "/search/titleSearchServlet.do": (
+                    json.dumps(envelope).encode("utf-8")
+                )
+            }
         )
         client = make_client(opener)
 
@@ -147,7 +198,11 @@ class HkexNewsClientTests(unittest.TestCase):
 
     def test_invalid_response_raises_data_error_without_dumping_html(self) -> None:
         opener = FakeOpener(
-            {"titleSearchServlet.do": b"<html><body>error page</body></html>"}
+            {
+                "/search/titleSearchServlet.do": (
+                    b"<html><body>error page</body></html>"
+                )
+            }
         )
         client = make_client(opener)
 

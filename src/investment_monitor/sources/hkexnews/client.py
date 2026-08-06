@@ -33,7 +33,6 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://www1.hkexnews.hk"
 TITLE_SEARCH_PATH = "/search/titleSearchServlet.do"
-ACTIVE_STOCK_PATH = "/ncms/script/eds/activestock_sehk_e.json"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 HKT = timezone(timedelta(hours=8))
 
@@ -147,6 +146,29 @@ class HkexNewsClient:
                 return row
         return None
 
+    def fetch_stock_list(
+        self,
+        status: str = "active",
+        lang: str = "e",
+    ) -> List[Mapping[str, Any]]:
+        """Fetch one HKEXnews stock list parsed into normalized rows.
+
+        ``status`` is ``active`` or ``inactive``; ``lang`` is ``e`` or ``c``.
+        Rows carry stock_code / stock_id / stock_name keys.
+        """
+        if status not in ("active", "inactive"):
+            raise ValueError(
+                "HKEXnews stock list status must be active or inactive."
+            )
+        if lang not in ("e", "c"):
+            raise ValueError("HKEXnews stock list lang must be 'e' or 'c'.")
+        url = (
+            f"{self._base_url}/ncms/script/eds/"
+            f"{status}stock_sehk_{lang}.json"
+        )
+        data = self._get_json(url)
+        return _parse_stock_list(data)
+
     def search_disclosures(
         self,
         stock_id: str,
@@ -174,31 +196,7 @@ class HkexNewsClient:
             fetched_at, cached = self._stock_cache
             if now - fetched_at < self._stock_list_ttl_seconds:
                 return cached
-        url = f"{self._base_url}{ACTIVE_STOCK_PATH}"
-        data = self._get_json(url)
-        if not isinstance(data, list):
-            raise HkexNewsDataError(
-                "HKEXnews active stock list was not a JSON array."
-            )
-        rows: List[Mapping[str, Any]] = []
-        for entry in data:
-            if not isinstance(entry, dict):
-                continue
-            code = str(entry.get("c") or "").strip()
-            stock_id = str(entry.get("s") or "").strip()
-            name = str(entry.get("n") or "").strip()
-            if code and stock_id:
-                rows.append(
-                    {
-                        "stock_code": code,
-                        "stock_id": stock_id,
-                        "stock_name": name,
-                    }
-                )
-        if not rows:
-            raise HkexNewsDataError(
-                "HKEXnews active stock list contained no usable entries."
-            )
+        rows = self.fetch_stock_list("active", "e")
         self._stock_cache = (now, rows)
         return rows
 
@@ -313,6 +311,32 @@ def _parse_search_response(
             }
         )
     return records
+
+
+def _parse_stock_list(data: Any) -> List[Mapping[str, Any]]:
+    """Parse an HKEXnews ``i/c/n/s`` stock list into normalized rows."""
+    if not isinstance(data, list):
+        raise HkexNewsDataError("HKEXnews stock list was not a JSON array.")
+    rows: List[Mapping[str, Any]] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        code = str(entry.get("c") or "").strip()
+        stock_id = str(entry.get("s") or "").strip()
+        name = str(entry.get("n") or "").strip()
+        if code and stock_id:
+            rows.append(
+                {
+                    "stock_code": code,
+                    "stock_id": stock_id,
+                    "stock_name": name,
+                }
+            )
+    if not rows:
+        raise HkexNewsDataError(
+            "HKEXnews stock list contained no usable entries."
+        )
+    return rows
 
 
 _DATE_FORMATS = (
