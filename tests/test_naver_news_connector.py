@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
+import re
 import unittest
 
 from investment_monitor import (
@@ -40,6 +41,37 @@ class FakeOpener:
 def fixture_bytes(name: str) -> bytes:
     text = (FIXTURES / name).read_text(encoding="utf-8")
     return text.encode("euc-kr")
+
+
+def make_page(rows) -> bytes:
+    body = "".join(
+        '<tr><td class="title"><a href="/news_read.naver?'
+        f'office_id={office_id}&amp;article_id={article_id}">'
+        f"{title}</a></td><td class=\"info\">YONHAP</td>"
+        f'<td class="date">{date_text}</td></tr>'
+        for office_id, article_id, title, date_text in rows
+    )
+    html = (
+        '<html lang="ko"><body><div class="tb_cont _replaceNewsLink">'
+        '<table class="type5"><thead><tr><th>title</th><th>source</th>'
+        "<th>date</th></tr></thead>"
+        f"<tbody>{body}</tbody></table></div></body></html>"
+    )
+    return html.encode("euc-kr")
+
+
+class MultiPageOpener:
+    def __init__(self, pages) -> None:
+        self.pages = pages
+        self.requested: list = []
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url
+        self.requested.append(url)
+        page = int(re.search(r"page=(\d+)", url).group(1))
+        if page not in self.pages:
+            raise AssertionError(f"unexpected page request: {url}")
+        return FakeResponse(self.pages[page])
 
 
 class NaverNewsClientTests(unittest.TestCase):
@@ -173,6 +205,131 @@ class NaverNewsConnectorTests(unittest.TestCase):
             )
 
         self.assertEqual(len(connector.last_errors), 1)
+
+
+class NaverNewsPaginationTests(unittest.TestCase):
+    def make_client(self, pages, max_pages=10):
+        from investment_monitor.sources.kr_news.naver.client import (
+            NaverNewsClient,
+        )
+
+        return NaverNewsClient(
+            opener=MultiPageOpener(pages),
+            requests_per_second=1000,
+            max_pages=max_pages,
+        )
+
+    def test_paginates_until_oldest_before_start_date(self) -> None:
+        pages = {
+            1: make_page([
+                ("008", "100", "News A", "2026.08.05 15:40"),
+                ("008", "101", "News B", "2026.08.04 09:00"),
+            ]),
+            2: make_page([
+                ("008", "102", "News C", "2026.08.02 10:00"),
+                ("008", "103", "Old", "2026.07.30 09:00"),
+            ]),
+        }
+        client = self.make_client(pages)
+
+        records = client.fetch_news(
+            "005930",
+            date(2026, 8, 1),
+            date(2026, 8, 5),
+        )
+
+        self.assertEqual(
+            [record["article_id"] for record in records],
+            ["100", "101", "102"],
+        )
+        self.assertEqual(len(client._opener.requested), 2)
+
+    def test_page2_in_window_news_is_not_lost(self) -> None:
+        pages = {
+            1: make_page([
+                ("008", "100", "News A", "2026.08.05 15:40"),
+            ]),
+            2: make_page([
+                ("008", "101", "News D", "2026.08.02 10:00"),
+                ("008", "102", "Old", "2026.07.31 09:00"),
+            ]),
+        }
+        client = self.make_client(pages)
+
+        records = client.fetch_news(
+            "005930",
+            date(2026, 8, 1),
+            date(2026, 8, 5),
+        )
+
+        self.assertEqual(
+            [record["article_id"] for record in records],
+            ["100", "101"],
+        )
+
+    def test_empty_page_stops_pagination(self) -> None:
+        pages = {
+            1: make_page([
+                ("008", "100", "News A", "2026.08.05 15:40"),
+                ("008", "101", "News B", "2026.08.04 09:00"),
+            ]),
+            2: fixture_bytes("naver_news_empty.html"),
+        }
+        client = self.make_client(pages)
+
+        records = client.fetch_news(
+            "005930",
+            date(2026, 8, 1),
+            date(2026, 8, 5),
+        )
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(len(client._opener.requested), 2)
+
+    def test_max_pages_caps_requests_and_warns(self) -> None:
+        pages = {
+            1: make_page([("008", "100", "News A", "2026.08.05 15:40")]),
+            2: make_page([("008", "101", "News B", "2026.08.04 09:00")]),
+        }
+        client = self.make_client(pages, max_pages=2)
+
+        with self.assertLogs(
+            "investment_monitor.sources.kr_news.naver.client",
+            level="WARNING",
+        ) as captured:
+            records = client.fetch_news(
+                "005930",
+                date(2026, 8, 1),
+                date(2026, 8, 5),
+            )
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(len(client._opener.requested), 2)
+        self.assertTrue(
+            any("max_pages" in line for line in captured.output)
+        )
+
+    def test_cross_page_duplicate_kept_once(self) -> None:
+        pages = {
+            1: make_page([("008", "100", "News A", "2026.08.05 15:40")]),
+            2: make_page([
+                ("008", "100", "News A again", "2026.08.04 09:00"),
+                ("008", "101", "News B", "2026.08.03 09:00"),
+            ]),
+        }
+        client = self.make_client(pages, max_pages=2)
+
+        records = client.fetch_news(
+            "005930",
+            date(2026, 8, 1),
+            date(2026, 8, 5),
+        )
+
+        self.assertEqual(
+            [record["article_id"] for record in records],
+            ["100", "101"],
+        )
+        self.assertEqual(records[0]["title"], "News A")
 
 
 if __name__ == "__main__":

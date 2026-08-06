@@ -110,8 +110,10 @@ used to fake A-share or HK resolution.
 - KIND (KRX): key-free exchange disclosure page scrape; may break without
   notice.
 - Naver Finance (`naver_news`): key-free stock news scrape; fragile, may be
-  empty from non-KR networks. Hankyung/TheBell are implemented but disabled
-  until their endpoints are reachable.
+  empty from non-KR networks. It paginates until a page is older than the
+  requested start date (hard cap `NAVER_NEWS_MAX_PAGES`, default 10). The
+  list HTML may change without notice. Hankyung/TheBell are implemented but
+  disabled until their endpoints are reachable.
 - Tradeable universe: cached from the OpenDART corpCode listing; ETF/ETN
   coverage is partial. FSC/data.go.kr is skipped because registration
   requires Korean identity.

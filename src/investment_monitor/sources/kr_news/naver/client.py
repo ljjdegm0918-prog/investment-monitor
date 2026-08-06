@@ -26,6 +26,7 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://finance.naver.com"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+DEFAULT_MAX_PAGES = 10
 
 
 class NaverNewsError(Exception):
@@ -53,6 +54,7 @@ class NaverNewsClient:
         opener: Callable[..., Any] = urlopen,
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
+        max_pages: int = DEFAULT_MAX_PAGES,
     ) -> None:
         if not base_url.strip():
             raise ValueError("Naver base URL must not be empty.")
@@ -64,6 +66,8 @@ class NaverNewsClient:
             raise ValueError(
                 "Naver requests_per_second must be greater than zero."
             )
+        if max_pages < 1:
+            raise ValueError("Naver max_pages must be at least 1.")
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
@@ -72,6 +76,7 @@ class NaverNewsClient:
         self._opener = opener
         self._clock = clock
         self._sleeper = sleeper
+        self._max_pages = max_pages
         self._last_request_at: Optional[float] = None
         self._rate_limit_lock = threading.Lock()
 
@@ -85,6 +90,10 @@ class NaverNewsClient:
                 "NAVER_NEWS_REQUESTS_PER_SECOND",
                 2.0,
             ),
+            max_pages=_read_int_environment(
+                "NAVER_NEWS_MAX_PAGES",
+                DEFAULT_MAX_PAGES,
+            ),
         )
 
     def fetch_news(
@@ -93,14 +102,45 @@ class NaverNewsClient:
         start_date: date,
         end_date: date,
     ) -> List[Mapping[str, Any]]:
-        """Fetch stock news rows for one KR code (parser filters dates)."""
+        """Fetch stock news for one KR code, paginating toward start_date.
+
+        Pages are requested in order until one of: a page with no news /
+        zero parseable rows, a page whose oldest row (before start-date
+        truncation) is older than ``start_date``, or ``max_pages`` reached.
+        Rows are window-filtered and deduplicated by (office_id,
+        article_id), keeping the first occurrence.
+        """
         normalized = normalize_kr_ticker(code)
-        url = (
-            f"{self._base_url}/item/news_news.naver"
-            f"?code={normalized}&page=1"
-        )
-        body = self._get_html(url, normalized)
-        return _parse_news_html(body, start_date=start_date, end_date=end_date)
+        collected: List[Mapping[str, Any]] = []
+        seen: set = set()
+        for page in range(1, self._max_pages + 1):
+            url = (
+                f"{self._base_url}/item/news_news.naver"
+                f"?code={normalized}&page={page}"
+            )
+            body = self._get_html(url, normalized)
+            rows = _parse_news_rows(body)
+            if not rows:
+                break
+            oldest = min(row["published"] for row in rows)
+            reached_start = oldest.date() < start_date
+            for row in rows:
+                if start_date <= row["published"].date() <= end_date:
+                    key = (str(row["office_id"]), str(row["article_id"]))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    collected.append(row)
+            if reached_start:
+                break
+            if page == self._max_pages:
+                LOGGER.warning(
+                    "naver_news code=%s reached max_pages=%d; "
+                    "results may be incomplete",
+                    normalized,
+                    self._max_pages,
+                )
+        return collected
 
     def _get_html(self, url: str, code: str) -> str:
         for attempt in range(self._max_retries + 1):
@@ -156,14 +196,8 @@ class NaverNewsClient:
             self._last_request_at = now
 
 
-def _parse_news_html(
-    html: str,
-    *,
-    start_date: date,
-    end_date: date,
-) -> List[Mapping[str, Any]]:
-    if "뉴스가 없습니다" in html:
-        return []
+def _parse_news_rows(html: str) -> List[Mapping[str, Any]]:
+    """Parse every news row on one page without window filtering."""
     if "type5" not in html or "<tbody" not in html:
         raise NaverNewsDataError(
             "Naver stock news page did not contain the expected table."
@@ -195,8 +229,6 @@ def _parse_news_html(
         published = parse_kst_datetime(cells[2] if len(cells) > 2 else "")
         if published is None:
             continue
-        if not start_date <= published.date() <= end_date:
-            continue
         records.append(
             {
                 "office_id": office_id,
@@ -207,6 +239,21 @@ def _parse_news_html(
             }
         )
     return records
+
+
+def _parse_news_html(
+    html: str,
+    *,
+    start_date: date,
+    end_date: date,
+) -> List[Mapping[str, Any]]:
+    if "뉴스가 없습니다" in html:
+        return []
+    return [
+        row
+        for row in _parse_news_rows(html)
+        if start_date <= row["published"].date() <= end_date
+    ]
 
 
 def _anchor_text(row_html: str) -> str:
