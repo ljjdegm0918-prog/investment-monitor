@@ -11,14 +11,22 @@ from .config import (
     ALLOWED_LIST_TYPES,
     CollectionSettings,
     ConfigurationError,
+    SourceConfig,
     UniverseEntry,
     load_environment_file,
     load_settings,
     load_universe,
 )
-from .connectors.base import SourceConnector
+from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.news import (
+    FinnhubClient,
+    FinnhubNewsConnector,
+    FinnhubNewsDataError,
+    FinnhubNewsError,
+    FinnhubNewsRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -28,23 +36,43 @@ from .sources.sec import (
     SECRequestError,
     TickerCollectionFailure,
 )
-from .models import CollectionRequest, InformationItem
+from .models import (
+    ALLOWED_MARKETS,
+    CollectionRequest,
+    InformationItem,
+    MARKET_CN,
+    MARKET_HK,
+    MARKET_UNKNOWN,
+    MARKET_US,
+)
 from .pipeline import CollectionFailure, CollectionPipeline
 from .registry import SourceRegistry, create_default_registry
 from .repository import InformationRepository, SaveResult
 from .report import ReportResult, generate_html_report
 from .sqlite_repository import SQLiteInformationRepository
+from .web_repository import WebRepository
 
 __all__ = [
     "ALLOWED_LIST_TYPES",
+    "ALLOWED_MARKETS",
     "CollectionFailure",
     "CollectionPipeline",
     "CollectionRequest",
     "CollectionSettings",
     "ConfigurationError",
     "ConfiguredCollectionResult",
+    "ConnectorUnavailableError",
+    "FinnhubClient",
+    "FinnhubNewsConnector",
+    "FinnhubNewsDataError",
+    "FinnhubNewsError",
+    "FinnhubNewsRequestError",
     "InformationRepository",
     "InformationItem",
+    "MARKET_CN",
+    "MARKET_HK",
+    "MARKET_UNKNOWN",
+    "MARKET_US",
     "MockConnector",
     "MockCommunityConnector",
     "SECClient",
@@ -53,6 +81,7 @@ __all__ = [
     "SECDataError",
     "SECError",
     "SECRequestError",
+    "SourceConfig",
     "SourceConnector",
     "SourceRegistry",
     "SQLiteInformationRepository",
@@ -60,6 +89,7 @@ __all__ = [
     "TickerCollectionFailure",
     "UniverseEntry",
     "WorkflowResult",
+    "WebRepository",
     "create_default_registry",
     "load_settings",
     "load_environment_file",

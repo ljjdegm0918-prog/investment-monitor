@@ -39,6 +39,7 @@ class MockCommunityConnector:
                 ),
                 collected_at=collected_at,
                 raw_metadata={"generated": True, "engagement": 42},
+                market=request.market_for(ticker),
             )
             for ticker in request.tickers
         ]

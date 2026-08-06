@@ -290,7 +290,12 @@ class WebRepositoryTests(unittest.TestCase):
         production = WebRepository(self.database_path, allowed_sources=("sec", "reddit"))
 
         result = production.query_feed(FeedFilters(information_type="community"))
-        statuses = {record["type"]: record for record in production.source_statuses()}
+        statuses = {
+            record["type"]: record
+            for record in production.source_statuses(
+                now=datetime(2026, 8, 2, 14, tzinfo=timezone.utc)
+            )
+        }
 
         self.assertEqual(result.total, 1)
         self.assertEqual(result.items[0]["source"], "reddit")
@@ -343,6 +348,84 @@ class WebRepositoryTests(unittest.TestCase):
             self.repository.activity(start_date=date(2026, 8, 3))["logs"],
             [],
         )
+
+    def test_secret_settings_are_whitelisted_and_masked(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_secret_keys=("FINNHUB_API_KEY", "SEC_USER_AGENT"),
+        )
+        repository.set_setting(
+            "FINNHUB_API_KEY",
+            "  sk-finnhub-12345678  ",
+        )
+
+        status = repository.setting_status(("FINNHUB_API_KEY",))[
+            "FINNHUB_API_KEY"
+        ]
+        loaded = repository.load_setting_values(("FINNHUB_API_KEY",))
+
+        self.assertTrue(status["configured"])
+        self.assertNotIn("sk-finnhub-12345678", status["hint"])
+        self.assertEqual(status["hint"], "••••5678")
+        self.assertEqual(loaded["FINNHUB_API_KEY"], "sk-finnhub-12345678")
+        self.assertEqual(
+            repository.setting_status(("SEC_USER_AGENT",))["SEC_USER_AGENT"],
+            {"configured": False, "hint": ""},
+        )
+
+    def test_clearing_secret_setting_removes_it(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_secret_keys=("FINNHUB_API_KEY",),
+        )
+        repository.set_setting("FINNHUB_API_KEY", "secret-value")
+        repository.set_setting("FINNHUB_API_KEY", "   ")
+
+        status = repository.setting_status(("FINNHUB_API_KEY",))[
+            "FINNHUB_API_KEY"
+        ]
+
+        self.assertFalse(status["configured"])
+        self.assertEqual(status["hint"], "")
+        self.assertNotIn(
+            "FINNHUB_API_KEY",
+            repository.load_setting_values(("FINNHUB_API_KEY",)),
+        )
+
+    def test_arbitrary_setting_key_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.repository.set_setting("AWS_SECRET_ACCESS_KEY", "x")
+
+    def test_extra_env_settings_are_validated_and_stored(self) -> None:
+        self.repository.set_setting("extra_env:CUSTOM_VAR", "value-1")
+
+        stored = self.repository.load_extra_env()
+        status = self.repository.setting_status(("extra_env:CUSTOM_VAR",))[
+            "extra_env:CUSTOM_VAR"
+        ]
+
+        self.assertEqual(stored, (("CUSTOM_VAR", "value-1"),))
+        self.assertTrue(status["configured"])
+        self.assertEqual(status["hint"], "••••ue-1")
+
+        self.repository.set_setting("extra_env:CUSTOM_VAR", "")
+        self.assertEqual(self.repository.load_extra_env(), ())
+
+    def test_extra_env_rejects_invalid_and_dangerous_names(self) -> None:
+        for bad_name in (
+            "1BAD",
+            "HAS-DASH",
+            "PATH",
+            "PYTHONPATH",
+            "HOME",
+            "USERPROFILE",
+            "TEMP",
+            "LD_LIBRARY_PATH",
+            "SSL_CERT_FILE",
+            "PYTHONHOME",
+        ):
+            with self.assertRaises(ValueError, msg=bad_name):
+                self.repository.set_setting(f"extra_env:{bad_name}", "x")
 
 
 if __name__ == "__main__":

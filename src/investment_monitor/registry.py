@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Iterable, List
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
-from .connectors.base import SourceConnector
+from .connectors.base import (
+    ConnectorUnavailableError,
+    SecretField,
+    SourceConnector,
+)
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
@@ -17,25 +22,74 @@ class SourceRegistry:
 
     def __init__(self) -> None:
         self._factories: Dict[str, ConnectorFactory] = {}
+        self._secret_fields: Dict[str, Tuple[SecretField, ...]] = {}
+        self._configuration_errors: Dict[str, Callable[[], Optional[str]]] = {}
 
-    def register(self, name: str, factory: ConnectorFactory) -> None:
-        """Register a connector factory under a unique configuration name."""
+    def register(
+        self,
+        name: str,
+        factory: ConnectorFactory,
+        secret_fields: Iterable[SecretField] = (),
+        configuration_error: Optional[Callable[[], Optional[str]]] = None,
+    ) -> None:
+        """Register a connector factory and its credential declarations."""
         if not name:
             raise ValueError("Connector name must not be empty.")
         if name in self._factories:
             raise ValueError(f"Connector already registered: {name}")
         self._factories[name] = factory
+        self._secret_fields[name] = tuple(secret_fields)
+        if configuration_error is not None:
+            self._configuration_errors[name] = configuration_error
 
-    def load_enabled(self, names: Iterable[str]) -> List[SourceConnector]:
-        """Create only the connectors named in application configuration."""
+    @property
+    def registered_names(self) -> Tuple[str, ...]:
+        """Return the names of all registered connector factories."""
+        return tuple(sorted(self._factories))
+
+    def load_enabled(
+        self,
+        names: Iterable[str],
+        missing: Optional[List[str]] = None,
+        unavailable: Optional[List[str]] = None,
+    ) -> List[SourceConnector]:
+        """Create connectors named in configuration; skip unimplemented names.
+
+        A source declared in configuration but not yet implemented (for
+        example news or research before their P1 connectors exist) is
+        collected into ``missing`` when provided instead of aborting the
+        whole pipeline. A source whose factory cannot build because of
+        missing configuration (for example no API key) is collected into
+        ``unavailable``.
+        """
         connectors: List[SourceConnector] = []
         for name in names:
+            factory = self._factories.get(name)
+            if factory is None:
+                if missing is not None:
+                    missing.append(name)
+                continue
             try:
-                factory = self._factories[name]
-            except KeyError as error:
-                raise KeyError(f"Unknown connector: {name}") from error
-            connectors.append(factory())
+                connectors.append(factory())
+            except ConnectorUnavailableError:
+                if unavailable is not None:
+                    unavailable.append(name)
         return connectors
+
+    def factory_for(self, name: str) -> Optional[ConnectorFactory]:
+        """Return the factory registered under ``name``, if any."""
+        return self._factories.get(name)
+
+    def secret_fields_for(self, name: str) -> Tuple[SecretField, ...]:
+        """Return the credential fields declared by a registered source."""
+        return self._secret_fields.get(name, ())
+
+    def configuration_error_for(self, name: str) -> Optional[str]:
+        """Return the declared configuration problem for a source, if any."""
+        probe = self._configuration_errors.get(name)
+        if probe is None:
+            return None
+        return probe()
 
 
 def create_default_registry() -> SourceRegistry:
@@ -43,5 +97,16 @@ def create_default_registry() -> SourceRegistry:
     registry = SourceRegistry()
     registry.register(MockConnector.name, MockConnector)
     registry.register(MockCommunityConnector.name, MockCommunityConnector)
-    registry.register(SECConnector.name, SECConnector.from_environment)
+    registry.register(
+        FinnhubNewsConnector.name,
+        FinnhubNewsConnector,
+        secret_fields=FinnhubNewsConnector.secret_fields,
+        configuration_error=FinnhubNewsConnector.configuration_error,
+    )
+    registry.register(
+        SECConnector.name,
+        SECConnector.from_environment,
+        secret_fields=SECConnector.secret_fields,
+        configuration_error=SECConnector.configuration_error,
+    )
     return registry
