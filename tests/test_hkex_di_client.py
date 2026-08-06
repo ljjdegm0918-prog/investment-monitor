@@ -108,16 +108,17 @@ class HkexDiClientTests(unittest.TestCase):
         self.assertEqual(form["cmdSearch"], ["Search"])
         self.assertEqual(form["__VIEWSTATE"], ["AAABBBCCC"])
 
-    def test_out_of_archive_window_raises_data_error(self) -> None:
+    def test_out_of_archive_window_skips_silently(self) -> None:
         opener = FakeOpener([])
         client = self.make_client(opener)
 
-        with self.assertRaisesRegex(HkexDiDataError, "2003"):
-            client.search_disclosures(
-                "00700",
-                date(2026, 8, 1),
-                date(2026, 8, 6),
-            )
+        records = client.search_disclosures(
+            "00700",
+            date(2026, 8, 1),
+            date(2026, 8, 6),
+        )
+
+        self.assertEqual(records, [])
         self.assertEqual(opener.requested, [])
 
     def test_summary_only_page_raises_data_error_not_fake_success(self) -> None:

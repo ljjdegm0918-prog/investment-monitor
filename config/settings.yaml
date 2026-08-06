@@ -27,7 +27,7 @@ sources:
   - name: hkex_di
     label: Disclosure of Interests (HKEX)
     source_type: filings
-    enabled: true          # key-free public DI notice search; legacy archive 2003-2017, fragile ASP.NET page
+    enabled: false         # default off: legacy archive 2003-2017 only; enable explicitly for historical backfill
   - name: news
     label: News
     source_type: news

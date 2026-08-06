@@ -151,12 +151,15 @@ class HkexDiConnectorTests(unittest.TestCase):
         self.assertIsNotNone(registry.factory_for("hkex_di"))
         self.assertEqual(registry.secret_fields_for("hkex_di"), ())
 
-    def test_settings_loads_hkex_di_enabled(self) -> None:
+    def test_settings_loads_hkex_di_disabled_by_default(self) -> None:
         from investment_monitor.config import load_settings
 
         settings = load_settings(Path("config/settings.yaml"))
 
-        self.assertIn("hkex_di", settings.enabled_sources)
+        self.assertNotIn("hkex_di", settings.enabled_sources)
+        self.assertTrue(
+            any(source.name == "hkex_di" for source in settings.sources)
+        )
 
 
 if __name__ == "__main__":

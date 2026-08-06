@@ -15,10 +15,11 @@ Recon (verified live 2026-08-06, stdlib only):
   fail server-side with an Error.htm redirect; notice-level detail rows sit
   behind JS/session state (Akamai Bot Manager cookies ``bm_s``/``bm_so`` are
   set). ``https://sdinotice.hkex.com.hk/`` requires login (DION issuer side).
-- Conclusion: current DI notices are BLOCKED_LIVE from this network. This
-  client implements the archived public flow and fails loudly
-  (``HkexDiDataError``) for out-of-range windows or summary-only results
-  instead of faking success. Parsing is locked by fixtures.
+- Conclusion: current DI notices are BLOCKED_LIVE from this network. The
+  connector is disabled by default; when enabled, out-of-archive windows are
+  skipped silently (log only), while real parse failures still raise
+  ``HkexDiDataError`` instead of faking success. Parsing is locked by
+  fixtures.
 """
 
 from __future__ import annotations
@@ -128,10 +129,12 @@ class HkexDiClient:
         """Search archived DI notices for one HK stock and date range."""
         code = normalize_hk_ticker(stock_code)
         if end_date < ARCHIVE_START or start_date > ARCHIVE_END:
-            raise HkexDiDataError(
-                "HKEX DI public search covers 2003-04-01 to 2017-10-02 "
-                "(archive; DION current notices are not public here)."
+            LOGGER.info(
+                "hkex_di ticker=%s window_out_of_archive skipped "
+                "(public search covers 2003-04-01 to 2017-10-02)",
+                code,
             )
+            return []
         search_url = (
             f"{self._base_url}/NSSrchCorp.aspx?lang={quote(lang)}"
         )
