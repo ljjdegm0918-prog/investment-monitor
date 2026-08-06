@@ -12,6 +12,7 @@ from investment_monitor import (
     WebRepository,
     load_uk_universe,
     refresh_uk_universe,
+    search_uk_universe,
     uk_universe_name_map,
 )
 
@@ -53,6 +54,103 @@ def make_zip() -> bytes:
             make_xml(),
         )
     return buffer.getvalue()
+
+
+def make_xml_many(count: int) -> bytes:
+    ref = (
+        "<FinInstrmGnlAttrbts><Id>{isin}</Id>"
+        "<FullNm>{name}</FullNm><ShrtNm>{short}</ShrtNm>"
+        "<ClssfctnTp>{cfi}</ClssfctnTp><NtnlCcy>GBP</NtnlCcy>"
+        "</FinInstrmGnlAttrbts><Issr>213800TEST0000000000</Issr>"
+        "<TechAttrbts><RlvntCmptntAuthrty>GB</RlvntCmptntAuthrty>"
+        "<RlvntTradgVn>{venue}</RlvntTradgVn></TechAttrbts>"
+    )
+    records = [
+        (
+            f"GB00TEST{i:06d}",
+            f"COMPANY {i}",
+            f"COMPANY {i}",
+            "ESVUFR",
+            "XLON",
+        )
+        for i in range(count)
+    ]
+    body = "".join(
+        f"<RefData>{ref.format(isin=i, name=n, short=s, cfi=c, venue=v)}</RefData>"
+        for i, n, s, c, v in records
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<BizData xmlns="urn:iso:std:iso:20022:tech:xsd:head.003.001.01">'
+        '<Pyld><Document xmlns="urn:iso:std:iso:20022:tech:xsd:auth.017.001.02">'
+        "<FinInstrmRptgRefDataRpt><RptHdr/></FinInstrmRptgRefDataRpt>"
+        + body
+        + "</Document></Pyld></BizData>"
+    ).encode("utf-8")
+
+
+def make_zip_many(count: int) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "FULINS_TEST_20260801_01of01.xml",
+            make_xml_many(count),
+        )
+    return buffer.getvalue()
+
+
+def fake_fulins_json(url: str):
+    return {
+        "hits": {
+            "hits": [
+                {
+                    "_source": {
+                        "file_type": "FULINS",
+                        "publication_date": "2026-08-01",
+                        "file_name": "FULINS_TEST_20260801_01of01.zip",
+                        "download_link": (
+                            "https://data.fca.org.uk/artefacts/FIRDS/"
+                            "FULINS_TEST_20260801_01of01.zip"
+                        ),
+                    }
+                }
+            ]
+        }
+    }
+
+
+class FakeResponse:
+    def __init__(self, payload) -> None:
+        self._body = (
+            payload.encode("utf-8")
+            if isinstance(payload, str)
+            else payload
+        )
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+
+class FakeOpenFigiOpener:
+    def __init__(self, tickers_by_isin) -> None:
+        self.tickers_by_isin = tickers_by_isin
+        self.calls: list = []
+
+    def __call__(self, request, timeout=None):
+        self.calls.append(request.full_url)
+        body = json.loads(request.data.decode("utf-8"))
+        rows = []
+        for entry in body:
+            isin = entry["idValue"]
+            ticker = self.tickers_by_isin.get(isin)
+            rows.append({"ticker": ticker} if ticker else {"error": "not found"})
+        return FakeResponse(json.dumps(rows))
 
 
 class UkUniverseParseTests(unittest.TestCase):
@@ -123,7 +221,10 @@ class UkUniverseRefreshTests(unittest.TestCase):
             ), patch(
                 "investment_monitor.uk_universe.time.sleep"
             ):
-                payload = refresh_uk_universe(path=cache_path)
+                payload = refresh_uk_universe(
+                    path=cache_path,
+                    enrich_tickers=False,
+                )
                 loaded = load_uk_universe(cache_path)
                 name_map = uk_universe_name_map(cache_path)
 
@@ -178,6 +279,103 @@ class UkUniverseRefreshTests(unittest.TestCase):
         self.assertEqual(added["name"], "VODAFONE GROUP PUBLIC LIMITED COMPANY")
         self.assertEqual(added["exchange"], "LSE")
         self.assertEqual(added["mapping_status"], "unmapped")
+
+    def refresh_many(self, cache_path, count=300, opener=None, **kwargs):
+        import investment_monitor.uk_universe as uk
+
+        with patch.object(
+            uk,
+            "_get_json",
+            side_effect=fake_fulins_json,
+        ), patch.object(
+            uk,
+            "_download_bytes",
+            return_value=make_zip_many(count),
+        ), patch("investment_monitor.uk_universe.time.sleep"):
+            return refresh_uk_universe(
+                path=cache_path,
+                openfigi_opener=opener,
+                **kwargs,
+            )
+
+    def test_openfigi_enrichment_adds_hundreds_of_tickers(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            tickers_by_isin = {
+                f"GB00TEST{i:06d}": f"T{i:04d}"
+                for i in range(300)
+            }
+            opener = FakeOpenFigiOpener(tickers_by_isin)
+
+            payload = self.refresh_many(
+                cache_path,
+                count=300,
+                opener=opener,
+            )
+            name_map = uk_universe_name_map(cache_path)
+            results = search_uk_universe("T0042", cache_path)
+
+        ticked = [
+            item
+            for item in payload["items"]
+            if item.get("ticker")
+        ]
+        self.assertGreaterEqual(len(ticked), 300)
+        self.assertGreater(len(ticked), 9)
+        self.assertEqual(
+            ticked[42]["ticker_source"],
+            "openfigi",
+        )
+        self.assertIn("T0042", name_map)
+        self.assertEqual(results[0]["ticker"], "T0042")
+
+    def test_openfigi_failure_keeps_previous_tickers(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            tickers_by_isin = {
+                f"GB00TEST{i:06d}": f"T{i:04d}"
+                for i in range(300)
+            }
+            self.refresh_many(
+                cache_path,
+                count=300,
+                opener=FakeOpenFigiOpener(tickers_by_isin),
+            )
+
+            def failing_opener(request, timeout=None):
+                raise OSError("OpenFIGI blocked")
+
+            payload = self.refresh_many(
+                cache_path,
+                count=300,
+                opener=failing_opener,
+            )
+
+        by_isin = {
+            item["isin"]: item
+            for item in payload["items"]
+        }
+        self.assertEqual(by_isin["GB00TEST000042"]["ticker"], "T0042")
+
+    def test_search_matches_name_and_degrades_without_cache(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            cache_path = Path(temporary_directory) / "uk_universe.json"
+            missing = Path(temporary_directory) / "missing.json"
+
+            self.refresh_many(
+                cache_path,
+                count=300,
+                opener=FakeOpenFigiOpener(
+                    {f"GB00TEST{i:06d}": f"T{i:04d}" for i in range(300)}
+                ),
+            )
+            by_name = search_uk_universe("COMPANY 42", cache_path)
+            empty = search_uk_universe("zzz-nope", cache_path)
+            no_cache = search_uk_universe("VOD", missing)
+
+        self.assertEqual(by_name[0]["ticker"], "T0042")
+        self.assertEqual(empty, [])
+        self.assertEqual(no_cache, [])
 
 
 if __name__ == "__main__":

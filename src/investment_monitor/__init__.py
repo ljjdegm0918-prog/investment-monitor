@@ -36,6 +36,7 @@ from .uk_universe import (
     UkUniverseError,
     load_uk_universe,
     refresh_uk_universe,
+    search_uk_universe,
     uk_universe_name_map,
 )
 from .sources.companies_house import (
@@ -253,6 +254,7 @@ __all__ = [
     "refresh_kr_universe",
     "refresh_hk_universe",
     "refresh_uk_universe",
+    "search_uk_universe",
     "generate_html_report",
     "run_configured_collection",
     "run_ticker_collection",

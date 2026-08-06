@@ -127,7 +127,7 @@ used to fake A-share or HK resolution.
 |---|---|---|---|
 | companies_house | filings | `COMPANIES_HOUSE_API_KEY` — Test app keys authenticate only against `https://api-sandbox.company-information.service.gov.uk`; Live keys use the default live API | Statutory company filings (accounts, officers), **not RNS** |
 | investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
-| uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
+| uk_universe / FIRDS | breadth cache | none | ISIN-keyed breadth from FIRDS, enriched with tickers via the free OpenFIGI mapping API plus a blue-chip seed; not an IBKR-complete LSE/AIM universe; never enters the feed |
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
 | Finnhub | news | existing | **US only** — never queried for UK |
 

@@ -2,10 +2,12 @@
 
 FIRDS is a regulatory instrument-reference dataset (ISIN / LEI / trading
 venues / names); it does NOT carry ticker mnemonics. This module keeps an
-ISIN-keyed local cache, and a small verified ticker->ISIN seed gives ticker
-keys for well-known blue chips. It never flows into information_items.
-The full daily FULINS set is large (many split ZIP/XML files), so refresh is
-opt-in and supports ``max_parts`` for incremental validation.
+ISIN-keyed local cache and enriches UK equities with tickers via the free
+OpenFIGI mapping API (anonymous, key-free at low volume), plus a small
+verified ticker->ISIN seed for blue chips. It never flows into
+information_items. The full daily FULINS set is large (many split ZIP/XML
+files), so refresh is opt-in and supports ``max_parts`` for incremental
+validation.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ElementTree
@@ -30,6 +32,9 @@ FIRDS_LIST_URL = "https://api.data.fca.org.uk/fca_data_firds_files"
 FIRDS_FILE_PREFIX = "https://data.fca.org.uk/artefacts/FIRDS/"
 UK_VENUE_MICS = frozenset({"XLON"})
 REQUEST_SLEEP_SECONDS = 1.0
+OPENFIGI_MAPPING_URL = "https://api.openfigi.com/v3/mapping"
+OPENFIGI_BATCH_SIZE = 100
+OPENFIGI_REQUEST_SLEEP_SECONDS = 1.0
 
 # Best-effort public ISINs for common UK blue chips. Only used to give
 # ticker keys to FIRDS ISIN records; a wrong ISIN simply yields no ticker.
@@ -67,8 +72,18 @@ def refresh_uk_universe(
     path: Optional[Path] = None,
     source: Optional[str] = None,
     max_parts: Optional[int] = None,
+    enrich_tickers: Optional[bool] = None,
+    openfigi_opener: Optional[Callable[..., Any]] = None,
+    openfigi_sleeper: Optional[Callable[[float], None]] = None,
 ) -> Mapping[str, Any]:
-    """Refresh the UK universe from the latest FCA FIRDS FULINS set."""
+    """Refresh the UK universe from FIRDS, then enrich tickers via OpenFIGI.
+
+    The free OpenFIGI mapping API (anonymous, key-free at low volume) maps
+    ISINs to tickers for UK equities. Enrichment is best-effort: a failure
+    keeps any previously cached ticker mapping and never breaks the FIRDS
+    cache. Set ``enrich_tickers=False`` or ``UK_UNIVERSE_ENRICH_TICKERS=false``
+    to skip the network enrichment step.
+    """
     cache_path = _cache_path(path)
     source_name = source or os.environ.get("UK_UNIVERSE_SOURCE", "firds")
     if source_name != "firds":
@@ -108,6 +123,41 @@ def refresh_uk_universe(
         entries.values(),
         key=lambda item: (str(item.get("ticker") or ""), str(item["isin"])),
     )
+    if enrich_tickers is None:
+        raw_enrich = os.environ.get(
+            "UK_UNIVERSE_ENRICH_TICKERS",
+            "true",
+        ).strip().lower()
+        enrich_tickers = raw_enrich not in {"0", "false", "no", "off"}
+    if enrich_tickers:
+        previous = load_uk_universe(cache_path)
+        previous_by_isin = {
+            str(item.get("isin") or ""): item
+            for item in (previous or {}).get("items") or []
+        }
+        mapping = _enrich_tickers_with_openfigi(
+            items,
+            opener=openfigi_opener or urlopen,
+            sleeper=openfigi_sleeper or time.sleep,
+        )
+        for item in items:
+            isin = str(item.get("isin") or "")
+            if str(item.get("ticker") or ""):
+                item["ticker_source"] = str(
+                    item.get("ticker_source") or "seed"
+                )
+                continue
+            new_ticker = mapping.get(isin)
+            old_item = previous_by_isin.get(isin) or {}
+            if not new_ticker:
+                new_ticker = str(old_item.get("ticker") or "")
+            if new_ticker:
+                item["ticker"] = new_ticker
+                item["ticker_source"] = (
+                    "openfigi"
+                    if isin in mapping
+                    else str(old_item.get("ticker_source") or "previous")
+                )
     payload = {
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": "firds",
@@ -121,6 +171,89 @@ def refresh_uk_universe(
         json.dump(payload, cache_file, ensure_ascii=False)
     temporary_path.replace(cache_path)
     return payload
+
+
+def search_uk_universe(
+    query: str,
+    path: Optional[Path] = None,
+) -> List[Mapping[str, Any]]:
+    """Search the cached UK universe by ticker or name substring."""
+    payload = load_uk_universe(path)
+    if not payload:
+        return []
+    needle = str(query or "").strip().lower()
+    if not needle:
+        return []
+    matches: List[Mapping[str, Any]] = []
+    for item in payload.get("items") or []:
+        haystack = (
+            f"{item.get('ticker') or ''} {item.get('name') or ''}"
+        ).lower()
+        if needle in haystack:
+            matches.append(dict(item))
+        if len(matches) >= 50:
+            break
+    return matches
+
+
+def _enrich_tickers_with_openfigi(
+    items: List[Mapping[str, Any]],
+    *,
+    opener: Callable[..., Any],
+    sleeper: Callable[[float], None],
+) -> Dict[str, str]:
+    """Map ISIN -> ticker for ticker-less UK equities via OpenFIGI.
+
+    Batches of 100 ISINs are posted to the free mapping endpoint with a
+    polite sleep between batches. Any batch failure logs a warning and stops
+    enrichment without raising; the caller keeps previous ticker data.
+    """
+    pending = [
+        str(item["isin"])
+        for item in items
+        if str(item.get("instrument_kind") or "") == "equity"
+        and str(item.get("ticker") or "") == ""
+        and str(item.get("isin") or "")
+    ]
+    mapping: Dict[str, str] = {}
+    for offset in range(0, len(pending), OPENFIGI_BATCH_SIZE):
+        chunk = pending[offset : offset + OPENFIGI_BATCH_SIZE]
+        body = json.dumps(
+            [{"idType": "ISIN", "idValue": isin} for isin in chunk]
+        ).encode("utf-8")
+        request = Request(
+            OPENFIGI_MAPPING_URL,
+            data=body,
+            headers={
+                "User-Agent": "InvestmentMonitor/0.1 (internal workspace)",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with opener(request, timeout=30) as response:
+                raw = response.read()
+            rows = json.loads(raw.decode("utf-8", errors="replace"))
+            if not isinstance(rows, list):
+                raise UkUniverseError(
+                    "OpenFIGI mapping response was not a JSON list."
+                )
+            for isin, row in zip(chunk, rows):
+                if isinstance(row, dict) and row.get("ticker"):
+                    ticker = str(row["ticker"]).strip()
+                    if ticker:
+                        mapping[isin] = ticker
+        except Exception as error:
+            LOGGER.warning(
+                "OpenFIGI ticker enrichment failed at offset %d: %s",
+                offset,
+                error,
+            )
+            break
+        if offset + OPENFIGI_BATCH_SIZE < len(pending):
+            sleeper(OPENFIGI_REQUEST_SLEEP_SECONDS)
+    return mapping
 
 
 def uk_universe_name_map(
@@ -224,6 +357,7 @@ def _parse_xml_records(xml_stream: Any) -> tuple:
         records.append(
             {
                 "ticker": ticker,
+                "ticker_source": "seed" if ticker else "",
                 "name": record["name"],
                 "isin": isin,
                 "lei": record["lei"],
