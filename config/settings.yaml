@@ -48,3 +48,7 @@ sources:
     label: Research
     source_type: research
     enabled: false
+  - name: tdnet_public_web
+    label: TDnet (JPX public page)
+    source_type: regulatory_disclosure
+    enabled: false          # requires explicit robots/JPX permission confirmation

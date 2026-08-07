@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import json
+from hashlib import sha256
 from pathlib import Path
 import sqlite3
 from typing import Iterable, Iterator, List, Optional, Tuple
@@ -53,6 +54,21 @@ def ensure_information_item_schema(connection: sqlite3.Connection) -> None:
             ON information_items(published_at);
         CREATE INDEX IF NOT EXISTS idx_item_tickers_ticker
             ON information_item_tickers(ticker);
+
+        CREATE TABLE IF NOT EXISTS information_item_versions (
+            id INTEGER PRIMARY KEY,
+            source TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            snapshot_hash TEXT NOT NULL,
+            observed_at TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            provenance_url TEXT NOT NULL,
+            revision_status TEXT NOT NULL,
+            UNIQUE (source, external_id, snapshot_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_information_item_versions_identity
+            ON information_item_versions(source, external_id, observed_at);
         """
     )
 
@@ -134,6 +150,8 @@ class SQLiteInformationRepository:
         updated = 0
         with self._connect() as connection:
             for item in items:
+                if item.source == "tdnet_public_web":
+                    _save_immutable_version(connection, item)
                 existing_row = connection.execute(
                     """
                     SELECT id
@@ -289,6 +307,45 @@ class SQLiteInformationRepository:
             ).fetchone()
         return int(row["item_count"])
 
+    def query_published_between(
+        self,
+        start_at: datetime,
+        end_at: datetime,
+        *,
+        ticker: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> List[InformationItem]:
+        """Query the exact half-open UTC interval [start_at, end_at)."""
+        if start_at.tzinfo is None or end_at.tzinfo is None:
+            raise ValueError("start_at and end_at must be timezone-aware.")
+        start_utc = start_at.astimezone(timezone.utc)
+        end_utc = end_at.astimezone(timezone.utc)
+        if start_utc >= end_utc:
+            raise ValueError("start_at must be before end_at.")
+        conditions = [
+            "julianday(published_at) >= julianday(?)",
+            "julianday(published_at) < julianday(?)",
+        ]
+        parameters: List[str] = [start_utc.isoformat(), end_utc.isoformat()]
+        if ticker is not None:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM information_item_tickers matching_ticker "
+                "WHERE matching_ticker.item_id = information_items.id "
+                "AND matching_ticker.ticker = ?)"
+            )
+            parameters.append(ticker.strip().upper())
+        if source is not None:
+            conditions.append("source = ?")
+            parameters.append(source)
+        sql = f"""
+            SELECT * FROM information_items
+            WHERE {' AND '.join(conditions)}
+            ORDER BY julianday(published_at) ASC, source ASC, external_id ASC
+        """
+        with self._connect() as connection:
+            rows = connection.execute(sql, parameters).fetchall()
+            return [self._row_to_item(connection, row) for row in rows]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             ensure_information_item_schema(connection)
@@ -362,4 +419,55 @@ def _item_values(item: InformationItem) -> Tuple[str, ...]:
         item.market,
         item.summary,
         item.effective_at.isoformat() if item.effective_at is not None else None,
+    )
+
+
+def _save_immutable_version(
+    connection: sqlite3.Connection,
+    item: InformationItem,
+) -> None:
+    """Keep every distinct TDnet observation without rewriting prior payloads."""
+    payload = {
+        "source": item.source,
+        "source_type": item.source_type,
+        "external_id": item.external_id,
+        "tickers": list(item.tickers),
+        "issuer": item.issuer,
+        "published_at": item.published_at.isoformat(),
+        "title": item.title,
+        "document_type": item.document_type,
+        "url": item.url,
+        "collected_at": item.collected_at.isoformat(),
+        "raw_metadata": dict(item.raw_metadata),
+        "market": item.market,
+        "summary": item.summary,
+        "effective_at": (
+            item.effective_at.isoformat() if item.effective_at else None
+        ),
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    raw_hash = str(item.raw_metadata.get("raw_content_hash") or "")
+    snapshot_hash = raw_hash or sha256(serialized.encode("utf-8")).hexdigest()
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO information_item_versions (
+            source, external_id, snapshot_hash, observed_at, payload,
+            provenance_url, revision_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            item.source,
+            item.external_id,
+            snapshot_hash,
+            item.collected_at.isoformat(),
+            serialized,
+            str(
+                item.raw_metadata.get("official_source_url")
+                or item.url
+            ),
+            str(
+                item.raw_metadata.get("revision_semantics")
+                or "pending_unresolved"
+            ),
+        ),
     )

@@ -23,6 +23,7 @@ from .sources.kr_news import (
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.tdnet import TDnetConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -137,4 +138,10 @@ def create_default_registry() -> SourceRegistry:
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(
+        TDnetConnector.name,
+        TDnetConnector.from_environment,
+        secret_fields=TDnetConnector.secret_fields,
+        configuration_error=TDnetConnector.configuration_error,
+    )
     return registry

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Iterable, List, Optional, Protocol, runtime_checkable
 
 from .models import InformationItem
@@ -43,3 +43,13 @@ class InformationRepository(Protocol):
         """Find stored items using optional inclusive filters."""
         ...
 
+    def query_published_between(
+        self,
+        start_at: datetime,
+        end_at: datetime,
+        *,
+        ticker: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> List[InformationItem]:
+        """Find items in the half-open UTC interval [start_at, end_at)."""
+        ...
