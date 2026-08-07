@@ -110,6 +110,8 @@ class FeedFilters:
     form_type: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
     read_state: str = "all"
     amendment: str = "all"
     query: Optional[str] = None
@@ -123,6 +125,13 @@ class FeedFilters:
             raise ValueError("page_size must be between 1 and 100")
         if self.start_date and self.end_date and self.start_date > self.end_date:
             raise ValueError("start_date must not be after end_date")
+        if bool(self.start_at) != bool(self.end_at):
+            raise ValueError("start_at and end_at must be supplied together")
+        if self.start_at and self.end_at:
+            if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
+                raise ValueError("start_at and end_at must be timezone-aware")
+            if self.start_at >= self.end_at:
+                raise ValueError("start_at must be before end_at")
         if self.read_state not in {"all", "read", "unread"}:
             raise ValueError("read_state must be all, read, or unread")
         if self.amendment not in {"all", "yes", "no"}:
@@ -1249,7 +1258,10 @@ class WebRepository:
             conditions.append("c.ticker = ?")
             parameters.append(filters.ticker.upper())
         if filters.information_type == "filings":
-            conditions.append("i.source_type = 'regulatory_filing'")
+            conditions.append(
+                "i.source_type IN ('regulatory_filing', "
+                "'regulatory_disclosure')"
+            )
         elif filters.information_type == "news":
             conditions.append("i.source_type = 'news'")
         elif filters.information_type == "community":
@@ -1267,6 +1279,12 @@ class WebRepository:
             _, end_utc = _eastern_day_bounds(filters.end_date)
             conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
             parameters.append(end_utc.isoformat())
+        if filters.start_at:
+            conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
+            parameters.append(filters.start_at.astimezone(timezone.utc).isoformat())
+        if filters.end_at:
+            conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
+            parameters.append(filters.end_at.astimezone(timezone.utc).isoformat())
         if filters.read_state == "read":
             conditions.append("COALESCE(r.is_read, 0) = 1")
         elif filters.read_state == "unread":
