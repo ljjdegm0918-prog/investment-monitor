@@ -203,17 +203,21 @@ class WebRepository:
             connection.executescript(sql)
             ensure_information_item_schema(connection)
             self._ensure_companies_multi_market(connection)
-            connection.executemany(
-                """
-                INSERT INTO system_lists (slug, name, position, is_fixed)
-                VALUES (?, ?, ?, 1)
-                ON CONFLICT(slug) DO UPDATE SET
-                    name = excluded.name,
-                    position = excluded.position,
-                    is_fixed = 1
-                """,
-                FIXED_LISTS,
-            )
+            seeded = connection.execute(
+                "SELECT value FROM app_settings WHERE key = 'default_lists_seeded'"
+            ).fetchone()
+            if not seeded:
+                connection.executemany(
+                    """
+                    INSERT OR IGNORE INTO system_lists (slug, name, position, is_fixed)
+                    VALUES (?, ?, ?, 1)
+                    """,
+                    FIXED_LISTS,
+                )
+                connection.execute(
+                    "INSERT INTO app_settings (key, value) "
+                    "VALUES ('default_lists_seeded', 'true')"
+                )
             connection.execute(
                 """
                 INSERT OR IGNORE INTO app_settings (key, value)
@@ -273,11 +277,87 @@ class WebRepository:
         return True
 
     def fixed_lists(self) -> List[Mapping[str, Any]]:
+        """Return all user-visible lists (legacy method name kept for callers)."""
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT id, slug, name, position FROM system_lists ORDER BY position"
+                "SELECT id, slug, name, position, is_fixed "
+                "FROM system_lists ORDER BY position, id"
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def create_list(self, name: str) -> Mapping[str, Any]:
+        normalized_name = _validate_list_name(name)
+        base_slug = _slugify(normalized_name)
+        with self._connect() as connection:
+            if connection.execute(
+                "SELECT 1 FROM system_lists WHERE name = ? COLLATE NOCASE",
+                (normalized_name,),
+            ).fetchone():
+                raise ValueError("A list with this name already exists")
+            position = int(connection.execute(
+                "SELECT COALESCE(MAX(position), 0) + 1 AS position FROM system_lists"
+            ).fetchone()["position"])
+            slug = base_slug
+            suffix = 2
+            while connection.execute(
+                "SELECT 1 FROM system_lists WHERE slug = ?", (slug,)
+            ).fetchone():
+                slug = f"{base_slug}-{suffix}"
+                suffix += 1
+            cursor = connection.execute(
+                "INSERT INTO system_lists (slug, name, position, is_fixed) "
+                "VALUES (?, ?, ?, 0)",
+                (slug, normalized_name, position),
+            )
+            list_id = int(cursor.lastrowid)
+        return {
+            "id": list_id,
+            "slug": slug,
+            "name": normalized_name,
+            "position": position,
+            "is_fixed": 0,
+        }
+
+    def rename_list(self, slug: str, name: str) -> Mapping[str, Any]:
+        normalized_name = _validate_list_name(name)
+        with self._connect() as connection:
+            if connection.execute(
+                "SELECT 1 FROM system_lists WHERE name = ? COLLATE NOCASE AND slug != ?",
+                (normalized_name, slug),
+            ).fetchone():
+                raise ValueError("A list with this name already exists")
+            cursor = connection.execute(
+                "UPDATE system_lists SET name = ? WHERE slug = ?",
+                (normalized_name, slug),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("List not found")
+            row = connection.execute(
+                "SELECT id, slug, name, position, is_fixed FROM system_lists "
+                "WHERE slug = ?", (slug,),
+            ).fetchone()
+        return dict(row)
+
+    def delete_list(self, slug: str) -> Mapping[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id, slug, name FROM system_lists WHERE slug = ?", (slug,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("List not found")
+            membership_count = int(connection.execute(
+                "SELECT COUNT(*) AS count FROM company_list_memberships WHERE list_id = ?",
+                (row["id"],),
+            ).fetchone()["count"])
+            connection.execute(
+                "DELETE FROM company_list_memberships WHERE list_id = ?", (row["id"],)
+            )
+            connection.execute("DELETE FROM system_lists WHERE id = ?", (row["id"],))
+        return {
+            "slug": row["slug"],
+            "name": row["name"],
+            "removed_memberships": membership_count,
+        }
 
     def companies(self, list_slug: Optional[str] = None) -> List[Mapping[str, Any]]:
         parameters: List[Any] = []
@@ -301,6 +381,36 @@ class WebRepository:
                 parameters,
             ).fetchall()
         return [_company_dict(row) for row in rows]
+
+    def search_companies(self, query: str, *, limit: int = 20) -> List[Mapping[str, Any]]:
+        """Search known companies by name, ticker, or recorded exchange."""
+        term = query.strip()
+        if not term:
+            return []
+        like = f"%{term}%"
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT c.id, c.ticker, c.name, c.exchange, c.cik, c.market,
+                       c.mapping_status,
+                       GROUP_CONCAT(l.slug, ',') AS list_slugs
+                FROM companies c
+                LEFT JOIN company_list_memberships m ON m.company_id = c.id
+                LEFT JOIN system_lists l ON l.id = m.list_id
+                WHERE c.ticker LIKE ? COLLATE NOCASE
+                   OR c.name LIKE ? COLLATE NOCASE
+                   OR COALESCE(c.exchange, '') LIKE ? COLLATE NOCASE
+                GROUP BY c.id
+                ORDER BY CASE WHEN c.ticker = ? COLLATE NOCASE THEN 0 ELSE 1 END,
+                         c.name, c.ticker
+                LIMIT ?
+                """,
+                (like, like, like, term, max(1, min(limit, 50))),
+            ).fetchall()
+        return [{
+            **_company_dict(row),
+            "region": _market_region(str(row["market"])),
+        } for row in rows]
 
     def active_tickers(self) -> Tuple[str, ...]:
         """Return tickers that currently belong to at least one fixed list."""
@@ -698,6 +808,78 @@ class WebRepository:
                 )
             )
         return statuses
+
+    def connector_statuses(
+        self,
+        *,
+        now: Optional[datetime] = None,
+        stale_after: timedelta = timedelta(hours=36),
+    ) -> List[Mapping[str, Any]]:
+        """Return one truthful status record per configured real connector."""
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        coverage = {
+            "sec": ("United States",),
+            "news": ("United States",),
+            "tdnet_public_web": ("Japan",),
+        }
+        records: List[Mapping[str, Any]] = []
+        for source in self._source_catalog:
+            if source.name.startswith("mock"):
+                continue
+            run_row, failure_row = self._source_run_status(source.name)
+            with self._connect() as connection:
+                item_row = connection.execute(
+                    "SELECT MAX(collected_at) AS latest FROM information_items "
+                    "WHERE source = ?", (source.name,),
+                ).fetchone()
+            latest_item = item_row["latest"] if item_row else None
+            latest_success = (
+                (run_row["finished_at"] or run_row["started_at"])
+                if run_row and run_row["status"] in {"success", "partial"}
+                else latest_item
+            )
+            is_stale = bool(
+                latest_success
+                and current_time.astimezone(timezone.utc)
+                - _parse_datetime(str(latest_success)).astimezone(timezone.utc)
+                > stale_after
+            )
+            enabled = source.name in self._allowed_sources
+            implemented = source.name in self._implemented_sources
+            unavailable_reason = self._unavailable_sources.get(source.name)
+            if not enabled or not implemented:
+                status = "not_connected"
+            elif unavailable_reason:
+                status = "not_connected"
+            elif run_row and run_row["status"] == "failure":
+                status = "temporarily_unavailable"
+            elif is_stale:
+                status = "stale"
+            elif latest_success:
+                status = "connected"
+            else:
+                status = "unavailable"
+            records.append({
+                "name": source.name,
+                "provider": PROVIDER_LABELS.get(source.name, source.label),
+                "type": _display_source_type(source.source_type),
+                "regions": list(coverage.get(source.name, ())),
+                "enabled": enabled,
+                "implemented": implemented,
+                "status": status,
+                "latest_success": latest_success,
+                "latest_attempt": (
+                    (run_row["finished_at"] or run_row["started_at"])
+                    if run_row else None
+                ),
+                "last_failure": unavailable_reason or (
+                    failure_row["error_summary"] if failure_row else None
+                ),
+                "is_stale": is_stale,
+            })
+        return records
 
     def _filings_source_status(
         self,
@@ -1588,6 +1770,41 @@ def _normalize_tickers(raw: str) -> Tuple[str, ...]:
         if ticker and ticker not in normalized:
             normalized.append(ticker)
     return tuple(normalized)
+
+
+def _validate_list_name(name: str) -> str:
+    normalized = " ".join(name.strip().split())
+    if not normalized:
+        raise ValueError("List name is required")
+    if len(normalized) > 80:
+        raise ValueError("List name must be 80 characters or fewer")
+    return normalized
+
+
+def _slugify(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug[:64].rstrip("-") or "list"
+
+
+def _display_source_type(source_type: str) -> str:
+    if source_type in {"filings", "regulatory_filing", "regulatory_disclosure"}:
+        return "Filing"
+    if source_type == "news":
+        return "News"
+    if source_type == "community":
+        return "Community"
+    if source_type == "research":
+        return "Research"
+    return source_type.replace("_", " ").title()
+
+
+def _market_region(market: str) -> str:
+    return {
+        "us": "United States",
+        "jp": "Japan",
+        "hk": "Hong Kong",
+        "cn": "China",
+    }.get(market, "Unavailable")
 
 
 def _company_dict(row: sqlite3.Row) -> Mapping[str, Any]:

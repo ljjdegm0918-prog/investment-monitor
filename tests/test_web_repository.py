@@ -94,6 +94,32 @@ class WebRepositoryTests(unittest.TestCase):
         WebRepository(self.database_path)
         self.assertEqual(self.items.count(), original_count)
 
+    def test_dynamic_list_crud_and_deleted_default_does_not_reappear(self) -> None:
+        created = self.repository.create_list("Long Term Quality")
+        renamed = self.repository.rename_list(created["slug"], "Quality Compounders")
+        self.add_company("AAPL", created["slug"])
+        deleted = self.repository.delete_list(created["slug"])
+
+        self.assertEqual(renamed["name"], "Quality Compounders")
+        self.assertEqual(deleted["removed_memberships"], 1)
+        self.assertNotIn(created["slug"], {
+            record["slug"] for record in self.repository.fixed_lists()
+        })
+
+        self.repository.delete_list("watchlist")
+        WebRepository(self.database_path)
+        self.assertNotIn("watchlist", {
+            record["slug"] for record in self.repository.fixed_lists()
+        })
+
+    def test_company_search_matches_recorded_exchange(self) -> None:
+        self.add_company("AAPL", "holdings")
+
+        results = self.repository.search_companies("Nasdaq")
+
+        self.assertEqual(results[0]["ticker"], "AAPL")
+        self.assertEqual(results[0]["region"], "United States")
+
     def test_batch_add_allows_partial_success_and_normalizes_input(self) -> None:
         result = self.repository.add_companies_batch(
             "aapl, BAD\nmsft aapl", ("planned",), self.resolver  # type: ignore[arg-type]

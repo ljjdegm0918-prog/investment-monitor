@@ -75,9 +75,64 @@ class WebApplicationTests(unittest.TestCase):
             b"Loading information",
             b"No information for this date",
             b"This source is not configured",
+            b"Search returned no results",
+            b"Information sources",
             b"Request failed",
         ):
             self.assertIn(state_text, script.body)
+
+    def test_p0_list_company_search_daily_and_source_workflow(self) -> None:
+        manage = self.application.handle("GET", "/manage")
+        created = self.payload(self.application.handle(
+            "POST", "/api/lists", json.dumps({"name": "Long Term"}).encode()
+        ))
+        slug = created["list"]["slug"]
+        renamed = self.payload(self.application.handle(
+            "POST", "/api/lists/rename",
+            json.dumps({"slug": slug, "name": "Long Term Quality"}).encode(),
+        ))
+        candidates = self.payload(self.application.handle(
+            "GET", "/api/companies/search?q=Apple"
+        ))
+        added = self.application.handle(
+            "POST", "/api/companies/batch",
+            json.dumps({"tickers": "AAPL", "lists": [slug], "market": "us"}).encode(),
+        )
+        self.items.save((InformationItem(
+            source="sec",
+            source_type="regulatory_filing",
+            external_id="daily-aapl",
+            tickers=("AAPL",),
+            issuer="Apple Inc.",
+            published_at=datetime(2026, 8, 2, 15, tzinfo=timezone.utc),
+            title="Apple daily filing",
+            document_type="8-K",
+            url="https://www.sec.gov/Archives/daily-aapl.htm",
+            collected_at=datetime(2026, 8, 2, 16, tzinfo=timezone.utc),
+            raw_metadata={"acceptanceDateTime": "2026-08-02T11:00:00-04:00"},
+        ),))
+        daily = self.payload(self.application.handle(
+            "GET", f"/api/daily?date=2026-08-02&list={slug}"
+        ))
+        sources = self.payload(self.application.handle("GET", "/api/sources"))
+
+        self.assertEqual(manage.status, 200)
+        self.assertEqual(renamed["list"]["name"], "Long Term Quality")
+        self.assertEqual(candidates["candidates"][0]["ticker"], "AAPL")
+        self.assertEqual(added.status, 201)
+        self.assertEqual(daily["companies"][0]["name"], "Apple Inc.")
+        self.assertEqual(
+            set(daily["companies"][0]["items"][0]),
+            {"time", "type", "source", "title", "url"},
+        )
+        self.assertEqual(daily["companies"][0]["items"][0]["type"], "Filing")
+        sec = next(source for source in sources["sources"] if source["name"] == "sec")
+        self.assertEqual(sec["regions"], ["United States"])
+
+        deleted = self.application.handle(
+            "POST", "/api/lists/delete", json.dumps({"slug": slug}).encode()
+        )
+        self.assertEqual(deleted.status, 200)
 
     def test_bootstrap_uses_fixed_lists_and_truthful_source_status(self) -> None:
         with patch.dict(
