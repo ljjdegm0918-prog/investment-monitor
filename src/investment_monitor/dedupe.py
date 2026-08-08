@@ -13,7 +13,10 @@ day + normalized title. For TW, TWSE and TPEx filings share no cross-source
 identity, so their title fallback is source-scoped and the two boards are
 never annotated against each other; same-source title fallback pairs on
 ticker + Taipei day + normalized title. TW news (yahoo_tw / google_news_tw)
-pairs across sources on ticker + Taipei day + normalized title.
+pairs across sources on ticker + Taipei day + normalized title. For CA, no
+disclosure connector is wired (SEDAR+ A3 spike), so regulatory filings never
+get a key and are never annotated; CA news (yahoo_ca / google_news_ca)
+pairs across sources on ticker + Toronto day + normalized title.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ KST = ZoneInfo("Asia/Seoul")
 LONDON = ZoneInfo("Europe/London")
 HKT = ZoneInfo("Asia/Hong_Kong")
 TAIPEI = ZoneInfo("Asia/Taipei")
+TORONTO = ZoneInfo("America/Toronto")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -49,6 +53,8 @@ NEWS_SOURCE_PRIORITY = {
     "yahoo_hk": 5,
     "yahoo_tw": 6,
     "google_news_tw": 7,
+    "yahoo_ca": 8,
+    "google_news_ca": 9,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -68,6 +74,8 @@ SOURCE_DISPLAY_LABELS = {
     "tpex_material": "TPEx OpenAPI (material)",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
+    "yahoo_ca": "Yahoo Finance CA",
+    "google_news_ca": "Google News (CA)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -78,7 +86,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk", "tw"}:
+    if market not in {"kr", "uk", "hk", "tw", "ca"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -165,6 +173,10 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return _hk_filing_key(item)
     if market == "tw":
         return _tw_filing_key(item)
+    if market == "ca":
+        # No CA disclosure connector is wired (SEDAR+ A3 spike); a stray
+        # regulatory_filing row must never be cross-annotated.
+        return None
     return _uk_filing_key(item)
 
 
@@ -253,6 +265,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "hk"
         else TAIPEI
         if market == "tw"
+        else TORONTO
+        if market == "ca"
         else LONDON
     )
     title = normalize_title(item.get("title"))

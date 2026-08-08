@@ -206,6 +206,14 @@ when available) and remain unmapped; `ca_universe_name_map()` backfills
 names and board (TSX/TSXV) for add-company. Finnhub is **US only** and never
 queried for CA. News comes from `yahoo_ca` / `google_news_ca`.
 
+CA feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as KR/UK/HK/TW, default on): `yahoo_ca` / `google_news_ca` news pairs
+across sources on ticker + Toronto day (`America/Toronto`) + normalized
+title. Regulatory filings are **never** annotated because no CA disclosure
+connector is wired (SEDAR+ A3); a stray filing row simply gets no key. Every
+row stays in the feed with an "Also seen on …" label; totals and page sizes
+are never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
