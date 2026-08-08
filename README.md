@@ -214,6 +214,11 @@ connector is wired (SEDAR+ A3); a stray filing row simply gets no key. Every
 row stays in the feed with an "Also seen on …" label; totals and page sizes
 are never shrunk.
 
+### Australia sources (AU)
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=au` companies use canonical root tickers (`BHP` / `BHP.AX` / `BHP-ASX` all store as `BHP`; exchange suffixes `.AX` / `.ASX` are stripped at add time, board goes into `exchange` when available) and remain unmapped. ASX disclosure, an AU universe cache, and AU news connectors are planned but not wired yet (AU-1 … AU-5). Finnhub is **US only** and never queried for AU. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

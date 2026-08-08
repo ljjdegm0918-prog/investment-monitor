@@ -27,7 +27,14 @@ from zoneinfo import ZoneInfo
 from .config import SourceConfig, UniverseEntry
 from .daily import local_day_bounds, resolve_timezone
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_HK, MARKET_TW, MARKET_US
+from .models import (
+    ALLOWED_MARKETS,
+    MARKET_AU,
+    MARKET_CA,
+    MARKET_HK,
+    MARKET_TW,
+    MARKET_US,
+)
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -453,6 +460,10 @@ class WebRepository:
         if market == MARKET_CA:
             tickers = tuple(
                 dict.fromkeys(normalize_ca_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_AU:
+            tickers = tuple(
+                dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
             )
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
@@ -1759,6 +1770,36 @@ def normalize_ca_ticker(ticker: str) -> str:
         changed = False
         for separator in _CA_TICKER_SEPARATORS:
             for suffix in _CA_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_AU_TICKER_SUFFIXES = ("AX", "ASX")
+_AU_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def normalize_au_ticker(ticker: str) -> str:
+    """Normalize an Australian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``BHP``) and the common exchange suffixes used by
+    Australian data providers (``BHP.AX``, ``BHP.ASX``; space or dash
+    separators are tolerated too, and stacked suffixes like ``BHP.AX.AX``
+    collapse to ``BHP``). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``AX``, ``ASX``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AU_TICKER_SEPARATORS:
+            for suffix in _AU_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

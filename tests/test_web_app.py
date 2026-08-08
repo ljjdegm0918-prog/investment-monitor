@@ -840,6 +840,36 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["market"], "ca")
         self.assertEqual(added["mapping_status"], "unmapped")
 
+    def test_au_resolver_is_none(self) -> None:
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+
+        self.assertIsNone(application._resolver_for("au"))
+        self.assertIsNot(application._resolver_for("au"), application.resolver)
+
+    def test_adding_au_company_never_uses_sec_resolver(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "BHP.AX",
+                    "lists": ["holdings"],
+                    "market": "au",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "BHP")
+        self.assertEqual(added["market"], "au")
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(added["cik"], "")
+
     def test_hk_ticker_input_normalizes_to_five_digits(self) -> None:
         response = self.application.handle(
             "POST",

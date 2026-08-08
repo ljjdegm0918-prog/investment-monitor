@@ -28,7 +28,15 @@ from .connectors.base import ConnectorUnavailableError
 from .daily import resolve_timezone
 from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_CA, MARKET_HK, MARKET_KR, MARKET_TW, MARKET_UK, MARKET_US
+from .models import (
+    MARKET_AU,
+    MARKET_CA,
+    MARKET_HK,
+    MARKET_KR,
+    MARKET_TW,
+    MARKET_UK,
+    MARKET_US,
+)
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -507,6 +515,10 @@ class WebApplication:
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
+            return None
+        if market == MARKET_AU:
+            # AU disclosure mapping is not connected yet; never let SEC map
+            # an Australian symbol to a same-named US company.
             return None
         return self.resolver
 
