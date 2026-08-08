@@ -214,6 +214,55 @@ These defaults can be adjusted in `.env`.
   failure summary.
 - Official links open in a new tab with `noopener` and `noreferrer`.
 
+## Official EDINET connector
+
+The `edinet` package uses only EDINET API v2 for disclosure metadata and
+documents. Configure `EDINET_API_KEY` in `.env`; never commit the key. The
+login-oriented API requests every Japanese file date intersecting the absolute
+time window, filters by `submitDateTime`, and matches filer, issuer, subject,
+and subsidiary EDINET-code roles without a `docTypeCode` whitelist:
+
+```python
+result = connector.getWatchlistDisclosuresSince(
+    companies=user.watchlist,
+    since=now - timedelta(hours=24),
+    now=now,
+    include_downloads=False,
+)
+```
+
+The indexed-first implementation stores date-level completeness in SQLite and
+uses a short cache before falling back to the official API. A failed date is
+reported through `partial` and `errors`; successful dates are still returned.
+See `examples/edinet_login.py` for a complete login hook.
+
+CLI examples:
+
+```bash
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli refresh-codes
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli \
+  login-feed --watchlist 7203,6758,9984 --since 24h
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli \
+  sync --from 2024-01-01 --to 2024-12-31
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli sync --incremental
+```
+
+Downloads are opt-in. Types `1` through `5` are passed through to the official
+v2 endpoint; stored payloads include SHA-256, size, content type, and ZIP
+integrity state under `data/downloads/edinet/{fileDate}/{docID}/type-{n}/`.
+
+The official EDINET code-list ZIP is imported into the same SQLite database for
+exact EDINET code, securities code, JCN, and filer-name resolution. Ambiguous
+or unknown inputs are returned in `unresolved` rather than silently dropped.
+
+## TDnet operating mode
+
+TDnet collection uses the official JPX public list as its source of truth. Its
+official declared count, contiguous pagination, and parsed-row count remain
+fail-closed checks. The optional non-official Yanoshin comparison is disabled
+by default (`TDNET_YANOSHIN_CROSSCHECK_ENABLED=false`), so third-party downtime
+cannot block otherwise complete official JPX collection.
+
 ## Data model and safe migration
 
 The standardized item tables now carry `market`, nullable `summary`, and

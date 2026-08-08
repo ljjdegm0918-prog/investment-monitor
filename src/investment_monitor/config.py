@@ -28,6 +28,7 @@ DEFAULT_SOURCE_META = {
     "news": ("News", "news"),
     "community": ("Community", "community"),
     "research": ("Research", "research"),
+    "edinet": ("EDINET", "regulatory_disclosure"),
     "mock": ("Mock", "mock"),
     "mock_community": ("Mock Community", "community"),
 }

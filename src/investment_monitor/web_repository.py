@@ -49,6 +49,7 @@ SOURCE_LABELS = {
     "news": "News",
     "community": "Community",
     "research": "Research",
+    "edinet": "EDINET",
 }
 PROVIDER_LABELS = {
     "news": "Finnhub News",
@@ -94,6 +95,7 @@ STANDARD_SOURCE_DEFAULTS = (
     ("news", "News", "news"),
     ("community", "Community", "community"),
     ("research", "Research", "research"),
+    ("edinet", "EDINET", "regulatory_disclosure"),
 )
 CONTENT_TYPE_LABELS = (
     ("News", "news"),
@@ -823,6 +825,7 @@ class WebRepository:
             "sec": ("United States",),
             "news": ("United States",),
             "tdnet_public_web": ("Japan",),
+            "edinet": ("Japan",),
         }
         records: List[Mapping[str, Any]] = []
         for source in self._source_catalog:

@@ -13,6 +13,7 @@ dependencies = []
 [project.scripts]
 investment-monitor = "investment_monitor.cli:main"
 investment-monitor-web = "investment_monitor.web:main"
+edinet = "investment_monitor.sources.edinet.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

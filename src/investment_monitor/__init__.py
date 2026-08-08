@@ -111,6 +111,14 @@ from .sources.tdnet import (
     TDnetDataError,
     TDnetHTTPClient,
 )
+from .sources.edinet import (
+    EDINETClient,
+    EDINETCompanyInput,
+    EDINETConnector,
+    EDINETDisclosure,
+    EDINETStore,
+    WatchlistDisclosureResult,
+)
 from .models import (
     ALLOWED_MARKETS,
     CollectionRequest,
@@ -165,6 +173,11 @@ __all__ = [
     "FinnhubNewsError",
     "FinnhubNewsRequestError",
     "HankyungConnector",
+    "EDINETClient",
+    "EDINETCompanyInput",
+    "EDINETConnector",
+    "EDINETDisclosure",
+    "EDINETStore",
     "InformationRepository",
     "InformationItem",
     "KindClient",
@@ -210,6 +223,7 @@ __all__ = [
     "YahooNewsError",
     "YahooNewsRequestError",
     "WebRepository",
+    "WatchlistDisclosureResult",
     "create_default_registry",
     "kr_universe_name_map",
     "load_kr_universe",

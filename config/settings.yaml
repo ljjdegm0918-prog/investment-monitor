@@ -51,4 +51,8 @@ sources:
   - name: tdnet_public_web
     label: TDnet (JPX public page)
     source_type: regulatory_disclosure
-    enabled: false          # requires explicit robots/JPX permission confirmation
+    enabled: true           # official JPX pages; operator permission confirmed in .env
+  - name: edinet
+    label: EDINET
+    source_type: regulatory_disclosure
+    enabled: true           # degrades to Not connected until EDINET_API_KEY is configured

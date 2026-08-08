@@ -101,6 +101,39 @@ def connector_for(official, yanoshin, **kwargs):
 
 
 class TDnetConnectorTests(unittest.TestCase):
+    def test_official_empty_day_message_proves_zero_records(self):
+        official_empty = (
+            "<html><body><div>2026年08月07日</div>"
+            "<div>に開示された情報はありません。</div></body></html>"
+        ).encode()
+        connector, _ = connector_for(
+            official_empty,
+            crosscheck(),
+            crosscheck_enabled=False,
+        )
+
+        items = connector.collect(request("1111"))
+
+        self.assertEqual(items, [])
+        self.assertEqual(connector.last_reports[0].declared_count, 0)
+        self.assertEqual(connector.last_reports[0].official_count, 0)
+
+    def test_official_only_mode_does_not_depend_on_yanoshin(self):
+        connector, client = connector_for(
+            page(1, row()),
+            TDnetCollectionError("cross-check unavailable"),
+            crosscheck_enabled=False,
+        )
+
+        items = connector.collect(request("1111"))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(
+            connector.last_reports[0].crosscheck_coverage,
+            "disabled_official_only",
+        )
+
     def test_normal_single_page_converts_jst_to_utc_and_keeps_provenance(self):
         connector, _ = connector_for(
             page(1, row()),

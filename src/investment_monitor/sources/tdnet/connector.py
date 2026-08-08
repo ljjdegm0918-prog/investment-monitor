@@ -40,6 +40,7 @@ DECLARED_COUNT_PATTERNS = (
     re.compile(r"(?:全|合計)\s*([0-9][0-9,]*)\s*件"),
     re.compile(r"([0-9][0-9,]*)\s*件\s*(?:中|あります)"),
 )
+OFFICIAL_EMPTY_TEXT = "に開示された情報はありません。"
 TIME_PATTERN = re.compile(r"(?:^|\s)([0-2]?\d):([0-5]\d)(?:\s|$)")
 COMPANY_CODE_PATTERN = re.compile(r"(?:^|\s)([0-9A-Z]{4,5})(?:\s|$)", re.I)
 TARGET_TICKER_PATTERN = re.compile(
@@ -287,6 +288,7 @@ class TDnetConnector:
         checkpoint_path: Optional[Path] = None,
         ledger_path: Optional[Path] = None,
         yanoshin_limit: int = DEFAULT_YANOSHIN_LIMIT,
+        crosscheck_enabled: bool = True,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self._client = client
@@ -297,6 +299,7 @@ class TDnetConnector:
         if yanoshin_limit <= 0:
             raise ValueError("Yanoshin limit must be greater than zero.")
         self._yanoshin_limit = yanoshin_limit
+        self._crosscheck_enabled = crosscheck_enabled
         self._now = now
         self._pending_checkpoint: Optional[date] = None
         self._last_reports: Tuple[TDnetRunReport, ...] = ()
@@ -331,6 +334,7 @@ class TDnetConnector:
                 "TDNET_YANOSHIN_LIMIT",
                 DEFAULT_YANOSHIN_LIMIT,
             ),
+            crosscheck_enabled=_read_bool("TDNET_YANOSHIN_CROSSCHECK_ENABLED", False),
         )
 
     @classmethod
@@ -414,6 +418,28 @@ class TDnetConnector:
         today_jp = self._now().astimezone(JAPAN_TIME).date()
         for day in _date_range(effective_start, request.end_date):
             official, report = self._collect_official_day(day)
+            if not self._crosscheck_enabled:
+                is_current_day = day >= today_jp
+                completed_report = TDnetRunReport(
+                    day=day,
+                    status=(TDnetCompleteness.PROVISIONAL if is_current_day
+                            else TDnetCompleteness.COMPLETE),
+                    declared_count=report.declared_count,
+                    official_count=len(official),
+                    crosscheck_count=None,
+                    pages=report.pages,
+                    page_hashes=report.page_hashes,
+                    pages_contiguous=report.pages_contiguous,
+                    fetched_at=report.fetched_at,
+                    declared_count_evidence=report.declared_count_evidence,
+                    crosscheck_coverage="disabled_official_only",
+                    finalization=("provisional_current_jp_day" if is_current_day
+                                  else "historical_day_officially_finalized"),
+                )
+                reports.append(completed_report)
+                self._persist_report(completed_report)
+                all_disclosures.extend(official)
+                continue
             try:
                 crosscheck_result = self._collect_yanoshin_day(day)
             except TDnetCollectionError as error:
@@ -666,6 +692,9 @@ class TDnetConnector:
             visited.add(page_url)
             match = _declared_count_match(parser.all_text)
             count = match[0] if match else None
+            if count is None and OFFICIAL_EMPTY_TEXT in _normalize_space("".join(parser.all_text)):
+                count = 0
+                match = (0, OFFICIAL_EMPTY_TEXT)
             if count is not None:
                 declared_counts.add(count)
                 declared_evidence.add(match[1])
@@ -1019,3 +1048,15 @@ def _read_permission_confirmation() -> bool:
         .lower()
         == "true"
     )
+
+
+def _read_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be true or false")
