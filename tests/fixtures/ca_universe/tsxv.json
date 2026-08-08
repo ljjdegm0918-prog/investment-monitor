@@ -1,0 +1,35 @@
+{
+  "isHttpError": false,
+  "last_updated": 1786092912,
+  "length": 4,
+  "results": [
+    {
+      "symbol": "ONE",
+      "name": "01 Quantum Inc.",
+      "instruments": [
+        {"symbol": "ONE", "name": "01 Quantum Inc."}
+      ]
+    },
+    {
+      "symbol": "AUMB",
+      "name": "1911 Gold Corporation",
+      "instruments": [
+        {"symbol": "AUMB", "name": "1911 Gold Corporation"}
+      ]
+    },
+    {
+      "symbol": "FNR",
+      "name": "49 North Resources Inc.",
+      "instruments": [
+        {"symbol": "FNR", "name": "49 North Resources Inc."}
+      ]
+    },
+    {
+      "symbol": "RY",
+      "name": "Royal Bank of Canada (Venture)",
+      "instruments": [
+        {"symbol": "RY", "name": "Royal Bank of Canada (Venture)"}
+      ]
+    }
+  ]
+}

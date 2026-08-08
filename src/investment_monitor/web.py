@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .application import ConfiguredCollectionResult, run_ticker_collection
+from .ca_universe import ca_universe_name_map
 from .config import (
     SourceConfig,
     load_environment_file,
@@ -245,6 +246,8 @@ class WebApplication:
                     name_fallback = hk_universe_name_map()
                 elif market == MARKET_TW:
                     name_fallback = tw_universe_name_map()
+                elif market == MARKET_CA:
+                    name_fallback = ca_universe_name_map()
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),

@@ -20,6 +20,13 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .ca_universe import (
+    CaUniverseError,
+    ca_universe_name_map,
+    load_ca_universe,
+    refresh_ca_universe,
+    search_ca_universe,
+)
 from .kr_universe import (
     KrUniverseError,
     kr_universe_name_map,
@@ -189,6 +196,7 @@ from .web_repository import WebRepository
 __all__ = [
     "ALLOWED_LIST_TYPES",
     "ALLOWED_MARKETS",
+    "CaUniverseError",
     "CollectionFailure",
     "CollectionPipeline",
     "CollectionRequest",
@@ -203,6 +211,7 @@ __all__ = [
     "CompaniesHouseError",
     "CompaniesHouseRequestError",
     "CompanyNumberCache",
+    "ca_universe_name_map",
     "CorpCodeCache",
     "DARTCompanyResolver",
     "DARTConnector",
@@ -305,14 +314,17 @@ __all__ = [
     "kr_universe_name_map",
     "load_hk_universe",
     "load_kr_universe",
+    "load_ca_universe",
     "load_uk_universe",
     "load_settings",
     "load_environment_file",
     "load_universe",
     "refresh_kr_universe",
     "refresh_hk_universe",
+    "refresh_ca_universe",
     "refresh_uk_universe",
     "search_uk_universe",
+    "search_ca_universe",
     "load_tw_universe",
     "refresh_tw_universe",
     "search_tw_universe",

@@ -783,6 +783,63 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["added"][0]["market"], "ca")
         self.assertEqual(payload["added"][0]["mapping_status"], "unmapped")
 
+    def test_adding_ca_company_uses_universe_cache_for_name(self) -> None:
+        cache_path = (
+            self.project_root
+            / ".cache"
+            / "investment_monitor"
+            / "ca_universe.json"
+        )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "updated_at": "2026-08-08T00:00:00+00:00",
+                    "source": ["tsx_directory"],
+                    "counts": {"TSX": 1, "TSXV": 0},
+                    "items": [
+                        {
+                            "ticker": "RY",
+                            "name": "Royal Bank of Canada",
+                            "board": "TSX",
+                            "exchange": "TSX",
+                            "status": "active",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            os.environ,
+            {"CA_UNIVERSE_CACHE_PATH": str(cache_path)},
+            clear=False,
+        ):
+            application = WebApplication(
+                self.project_root,
+                collection_runner=self.noop_collection_runner,
+            )
+            response = application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps(
+                    {
+                        "tickers": "RY.TO",
+                        "lists": ["holdings"],
+                        "market": "ca",
+                    }
+                ).encode(),
+            )
+            payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "RY")
+        self.assertEqual(added["name"], "Royal Bank of Canada")
+        self.assertEqual(added["exchange"], "TSX")
+        self.assertEqual(added["market"], "ca")
+        self.assertEqual(added["mapping_status"], "unmapped")
+
     def test_hk_ticker_input_normalizes_to_five_digits(self) -> None:
         response = self.application.handle(
             "POST",

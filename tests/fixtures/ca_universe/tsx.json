@@ -1,0 +1,29 @@
+{
+  "isHttpError": false,
+  "last_updated": 1786092912,
+  "length": 3,
+  "results": [
+    {
+      "symbol": "RY",
+      "name": "Royal Bank of Canada",
+      "instruments": [
+        {"symbol": "RY", "name": "Royal Bank of Canada"}
+      ]
+    },
+    {
+      "symbol": "SHOP",
+      "name": "Shopify Inc.",
+      "instruments": [
+        {"symbol": "SHOP", "name": "Shopify Inc."},
+        {"symbol": "SHOP.WT", "name": "Shopify Inc. Warrants"}
+      ]
+    },
+    {
+      "symbol": "IGBT.UN",
+      "name": "2028 Investment Grade Bond Trust",
+      "instruments": [
+        {"symbol": "IGBT.UN", "name": "2028 InvGrd Bnd F Un"}
+      ]
+    }
+  ]
+}
