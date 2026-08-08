@@ -872,19 +872,9 @@ def _filter_dict(filters: FeedFilters) -> Mapping[str, Any]:
 
 
 def _view_for_path(path: str) -> str:
-    if path in {"/", "/today"}:
+    if path in {"/", "/today", "/information", "/search"}:
         return "today"
-    if path == "/information":
-        return "information"
-    if path == "/search":
-        return "search"
-    if path == "/activity":
-        return "activity"
-    if path == "/sources":
-        return "sources"
-    if path == "/settings":
-        return "settings"
-    if path == "/manage" or path.startswith("/lists/"):
+    if path in {"/manage", "/activity", "/sources", "/settings"} or path.startswith("/lists/"):
         return "manage"
     return path.rsplit("/", 1)[-1]
 

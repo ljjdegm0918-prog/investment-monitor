@@ -188,9 +188,9 @@ Terminal window open while using the site. Press `Control-C` to stop it.
 
 While the service is running it performs one incremental collection per
 Eastern calendar day. On startup it catches up if the current ET day has not
-yet been attempted, then checks daily at 6:00 AM ET. The default seven-day
-overlap safely catches delayed or missed filings; accession-number
-deduplication prevents duplicate records.
+yet been attempted, then checks daily at 6:00 AM ET. To preview the stored data
+without making external collection requests, start it with
+`AUTO_DAILY_COLLECTION=false`.
 
 Adding a company through a list page immediately performs a one-year SEC
 metadata backfill. The company remains in the selected lists even if SEC is
@@ -199,22 +199,20 @@ These defaults can be adjusted in `.env`.
 
 ## Main web behavior
 
-- **Today** uses filing acceptance time when available, groups by
-  `America/New_York`, shows `ET`, and deduplicates across lists.
-- **All Information** provides historical server-side filters and stable
-  pagination.
-- **Holdings, Planned Purchases, Watchlist** manage many-to-many company-list
-  memberships. Removing memberships never deletes stored filings.
-- **Search** searches stored metadata only: ticker, company name, title, form,
-  and accession number. Filing bodies are not downloaded or indexed.
-- **Read/Unread** persists in SQLite. Opening an official filing marks it read;
-  explicit individual and scoped bulk actions are also available.
-- **Activity & Logs** shows only collection operations recorded after this web
-  migration was introduced. It does not invent metrics for earlier CLI runs.
-- **Data Sources** reports the latest real SEC attempt and success, marks SEC
-  data stale after 36 hours, and marks News, Community, and Research as
-  not connected until a real connector is enabled.
-- Official filing links open in a new tab with `noopener` and `noreferrer`.
+- **Daily information** selects one Eastern Time calendar day and an optional
+  list, hides companies without updates, groups the remaining items by company,
+  and shows only time, type, source, title, and original URL. The print action
+  uses a dedicated layout suitable for browser PDF export.
+- **Lists & sources** creates, renames, deletes, and switches lists. A company
+  may belong to multiple lists; removing a membership never deletes stored
+  information.
+- Company candidates are searched from the local official SEC mapping by name
+  or ticker and from already-known companies by name, ticker, or recorded
+  exchange. The user confirms a candidate before it is added.
+- Source cards report each configured connector separately, including its
+  coverage region, enabled state, latest attempt and success, and persisted
+  failure summary.
+- Official links open in a new tab with `noopener` and `noreferrer`.
 
 ## Data model and safe migration
 

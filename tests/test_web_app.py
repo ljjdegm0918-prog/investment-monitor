@@ -61,12 +61,16 @@ class WebApplicationTests(unittest.TestCase):
 
     def test_core_pages_and_static_assets_are_served(self) -> None:
         page = self.application.handle("GET", "/today")
+        legacy_information = self.application.handle("GET", "/information")
+        legacy_sources = self.application.handle("GET", "/sources")
         script = self.application.handle("GET", "/static/app.js")
         favicon = self.application.handle("GET", "/favicon.ico")
 
         self.assertEqual(page.status, 200)
         self.assertIn(b"Investment Monitor", page.body)
         self.assertIn(b'data-view="today"', page.body)
+        self.assertIn(b'data-view="today"', legacy_information.body)
+        self.assertIn(b'data-view="manage"', legacy_sources.body)
         self.assertEqual(script.status, 200)
         self.assertEqual(favicon.status, 204)
         self.assertIn(b'target="_blank" rel="noopener noreferrer"', script.body)
