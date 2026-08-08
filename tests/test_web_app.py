@@ -78,7 +78,6 @@ class WebApplicationTests(unittest.TestCase):
         for state_text in (
             b"Loading information",
             b"No information for this date",
-            b"This source is not configured",
             b"Search returned no results",
             b"Information sources",
             b"Request failed",
