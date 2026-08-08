@@ -229,6 +229,15 @@ at add time, board goes into `exchange` when available) and remain unmapped;
 Finnhub is **US only** and never queried for AU. News comes from `yahoo_au` /
 `google_news_au`.
 
+AU feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as KR/UK/HK/TW/CA, default on): `yahoo_au` / `google_news_au` news
+pairs across sources on ticker + Sydney day (`Australia/Sydney`) +
+normalized title. `asx_announcements` filings pair on the stable ASX
+document key, or on a same-source title fallback (ticker + Sydney day +
+normalized title); with only one disclosure source wired there is no
+cross-source filing pairing. Every row stays in the feed with an "Also seen
+on …" label; totals and page sizes are never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
