@@ -218,13 +218,16 @@ are never shrunk.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | asx_announcements | filings | none | ASX company announcements via the ASX site research API (`asx.api.markitdigital.com/asx-research/1.0/companies/{CODE}/announcements`; key-free, live verified 2026-08-08). Undocumented internal JSON — may change without notice; returns only the latest 5 announcements per company (no pagination), so hyper-active companies may be partial; items carry no deep document URL, so `url` points at the per-company announcement list and `document_key` is stored in metadata. |
-| au_universe | breadth cache | none | ASX company directory via the key-free ASX site research API (`/asx-research/1.0/companies/directory`; live 2026-08-08: ~1,840 listed companies); not an IBKR-complete universe; never enters the feed. AU news connectors are planned (AU-3). |
+| au_universe | breadth cache | none | ASX company directory via the key-free ASX site research API (`/asx-research/1.0/companies/directory`; live 2026-08-08: ~1,840 listed companies); not an IBKR-complete universe; never enters the feed. |
+| yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`, `lang=en-AU`); `.AX` at request time; may be loosely related and break without notice |
+| google_news_au | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-AU&gl=AU&ceid=AU:en`); may be loosely related and break without notice |
 
 `market=au` companies use canonical root tickers (`BHP` / `BHP.AX` /
 `BHP-ASX` all store as `BHP`; exchange suffixes `.AX` / `.ASX` are stripped
 at add time, board goes into `exchange` when available) and remain unmapped;
 `au_universe_name_map()` backfills names and board (ASX) for add-company.
-Finnhub is **US only** and never queried for AU.
+Finnhub is **US only** and never queried for AU. News comes from `yahoo_au` /
+`google_news_au`.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: BHP.AX News</title>
+    <item>
+      <title>Union boss explains $120m BHP strike</title>
+      <link>https://au.finance.yahoo.com/news/union-boss-bhp-110000201.html</link>
+      <pubDate>Sat, 08 Aug 2026 03:25:44 +0000</pubDate>
+      <description>BHP strike coverage from Australia.</description>
+    </item>
+    <item>
+      <title>BHP quarterly output rises</title>
+      <link>https://au.finance.yahoo.com/news/bhp-quarterly-110000202.html</link>
+      <pubDate>Fri, 07 Aug 2026 01:00:00 +0000</pubDate>
+      <description>BHP reported quarterly production.</description>
+    </item>
+    <item>
+      <title>Old item outside window</title>
+      <link>https://au.finance.yahoo.com/news/old-outside-110000203.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Too old to include.</description>
+    </item>
+  </channel>
+</rss>
