@@ -733,6 +733,56 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(added["cik"], "")
 
+    def test_ca_resolver_is_none(self) -> None:
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+
+        self.assertIsNone(application._resolver_for("ca"))
+        self.assertIsNot(application._resolver_for("ca"), application.resolver)
+
+    def test_adding_ca_company_never_uses_sec_resolver(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "RY.TO",
+                    "lists": ["holdings"],
+                    "market": "ca",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        added = payload["added"][0]
+        self.assertEqual(added["ticker"], "RY")
+        self.assertEqual(added["market"], "ca")
+        self.assertEqual(added["mapping_status"], "unmapped")
+        self.assertEqual(added["cik"], "")
+
+    def test_ca_ticker_input_normalizes_to_root(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps(
+                {
+                    "tickers": "RY, RY.TO, ry-TO",
+                    "lists": ["holdings"],
+                    "market": "ca",
+                }
+            ).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(len(payload["added"]), 1)
+        self.assertEqual(payload["added"][0]["ticker"], "RY")
+        self.assertEqual(payload["added"][0]["market"], "ca")
+        self.assertEqual(payload["added"][0]["mapping_status"], "unmapped")
+
     def test_hk_ticker_input_normalizes_to_five_digits(self) -> None:
         response = self.application.handle(
             "POST",

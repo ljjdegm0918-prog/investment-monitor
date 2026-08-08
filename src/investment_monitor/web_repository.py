@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 from .config import SourceConfig, UniverseEntry
 from .daily import local_day_bounds, resolve_timezone
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_HK, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -449,6 +449,10 @@ class WebRepository:
         if market == MARKET_TW:
             tickers = tuple(
                 dict.fromkeys(normalize_tw_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_CA:
+            tickers = tuple(
+                dict.fromkeys(normalize_ca_ticker(ticker) for ticker in tickers)
             )
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
@@ -1732,6 +1736,36 @@ def normalize_tw_ticker(ticker: str) -> str:
     core = cleaned.removesuffix(".TW").removesuffix(".TWO")
     if core.isdigit():
         return core.lstrip("0").zfill(4)
+    return cleaned
+
+
+_CA_TICKER_SUFFIXES = ("TO", "TSX", "V", "TSXV", "CN", "NE", "NEO")
+_CA_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def normalize_ca_ticker(ticker: str) -> str:
+    """Normalize a Canadian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``RY``) and the common exchange suffixes used by
+    Canadian data providers (``RY.TO``, ``SHOP.TSX``, ``ABX.V``,
+    ``CVE.TSXV``, ``TD.CN``, ``Q.NE``, ``HUT.NEO``; space or dash separators
+    are tolerated too). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``TO``, ``V``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _CA_TICKER_SEPARATORS:
+            for suffix in _CA_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
     return cleaned
 
 

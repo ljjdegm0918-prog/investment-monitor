@@ -191,6 +191,11 @@ separate. `yahoo_tw` / `google_news_tw` news pairs across sources on ticker +
 Taipei day + normalized title. Every row stays in the feed with an "Also seen
 on …" label; totals and page sizes are never shrunk.
 
+### Canada sources (CA)
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO` all store as `RY`; exchange suffixes `.TO` / `.TSX` / `.V` / `.TSXV` / `.CN` / `.NE` / `.NEO` are stripped at add time, board goes into `exchange` when available) and remain unmapped. SEDAR+ / TSX / TSXV disclosure, a CA universe cache, and CA news connectors are planned but not wired yet (CA-1 … CA-5). Finnhub is **US only** and never queried for CA. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
