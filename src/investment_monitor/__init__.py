@@ -143,6 +143,13 @@ from .sources.ca_news import (
     YahooCaNewsError,
     YahooCaNewsRequestError,
 )
+from .sources.asx_announcements import (
+    AsxAnnouncementsClient,
+    AsxAnnouncementsConnector,
+    AsxAnnouncementsDataError,
+    AsxAnnouncementsError,
+    AsxAnnouncementsRequestError,
+)
 from .sources.twse_material import (
     TwseMaterialClient,
     TwseMaterialConnector,
@@ -209,6 +216,11 @@ from .web_repository import WebRepository
 __all__ = [
     "ALLOWED_LIST_TYPES",
     "ALLOWED_MARKETS",
+    "AsxAnnouncementsClient",
+    "AsxAnnouncementsConnector",
+    "AsxAnnouncementsDataError",
+    "AsxAnnouncementsError",
+    "AsxAnnouncementsRequestError",
     "CaUniverseError",
     "CollectionFailure",
     "CollectionPipeline",

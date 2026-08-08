@@ -217,7 +217,12 @@ are never shrunk.
 ### Australia sources (AU)
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=au` companies use canonical root tickers (`BHP` / `BHP.AX` / `BHP-ASX` all store as `BHP`; exchange suffixes `.AX` / `.ASX` are stripped at add time, board goes into `exchange` when available) and remain unmapped. ASX disclosure, an AU universe cache, and AU news connectors are planned but not wired yet (AU-1 … AU-5). Finnhub is **US only** and never queried for AU. |
+| asx_announcements | filings | none | ASX company announcements via the ASX site research API (`asx.api.markitdigital.com/asx-research/1.0/companies/{CODE}/announcements`; key-free, live verified 2026-08-08). Undocumented internal JSON — may change without notice; returns only the latest 5 announcements per company (no pagination), so hyper-active companies may be partial; items carry no deep document URL, so `url` points at the per-company announcement list and `document_key` is stored in metadata. An AU universe cache and AU news connectors are planned but not wired yet (AU-2, AU-3). |
+
+`market=au` companies use canonical root tickers (`BHP` / `BHP.AX` /
+`BHP-ASX` all store as `BHP`; exchange suffixes `.AX` / `.ASX` are stripped
+at add time, board goes into `exchange` when available) and remain unmapped.
+Finnhub is **US only** and never queried for AU.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
