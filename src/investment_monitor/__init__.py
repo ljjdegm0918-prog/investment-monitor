@@ -20,6 +20,13 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError, SourceConnector
 from .connectors.mock import MockConnector
 from .connectors.mock_community import MockCommunityConnector
+from .au_universe import (
+    AuUniverseError,
+    au_universe_name_map,
+    load_au_universe,
+    refresh_au_universe,
+    search_au_universe,
+)
 from .ca_universe import (
     CaUniverseError,
     ca_universe_name_map,
@@ -221,6 +228,7 @@ __all__ = [
     "AsxAnnouncementsDataError",
     "AsxAnnouncementsError",
     "AsxAnnouncementsRequestError",
+    "AuUniverseError",
     "CaUniverseError",
     "CollectionFailure",
     "CollectionPipeline",
@@ -236,6 +244,7 @@ __all__ = [
     "CompaniesHouseError",
     "CompaniesHouseRequestError",
     "CompanyNumberCache",
+    "au_universe_name_map",
     "ca_universe_name_map",
     "CorpCodeCache",
     "GoogleCaNewsClient",
@@ -351,6 +360,7 @@ __all__ = [
     "load_hk_universe",
     "load_kr_universe",
     "load_ca_universe",
+    "load_au_universe",
     "load_uk_universe",
     "load_settings",
     "load_environment_file",
@@ -358,9 +368,11 @@ __all__ = [
     "refresh_kr_universe",
     "refresh_hk_universe",
     "refresh_ca_universe",
+    "refresh_au_universe",
     "refresh_uk_universe",
     "search_uk_universe",
     "search_ca_universe",
+    "search_au_universe",
     "load_tw_universe",
     "refresh_tw_universe",
     "search_tw_universe",
