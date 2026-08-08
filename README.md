@@ -195,14 +195,16 @@ on …" label; totals and page sizes are never shrunk.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | ca_universe | breadth cache | none | TSX + TSXV company directories via key-free official TMX JSON (`/json/company-directory/search/tsx/^` and `.../tsxv/^`; live 2026-08-08: ~2,264 TSX results / ~2,997 instruments and ~1,433 TSXV results / ~1,479 instruments); CSE (`api.thecse.com`) fails the TLS handshake from the current network and NEO returns Cloudflare 522 origin timeouts, so those boards are not wired; not an IBKR-complete universe; never enters the feed |
-| (disclosure none) | — | — | Regulatory disclosure is **deliberately not wired** (CA-1 spike): SEDAR+ has no official public API and its Radware edge returns 403 to stdlib HTTP clients on every path (including `robots.txt`); no stable key-free disclosure feed was found. CA news connectors are planned (CA-3). |
+| yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); TSXV symbols may return an empty feed; may be loosely related and break without notice |
+| google_news_ca | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
+| (disclosure none) | — | — | Regulatory disclosure is **deliberately not wired** (CA-1 spike): SEDAR+ has no official public API and its Radware edge returns 403 to stdlib HTTP clients on every path (including `robots.txt`); no stable key-free disclosure feed was found. |
 
 `market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO`
 all store as `RY`; exchange suffixes `.TO` / `.TSX` / `.V` / `.TSXV` /
 `.CN` / `.NE` / `.NEO` are stripped at add time, board goes into `exchange`
 when available) and remain unmapped; `ca_universe_name_map()` backfills
 names and board (TSX/TSXV) for add-company. Finnhub is **US only** and never
-queried for CA.
+queried for CA. News comes from `yahoo_ca` / `google_news_ca`.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

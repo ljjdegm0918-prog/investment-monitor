@@ -68,6 +68,14 @@ sources:
     label: Google News (TW)
     source_type: news
     enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  - name: yahoo_ca
+    label: Yahoo Finance CA
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_ca
+    label: Google News (CA)
+    source_type: news
+    enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
   - name: community
     label: Community
     source_type: community
