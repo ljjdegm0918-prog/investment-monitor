@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_au_ticker
 
 
@@ -177,6 +178,33 @@ class MarketAUFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketAUDisclosureFollowupTests(unittest.TestCase):
+    def test_asx_announcements_remains_registered(self) -> None:
+        registry = create_default_registry()
+
+        self.assertIsNotNone(registry.factory_for("asx_announcements"))
+
+    def test_no_second_au_disclosure_connector_is_registered(self) -> None:
+        """Lock the AU-4 D2 spike decision.
+
+        AU-4 re-verified (2026-08-08) that the ASX announcements endpoint
+        still returns only the latest 5 items with no pagination or deep
+        document URL, and found no stable key-free second disclosure source
+        (no ASX announcements RSS; ASIC has no keyless disclosure JSON). No
+        second AU disclosure connector is registered. Remove this test when
+        a real second source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "asx_rss",
+            "asic_disclosure",
+            "asx_announcements_rss",
+        ):
+            self.assertNotIn(blocked_name, names)
 
 
 if __name__ == "__main__":
