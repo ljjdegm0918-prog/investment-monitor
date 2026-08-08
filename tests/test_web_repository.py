@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -94,6 +94,32 @@ class WebRepositoryTests(unittest.TestCase):
         WebRepository(self.database_path)
         self.assertEqual(self.items.count(), original_count)
 
+    def test_dynamic_list_crud_and_deleted_default_does_not_reappear(self) -> None:
+        created = self.repository.create_list("Long Term Quality")
+        renamed = self.repository.rename_list(created["slug"], "Quality Compounders")
+        self.add_company("AAPL", created["slug"])
+        deleted = self.repository.delete_list(created["slug"])
+
+        self.assertEqual(renamed["name"], "Quality Compounders")
+        self.assertEqual(deleted["removed_memberships"], 1)
+        self.assertNotIn(created["slug"], {
+            record["slug"] for record in self.repository.fixed_lists()
+        })
+
+        self.repository.delete_list("watchlist")
+        WebRepository(self.database_path)
+        self.assertNotIn("watchlist", {
+            record["slug"] for record in self.repository.fixed_lists()
+        })
+
+    def test_company_search_matches_recorded_exchange(self) -> None:
+        self.add_company("AAPL", "holdings")
+
+        results = self.repository.search_companies("Nasdaq")
+
+        self.assertEqual(results[0]["ticker"], "AAPL")
+        self.assertEqual(results[0]["region"], "United States")
+
     def test_batch_add_allows_partial_success_and_normalizes_input(self) -> None:
         result = self.repository.add_companies_batch(
             "aapl, BAD\nmsft aapl", ("planned",), self.resolver  # type: ignore[arg-type]
@@ -158,6 +184,33 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertEqual(
             holdings_result.items[0]["list_slugs"],
             ["holdings", "planned", "watchlist"],
+        )
+
+    def test_rolling_24_hour_filter_is_utc_half_open_not_eastern_calendar_day(self) -> None:
+        self.add_company("AAPL", "holdings")
+        start = datetime(2026, 8, 2, 3, tzinfo=timezone.utc)
+        end = start + timedelta(hours=24)
+        self.items.save([
+            make_item("before-window", accepted_at="2026-08-02T02:59:59Z"),
+            make_item("at-start", accepted_at=start.isoformat()),
+            make_item("inside", accepted_at="2026-08-03T02:59:59Z"),
+            make_item("at-end", accepted_at=end.isoformat()),
+        ])
+
+        result = self.repository.query_feed(FeedFilters(
+            start_at=start,
+            end_at=end,
+        ))
+
+        self.assertEqual(
+            {item["external_id"] for item in result.items},
+            {"at-start", "inside"},
+        )
+        # 03:00 UTC is still the prior date in New York, proving this is not
+        # the legacy ET calendar-day boundary.
+        self.assertEqual(
+            next(item for item in result.items if item["external_id"] == "at-start")["effective_at"],
+            start.isoformat(),
         )
 
     def test_eastern_grouping_handles_offsets_and_daylight_saving_days(self) -> None:

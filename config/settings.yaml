@@ -48,3 +48,11 @@ sources:
     label: Research
     source_type: research
     enabled: false
+  - name: tdnet_public_web
+    label: TDnet (JPX public page)
+    source_type: regulatory_disclosure
+    enabled: true           # official JPX pages; operator permission confirmed in .env
+  - name: edinet
+    label: EDINET
+    source_type: regulatory_disclosure
+    enabled: true           # degrades to Not connected until EDINET_API_KEY is configured

@@ -188,9 +188,9 @@ Terminal window open while using the site. Press `Control-C` to stop it.
 
 While the service is running it performs one incremental collection per
 Eastern calendar day. On startup it catches up if the current ET day has not
-yet been attempted, then checks daily at 6:00 AM ET. The default seven-day
-overlap safely catches delayed or missed filings; accession-number
-deduplication prevents duplicate records.
+yet been attempted, then checks daily at 6:00 AM ET. To preview the stored data
+without making external collection requests, start it with
+`AUTO_DAILY_COLLECTION=false`.
 
 Adding a company through a list page immediately performs a one-year SEC
 metadata backfill. The company remains in the selected lists even if SEC is
@@ -199,22 +199,69 @@ These defaults can be adjusted in `.env`.
 
 ## Main web behavior
 
-- **Today** uses filing acceptance time when available, groups by
-  `America/New_York`, shows `ET`, and deduplicates across lists.
-- **All Information** provides historical server-side filters and stable
-  pagination.
-- **Holdings, Planned Purchases, Watchlist** manage many-to-many company-list
-  memberships. Removing memberships never deletes stored filings.
-- **Search** searches stored metadata only: ticker, company name, title, form,
-  and accession number. Filing bodies are not downloaded or indexed.
-- **Read/Unread** persists in SQLite. Opening an official filing marks it read;
-  explicit individual and scoped bulk actions are also available.
-- **Activity & Logs** shows only collection operations recorded after this web
-  migration was introduced. It does not invent metrics for earlier CLI runs.
-- **Data Sources** reports the latest real SEC attempt and success, marks SEC
-  data stale after 36 hours, and marks News, Community, and Research as
-  not connected until a real connector is enabled.
-- Official filing links open in a new tab with `noopener` and `noreferrer`.
+- **Daily information** selects one Eastern Time calendar day and an optional
+  list, hides companies without updates, groups the remaining items by company,
+  and shows only time, type, source, title, and original URL. The print action
+  uses a dedicated layout suitable for browser PDF export.
+- **Lists & sources** creates, renames, deletes, and switches lists. A company
+  may belong to multiple lists; removing a membership never deletes stored
+  information.
+- Company candidates are searched from the local official SEC mapping by name
+  or ticker and from already-known companies by name, ticker, or recorded
+  exchange. The user confirms a candidate before it is added.
+- Source cards report each configured connector separately, including its
+  coverage region, enabled state, latest attempt and success, and persisted
+  failure summary.
+- Official links open in a new tab with `noopener` and `noreferrer`.
+
+## Official EDINET connector
+
+The `edinet` package uses only EDINET API v2 for disclosure metadata and
+documents. Configure `EDINET_API_KEY` in `.env`; never commit the key. The
+login-oriented API requests every Japanese file date intersecting the absolute
+time window, filters by `submitDateTime`, and matches filer, issuer, subject,
+and subsidiary EDINET-code roles without a `docTypeCode` whitelist:
+
+```python
+result = connector.getWatchlistDisclosuresSince(
+    companies=user.watchlist,
+    since=now - timedelta(hours=24),
+    now=now,
+    include_downloads=False,
+)
+```
+
+The indexed-first implementation stores date-level completeness in SQLite and
+uses a short cache before falling back to the official API. A failed date is
+reported through `partial` and `errors`; successful dates are still returned.
+See `examples/edinet_login.py` for a complete login hook.
+
+CLI examples:
+
+```bash
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli refresh-codes
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli \
+  login-feed --watchlist 7203,6758,9984 --since 24h
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli \
+  sync --from 2024-01-01 --to 2024-12-31
+PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli sync --incremental
+```
+
+Downloads are opt-in. Types `1` through `5` are passed through to the official
+v2 endpoint; stored payloads include SHA-256, size, content type, and ZIP
+integrity state under `data/downloads/edinet/{fileDate}/{docID}/type-{n}/`.
+
+The official EDINET code-list ZIP is imported into the same SQLite database for
+exact EDINET code, securities code, JCN, and filer-name resolution. Ambiguous
+or unknown inputs are returned in `unresolved` rather than silently dropped.
+
+## TDnet operating mode
+
+TDnet collection uses the official JPX public list as its source of truth. Its
+official declared count, contiguous pagination, and parsed-row count remain
+fail-closed checks. The optional non-official Yanoshin comparison is disabled
+by default (`TDNET_YANOSHIN_CROSSCHECK_ENABLED=false`), so third-party downtime
+cannot block otherwise complete official JPX collection.
 
 ## Data model and safe migration
 

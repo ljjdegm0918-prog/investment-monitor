@@ -1,7 +1,8 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import sqlite3
 
 from investment_monitor import (
     InformationItem,
@@ -123,7 +124,53 @@ class SQLiteInformationRepositoryTests(unittest.TestCase):
         stored_sec_item = self.repository.query(source="sec")[0]
         self.assertEqual(stored_sec_item.title, "Updated title")
 
+    def test_tdnet_logical_item_keeps_distinct_immutable_versions(self) -> None:
+        first = make_item(
+            source="tdnet_public_web",
+            external_id="synthetic:stable",
+            ticker="7203",
+            published_at=datetime(2026, 8, 7, 1, tzinfo=timezone.utc),
+        )
+        first = InformationItem(
+            **{
+                **first.__dict__,
+                "market": "jp",
+                "raw_metadata": {
+                    "raw_content_hash": "hash-one",
+                    "official_source_url": "https://example.test/page",
+                },
+            }
+        )
+        second = InformationItem(
+            **{
+                **first.__dict__,
+                "title": "Changed observation",
+                "raw_metadata": {
+                    "raw_content_hash": "hash-two",
+                    "official_source_url": "https://example.test/page",
+                },
+            }
+        )
+        self.repository.save([first])
+        self.repository.save([second])
+        with sqlite3.connect(str(self.repository._database_path)) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM information_item_versions"
+            ).fetchone()[0]
+        self.assertEqual(self.repository.count(), 1)
+        self.assertEqual(count, 2)
+
+    def test_exact_utc_range_is_half_open_at_24_hour_boundaries(self) -> None:
+        start = datetime(2026, 8, 6, 12, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 7, 12, tzinfo=timezone.utc)
+        self.repository.save([
+            make_item(source="sec", external_id="before", ticker="AAPL", published_at=start),
+            make_item(source="sec", external_id="inside", ticker="AAPL", published_at=end - timedelta(minutes=1)),
+            make_item(source="sec", external_id="end", ticker="AAPL", published_at=end),
+        ])
+        result = self.repository.query_published_between(start, end, ticker="AAPL")
+        self.assertEqual([item.external_id for item in result], ["before", "inside"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

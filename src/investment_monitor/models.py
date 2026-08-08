@@ -7,13 +7,14 @@ from datetime import date, datetime
 from typing import Any, Mapping, Optional, Tuple
 
 
-ALLOWED_MARKETS = frozenset({"us", "cn", "hk", "kr", "uk", "unknown"})
+ALLOWED_MARKETS = frozenset({"us", "cn", "hk", "jp", "kr", "uk", "unknown"})
 MARKET_UNKNOWN = "unknown"
 MARKET_US = "us"
 MARKET_CN = "cn"
 MARKET_HK = "hk"
 MARKET_KR = "kr"
 MARKET_UK = "uk"
+MARKET_JP = "jp"
 
 
 @dataclass(frozen=True)
@@ -85,4 +86,3 @@ class InformationItem:
                 + f"; got {self.market!r}"
             )
         object.__setattr__(self, "market", normalized_market)
-

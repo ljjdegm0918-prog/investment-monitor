@@ -76,6 +76,72 @@ class CollectionPipeline:
         save_result = SaveResult()
 
         for connector in self._connectors:
+            if bool(getattr(connector, "source_wide_collection", False)):
+                started_at = datetime.now(timezone.utc)
+                try:
+                    source_start_date = self._clamped_start_date(
+                        connector,
+                        request.start_date,
+                        request.end_date,
+                    )
+                    source_request = CollectionRequest(
+                        tickers=request.tickers,
+                        start_date=source_start_date,
+                        end_date=request.end_date,
+                        markets=request.markets,
+                    )
+                    collected = connector.collect(source_request)
+                    source_save = SaveResult()
+                    if collected and self._repository is not None:
+                        source_save = self._repository.save(collected)
+                    commit_checkpoint = getattr(
+                        connector,
+                        "commit_checkpoint",
+                        None,
+                    )
+                    if self._repository is not None and callable(commit_checkpoint):
+                        commit_checkpoint()
+                    save_result = save_result + source_save
+                    items.extend(collected)
+                    status = "success" if collected else "empty"
+                    events.append(CollectionEvent(
+                        source=connector.name,
+                        ticker="*",
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc),
+                        status=status,
+                        records_read=len(collected),
+                        records_written=source_save.inserted + source_save.updated,
+                        records_inserted=source_save.inserted,
+                        records_updated=source_save.updated,
+                        duplicate_records=source_save.updated,
+                    ))
+                except Exception as error:
+                    message = str(error) or error.__class__.__name__
+                    failures.append(CollectionFailure(
+                        source=connector.name,
+                        ticker="*",
+                        message=message,
+                    ))
+                    self._logger.error(
+                        "collection source=%s ticker=* status=failure error=%s",
+                        connector.name,
+                        message,
+                    )
+                    events.append(CollectionEvent(
+                        source=connector.name,
+                        ticker="*",
+                        started_at=started_at,
+                        finished_at=datetime.now(timezone.utc),
+                        status="failure",
+                        records_read=0,
+                        records_written=0,
+                        records_inserted=0,
+                        records_updated=0,
+                        duplicate_records=0,
+                        error_message=message,
+                    ))
+                continue
             for ticker in request.tickers:
                 started_at = datetime.now(timezone.utc)
                 ticker_start_date = self._clamped_start_date(

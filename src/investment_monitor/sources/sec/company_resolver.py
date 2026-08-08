@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 
 from .client import SECClient
 from .connector import TickerCIKResolver, _read_cache_ttl
@@ -45,6 +45,41 @@ class SECCompanyResolver:
         except Exception:
             return None
         return self._identity(normalized, cik, name)
+
+    def search(self, query: str, *, limit: int = 20) -> List[Mapping[str, str]]:
+        """Search the local official SEC mapping without making a live request."""
+        term = query.strip().casefold()
+        if not term:
+            return []
+        try:
+            payload: Any = json.loads(self._cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(payload, dict):
+            return []
+        matches = []
+        for record in payload.values():
+            if not isinstance(record, dict):
+                continue
+            ticker = str(record.get("ticker") or "").strip().upper()
+            name = str(record.get("title") or ticker).strip()
+            if term not in ticker.casefold() and term not in name.casefold():
+                continue
+            try:
+                cik = int(record["cik_str"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            matches.append({
+                **self._identity(ticker, cik, name),
+                "market": "us",
+                "region": "United States",
+            })
+        matches.sort(key=lambda item: (
+            0 if item["ticker"].casefold() == term else 1,
+            0 if item["name"].casefold().startswith(term) else 1,
+            item["ticker"],
+        ))
+        return matches[:max(1, min(limit, 50))]
 
     def _find_cached(self, ticker: str) -> Optional[Mapping[str, str]]:
         try:

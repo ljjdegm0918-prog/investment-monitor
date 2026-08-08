@@ -187,18 +187,30 @@ class WebApplication:
                 return WebResponse(204, b"", "image/x-icon")
             if method == "GET" and parsed.path.startswith("/static/"):
                 return self._static(parsed.path)
-            if method == "GET" and parsed.path in {
+            if method == "GET" and (parsed.path in {
                 "/", "/today", "/information", "/search", "/activity",
-                "/sources", "/settings", "/lists/holdings",
-                "/lists/planned", "/lists/watchlist",
-            }:
+                "/sources", "/settings", "/manage",
+            } or parsed.path.startswith("/lists/")):
                 return self._html(parsed.path)
             if method == "GET" and parsed.path == "/api/bootstrap":
                 return self._json(self._bootstrap(query))
             if method == "GET" and parsed.path == "/api/feed":
                 return self._json(self._feed(query))
+            if method == "GET" and parsed.path == "/api/daily":
+                return self._json(self._daily(query))
             if method == "GET" and parsed.path == "/api/companies":
                 return self._json({"companies": self.repository.companies(_first(query, "list"))})
+            if method == "GET" and parsed.path == "/api/companies/search":
+                term = str(_first(query, "q") or "").strip()
+                if len(term) < 1:
+                    raise ValueError("Enter a company name or ticker")
+                candidates = {
+                    (str(record["ticker"]), str(record["market"])): dict(record)
+                    for record in self.resolver.search(term)
+                }
+                for record in self.repository.search_companies(term):
+                    candidates[(str(record["ticker"]), str(record["market"]))] = dict(record)
+                return self._json({"candidates": list(candidates.values())[:20]})
             if method == "GET" and parsed.path == "/api/activity":
                 return self._json(self.repository.activity(
                     source=_first(query, "source"),
@@ -207,7 +219,23 @@ class WebApplication:
                     end_date=_query_date(query, "end_date"),
                 ))
             if method == "GET" and parsed.path == "/api/sources":
-                return self._json({"sources": self.repository.source_statuses()})
+                return self._json({"sources": self.repository.connector_statuses()})
+            if method == "POST" and parsed.path == "/api/lists":
+                payload = _decode_json(body)
+                return self._json(
+                    {"list": self.repository.create_list(str(payload.get("name") or ""))},
+                    201,
+                )
+            if method == "POST" and parsed.path == "/api/lists/rename":
+                payload = _decode_json(body)
+                return self._json({"list": self.repository.rename_list(
+                    str(payload.get("slug") or ""), str(payload.get("name") or "")
+                )})
+            if method == "POST" and parsed.path == "/api/lists/delete":
+                payload = _decode_json(body)
+                return self._json({"deleted": self.repository.delete_list(
+                    str(payload.get("slug") or "")
+                )})
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
                 market = str(payload.get("market") or MARKET_US)
@@ -576,6 +604,50 @@ class WebApplication:
             "active_filters": _filter_dict(filters),
         }
 
+    def _daily(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
+        selected_date = _query_date(query, "date") or datetime.now(EASTERN).date()
+        list_slug = _first(query, "list")
+        items: List[Mapping[str, Any]] = []
+        page = 1
+        while True:
+            result = self.repository.query_feed(FeedFilters(
+                list_slug=list_slug,
+                start_date=selected_date,
+                end_date=selected_date,
+                page=page,
+                page_size=100,
+            ))
+            items.extend(result.items)
+            if page >= result.pages:
+                break
+            page += 1
+        groups: Dict[str, Dict[str, Any]] = {}
+        for item in items:
+            key = f"{item['ticker']}:{item['market']}"
+            group = groups.setdefault(key, {
+                "ticker": item["ticker"],
+                "name": item["company_name"],
+                "exchange": item["exchange"],
+                "market": item["market"],
+                "items": [],
+            })
+            group["items"].append({
+                "time": item["effective_at"],
+                "type": _daily_item_type(str(item["source_type"])),
+                "source": _daily_source_label(item),
+                "title": item["title"],
+                "url": item["url"],
+            })
+        return {
+            "date": selected_date.isoformat(),
+            "timezone": "America/New_York",
+            "list": list_slug,
+            "companies": sorted(groups.values(), key=lambda group: (
+                str(group["name"]).casefold(), str(group["ticker"])
+            )),
+            "item_count": len(items),
+        }
+
     def _html(self, path: str) -> WebResponse:
         template = (self.static_root / "index.html").read_text(encoding="utf-8")
         view = _view_for_path(path)
@@ -800,19 +872,30 @@ def _filter_dict(filters: FeedFilters) -> Mapping[str, Any]:
 
 
 def _view_for_path(path: str) -> str:
-    if path in {"/", "/today"}:
+    if path in {"/", "/today", "/information", "/search"}:
         return "today"
-    if path == "/information":
-        return "information"
-    if path == "/search":
-        return "search"
-    if path == "/activity":
-        return "activity"
-    if path == "/sources":
-        return "sources"
-    if path == "/settings":
-        return "settings"
+    if path in {"/manage", "/activity", "/sources", "/settings"} or path.startswith("/lists/"):
+        return "manage"
     return path.rsplit("/", 1)[-1]
+
+
+def _daily_item_type(source_type: str) -> str:
+    if source_type in {"regulatory_filing", "regulatory_disclosure"}:
+        return "Filing"
+    if source_type == "news":
+        return "News"
+    if source_type == "community":
+        return "Community"
+    return source_type.replace("_", " ").title()
+
+
+def _daily_source_label(item: Mapping[str, Any]) -> str:
+    metadata = item.get("raw_metadata") or {}
+    if item.get("source_type") == "news" and isinstance(metadata, dict):
+        publisher = str(metadata.get("source") or "").strip()
+        if publisher:
+            return publisher
+    return str(item.get("source_label") or item.get("source") or "Unavailable")
 
 
 def _environment_bool(name: str, default: bool) -> bool:
