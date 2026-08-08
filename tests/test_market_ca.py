@@ -189,15 +189,19 @@ class MarketCADisclosureStatusTests(unittest.TestCase):
         """Lock the CA-1 A3 spike decision.
 
         SEDAR+ has no official public API and its Radware edge blocks
-        stdlib HTTP clients (403 on every path, including ``robots.txt``);
-        no stable key-free alternative was found, so no CA disclosure
-        connector is registered. Remove this test when a real source lands.
+        stdlib HTTP clients on the real search endpoints (403), returning
+        only a JavaScript SPA shell elsewhere; CSE fails the TLS handshake
+        and NEO returns origin timeouts from the current network. CA-4
+        re-verified the same breakpoints (2026-08-08): no stable key-free
+        disclosure source exists, so no CA disclosure connector is
+        registered. Remove this test when a real source lands.
         """
         registry = create_default_registry()
 
-        self.assertFalse(
-            any("sedar" in name for name in registry.registered_names)
-        )
+        names = registry.registered_names
+        self.assertFalse(any("sedar" in name for name in names))
+        for blocked_name in ("sedar_plus", "sedarplus", "cse_filings", "neo_filings"):
+            self.assertNotIn(blocked_name, names)
 
 
 if __name__ == "__main__":
