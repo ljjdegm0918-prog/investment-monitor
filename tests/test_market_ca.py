@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_ca_ticker
 
 
@@ -181,6 +182,22 @@ class MarketCAFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketCADisclosureStatusTests(unittest.TestCase):
+    def test_no_ca_disclosure_connector_is_registered(self) -> None:
+        """Lock the CA-1 A3 spike decision.
+
+        SEDAR+ has no official public API and its Radware edge blocks
+        stdlib HTTP clients (403 on every path, including ``robots.txt``);
+        no stable key-free alternative was found, so no CA disclosure
+        connector is registered. Remove this test when a real source lands.
+        """
+        registry = create_default_registry()
+
+        self.assertFalse(
+            any("sedar" in name for name in registry.registered_names)
+        )
 
 
 if __name__ == "__main__":

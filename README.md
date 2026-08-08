@@ -194,7 +194,7 @@ on …" label; totals and page sizes are never shrunk.
 ### Canada sources (CA)
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO` all store as `RY`; exchange suffixes `.TO` / `.TSX` / `.V` / `.TSXV` / `.CN` / `.NE` / `.NEO` are stripped at add time, board goes into `exchange` when available) and remain unmapped. SEDAR+ / TSX / TSXV disclosure, a CA universe cache, and CA news connectors are planned but not wired yet (CA-1 … CA-5). Finnhub is **US only** and never queried for CA. |
+| (none yet) | — | — | Market skeleton only: `market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO` all store as `RY`; exchange suffixes `.TO` / `.TSX` / `.V` / `.TSXV` / `.CN` / `.NE` / `.NEO` are stripped at add time, board goes into `exchange` when available) and remain unmapped. Regulatory disclosure is **deliberately not wired** (CA-1 spike): SEDAR+ has no official public API and its Radware edge returns 403 to stdlib HTTP clients on every path (including `robots.txt`); the CSE public API fails the TLS handshake from this network; no stable key-free disclosure feed was found. A CA universe cache and CA news connectors are planned (CA-2, CA-3). Finnhub is **US only** and never queried for CA. |
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
