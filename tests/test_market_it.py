@@ -188,10 +188,10 @@ class MarketITFinnhubSkipTests(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
 
-    def test_registry_has_no_it_connectors_yet(self) -> None:
+    def test_registry_has_no_it_news_connectors_yet(self) -> None:
         registry = create_default_registry()
 
-        for blocked in ("eqs_it", "yahoo_it", "google_news_it"):
+        for blocked in ("yahoo_it", "google_news_it"):
             self.assertNotIn(blocked, registry.registered_names)
 
 

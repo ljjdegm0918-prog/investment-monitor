@@ -201,6 +201,13 @@ from .sources.eqs_nl import (
     EqsNlError,
     EqsNlRequestError,
 )
+from .sources.eqs_it import (
+    EqsItClient,
+    EqsItConnector,
+    EqsItDataError,
+    EqsItError,
+    EqsItRequestError,
+)
 from .sources.nl_news import (
     GoogleNlNewsClient,
     GoogleNlNewsConnector,
@@ -361,6 +368,11 @@ __all__ = [
     "EqsNlDataError",
     "EqsNlError",
     "EqsNlRequestError",
+    "EqsItClient",
+    "EqsItConnector",
+    "EqsItDataError",
+    "EqsItError",
+    "EqsItRequestError",
     "GoogleNlNewsClient",
     "GoogleNlNewsConnector",
     "GoogleNlNewsDataError",
