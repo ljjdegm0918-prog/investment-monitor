@@ -39,6 +39,7 @@ from .sources.au_news import (
     YahooAuNewsConnector,
 )
 from .sources.amf_oam import AmfOamConnector
+from .sources.cnmv_hr import CnmvHrConnector
 from .sources.fr_news import (
     GoogleFrNewsConnector,
     YahooFrNewsConnector,
@@ -190,6 +191,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(AmfOamConnector.name, AmfOamConnector)
+    registry.register(CnmvHrConnector.name, CnmvHrConnector)
     registry.register(YahooFrNewsConnector.name, YahooFrNewsConnector)
     registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(EqsDgapConnector.name, EqsDgapConnector)

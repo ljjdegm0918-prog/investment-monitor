@@ -283,7 +283,8 @@ never shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=es` companies use canonical root tickers (`SAN` / `SAN.MC` / `SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME` are stripped at add time, Spanish ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. BME / CNMV disclosure, an ES universe cache, and ES news connectors are planned but not wired yet (ES-1 … ES-5). Finnhub is **US only** and never queried for ES. |
+| cnmv_hr | filings | none | CNMV official relevant-information RSS — inside information (IP) + other relevant information (OIR) feeds (key-free, official; live 2026-08-10). Records are keyed by issuer legal name (`Title`) with a stable `nreg` registration number; needs the ES universe name/ISIN to match a requested ticker (ES-2). The IP feed is sometimes empty for a day (honest `[]`). Not a paid MOPS-style push. |
+| (universe + news) | — | — | Market skeleton plus disclosure only so far: `market=es` companies use canonical root tickers (`SAN` / `SAN.MC` / `SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME` are stripped at add time, Spanish ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. An ES universe cache and ES news connectors are planned but not wired yet (ES-2 … ES-5). Finnhub is **US only** and never queried for ES. |
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

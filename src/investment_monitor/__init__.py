@@ -187,6 +187,14 @@ from .sources.amf_oam import (
     AmfOamError,
     AmfOamRequestError,
 )
+from .sources.cnmv_hr import (
+    CnmvHrClient,
+    CnmvHrCompanyMatcher,
+    CnmvHrConnector,
+    CnmvHrDataError,
+    CnmvHrError,
+    CnmvHrRequestError,
+)
 from .sources.eqs_dgap import (
     EqsDgapClient,
     EqsDgapConnector,

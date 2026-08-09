@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" version="2.0">
+  <Channel>
+    <title>CNMV - Otra informacion relevante.</title>
+    <link>https://www.cnmv.es/Portal/Otra-Informacion-Relevante/AlDia-OIR.aspx</link>
+    <description>Otra informacion relevante del dia (Desde el cierre de la sesion anterior).</description>
+    <generator>CNMV RSS</generator>
+    <language>es</language>
+    <ttl>15</ttl>
+    <item>
+      <Title>BANCO SANTANDER, S.A.</Title>
+      <link><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42390]]></link>
+      <guid isPermaLink="true"><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42390]]></guid>
+      <pubDate>Fri, 07 Aug 2026 15:41:40 GMT</pubDate>
+      <description><![CDATA[<p><b>17:41  07/08/2026  </b> Sobre negocio y situacion financiera<BR/><BR/>Resultados del primer semestre de 2026.</p>]]></description>
+    </item>
+    <item>
+      <Title>ACCIONA, S.A.</Title>
+      <link><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42392]]></link>
+      <guid isPermaLink="true"><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42392]]></guid>
+      <pubDate>Fri, 07 Aug 2026 15:59:39 GMT</pubDate>
+      <description><![CDATA[<p><b>17:59  07/08/2026  </b> Contratos de liquidez y contrapartida<BR/><BR/>ACCIONA informa de la reactivacion de la operativa al amparo del contrato de liquidez.</p>]]></description>
+    </item>
+    <item>
+      <Title>IZERTIS , S.A.</Title>
+      <link><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42391]]></link>
+      <guid isPermaLink="true"><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42391]]></guid>
+      <pubDate>Fri, 07 Aug 2026 15:47:09 GMT</pubDate>
+      <description><![CDATA[<p><b>17:47  07/08/2026  </b> Contratos de liquidez y contrapartida<BR/><BR/>IZERTIS anuncia la suspension temporal de su contrato de liquidez.</p>]]></description>
+    </item>
+    <item>
+      <Title>BANCO SANTANDER, S.A.</Title>
+      <link><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42350]]></link>
+      <guid isPermaLink="true"><![CDATA[https://www.cnmv.es/Portal/Otra-Informacion-Relevante/Resultado-OIR.aspx?nreg=42350]]></guid>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 GMT</pubDate>
+      <description><![CDATA[<p><b>12:00  20/07/2026  </b> Sobre negocio y situacion financiera<BR/><BR/>Anuncio fuera de la ventana.</p>]]></description>
+    </item>
+  </Channel>
+</rss>

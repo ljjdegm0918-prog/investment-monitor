@@ -108,6 +108,10 @@ sources:
     label: AMF OAM
     source_type: filings
     enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: cnmv_hr
+    label: CNMV (hechos relevantes)
+    source_type: filings
+    enabled: true          # key-free official CNMV RSS (IP + OIR); needs universe name/ISIN to match
   - name: yahoo_fr
     label: Yahoo Finance FR
     source_type: news
