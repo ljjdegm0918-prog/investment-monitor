@@ -270,6 +270,15 @@ are stripped at add time, Italian ISINs are kept as-is, board goes into
 never queried for IT. `it_universe_name_map()` backfills names, board and
 ISIN for add-company. News comes from `yahoo_it` / `google_news_it`.
 
+IT feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_it` / `google_news_it` news
+pairs across sources on ticker + Rome day (`Europe/Rome`) + normalized
+title. `eqs_it` filings pair on the stable EQS news id, or on a same-source
+title fallback (ticker + Rome day + normalized title); with only one
+disclosure source wired there is no cross-source filing pairing. Every row
+stays in the feed with an "Also seen on …" label; totals and page sizes are
+never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
