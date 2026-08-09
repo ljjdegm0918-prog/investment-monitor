@@ -33,6 +33,11 @@ from .sources.tw_news import (
     GoogleTwNewsConnector,
     YahooTwNewsConnector,
 )
+from .sources.asx_announcements import AsxAnnouncementsConnector
+from .sources.au_news import (
+    GoogleAuNewsConnector,
+    YahooAuNewsConnector,
+)
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 
@@ -155,6 +160,9 @@ def create_default_registry() -> SourceRegistry:
     registry.register(TpexMaterialConnector.name, TpexMaterialConnector)
     registry.register(YahooTwNewsConnector.name, YahooTwNewsConnector)
     registry.register(GoogleTwNewsConnector.name, GoogleTwNewsConnector)
+    registry.register(AsxAnnouncementsConnector.name, AsxAnnouncementsConnector)
+    registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
+    registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

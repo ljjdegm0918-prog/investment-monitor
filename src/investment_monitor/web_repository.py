@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -52,6 +52,9 @@ SOURCE_LABELS = {
     "tpex_material": "TPEx OpenAPI (material)",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
+    "asx_announcements": "ASX Market Announcements",
+    "yahoo_au": "Yahoo Finance AU",
+    "google_news_au": "Google News (AU)",
     "sedar_plus": "SEDAR+ (not wired)",
     "cse_filings": "CSE filings (not wired)",
     "neo_filings": "NEO filings (not wired)",
@@ -76,6 +79,9 @@ PROVIDER_LABELS = {
     "tpex_material": "TPEx OpenAPI (material)",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
+    "asx_announcements": "ASX Market Announcements",
+    "yahoo_au": "Yahoo Finance AU",
+    "google_news_au": "Google News (AU)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -516,6 +522,10 @@ class WebRepository:
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
             )
         board_hints: Dict[str, str] = {}
+        if market == MARKET_AU:
+            tickers = tuple(
+                dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
+            )
         if market == MARKET_TW:
             tickers = tuple(
                 dict.fromkeys(normalize_tw_ticker(ticker) for ticker in tickers)
@@ -1849,7 +1859,38 @@ def _market_region(market: str) -> str:
         "uk": "United Kingdom",
         "tw": "Taiwan",
         "ca": "Canada",
+        "au": "Australia",
     }.get(market, "Unavailable")
+
+
+def normalize_au_ticker(ticker: str) -> str:
+    """Normalize an Australian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``BHP``) and the common exchange suffixes used by
+    Australian data providers (``BHP.AX``, ``BHP.ASX``; space or dash
+    separators are tolerated too, and stacked suffixes like ``BHP.AX.AX``
+    collapse to ``BHP``). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``AX``, ``ASX``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AU_TICKER_SEPARATORS:
+            for suffix in _AU_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_AU_TICKER_SUFFIXES = ("ASX", "AX")
+_AU_TICKER_SEPARATORS = (".", " ", "-")
 
 
 def normalize_tw_ticker(ticker: str) -> str:

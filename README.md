@@ -173,6 +173,19 @@ filings are never annotated because no CA disclosure connector is wired.
 same-source only (never cross-board by title); news pairs on ticker + Taipei
 day + normalized title.
 
+### Australia sources (AU)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| asx_announcements | filings | none | ASX company announcements via key-free research API; undocumented; latest 5 per company; may change without notice |
+| au_universe | breadth cache | none | ASX company directory; never enters the feed |
+| yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
+| google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
+
+`market=au` uses canonical root tickers (`BHP` / `BHP.AX` → `BHP`). Finnhub
+is **US only**. Soft-dedupe: ASX filings pair on document key (or same-source
+title fallback); news pairs on ticker + Sydney day + normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

@@ -16,7 +16,11 @@ ticker + Taipei day + normalized title. TW news (yahoo_tw / google_news_tw)
 pairs across sources on ticker + Taipei day + normalized title. For CA, no
 disclosure connector is wired (SEDAR+ A3 spike), so regulatory filings never
 get a key and are never annotated; CA news (yahoo_ca / google_news_ca)
-pairs across sources on ticker + Toronto day + normalized title.
+pairs across sources on ticker + Toronto day + normalized title. For AU,
+the only wired disclosure source is asx_announcements, which pairs on its
+stable ASX document key, or on a source-scoped title fallback (ticker +
+Sydney day + normalized title); AU news (yahoo_au / google_news_au) pairs
+across sources on ticker + Sydney day + normalized title.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ LONDON = ZoneInfo("Europe/London")
 HKT = ZoneInfo("Asia/Hong_Kong")
 TAIPEI = ZoneInfo("Asia/Taipei")
 TORONTO = ZoneInfo("America/Toronto")
+SYDNEY = ZoneInfo("Australia/Sydney")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -43,6 +48,7 @@ FILING_SOURCE_PRIORITY = {
     "hkex_di": 6,
     "twse_material": 7,
     "tpex_material": 8,
+    "asx_announcements": 9,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -55,6 +61,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_tw": 7,
     "yahoo_ca": 8,
     "google_news_ca": 9,
+    "yahoo_au": 10,
+    "google_news_au": 11,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -76,6 +84,9 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_tw": "Google News (TW)",
     "yahoo_ca": "Yahoo Finance CA",
     "google_news_ca": "Google News (CA)",
+    "asx_announcements": "ASX announcements",
+    "yahoo_au": "Yahoo Finance AU",
+    "google_news_au": "Google News (AU)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -86,7 +97,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk", "tw", "ca"}:
+    if market not in {"kr", "uk", "hk", "tw", "ca", "au"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -177,7 +188,35 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         # No CA disclosure connector is wired (SEDAR+ A3 spike); a stray
         # regulatory_filing row must never be cross-annotated.
         return None
+    if market == "au":
+        return _au_filing_key(item)
     return _uk_filing_key(item)
+
+
+def _au_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """AU filings pair on the stable ASX document key, or a title fallback.
+
+    ``asx_announcements`` is the only wired AU disclosure source; its
+    document key (``raw_metadata.document_key`` or ``external_id``) is the
+    primary identity. Without one, the fallback is source-scoped (source +
+    ticker + Sydney day + normalized title), so a hypothetical second AU
+    disclosure source is never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    document_key = str(
+        metadata.get("document_key") or item.get("external_id") or ""
+    ).strip()
+    if document_key:
+        return f"au:filing:asx:{document_key}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, SYDNEY)
+    if title and day:
+        return (
+            f"au:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
 
 
 def _kr_filing_key(item: Mapping[str, Any]) -> Optional[str]:
@@ -267,6 +306,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "tw"
         else TORONTO
         if market == "ca"
+        else SYDNEY
+        if market == "au"
         else LONDON
     )
     title = normalize_title(item.get("title"))
