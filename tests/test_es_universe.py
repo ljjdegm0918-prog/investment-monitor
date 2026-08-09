@@ -106,6 +106,7 @@ class EsUniverseRefreshTests(unittest.TestCase):
                 "exchange": "BME (SIBE)",
                 "board": "BME (SIBE)",
                 "isin": "ES0113900J37",
+                "company_key": "13900",
             },
         )
         self.assertEqual(name_map["SCAFS"]["exchange"], "BME ScaleUp")

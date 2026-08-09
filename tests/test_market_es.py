@@ -13,6 +13,7 @@ from investment_monitor import (
     WebRepository,
 )
 from investment_monitor.web_repository import normalize_es_ticker
+from investment_monitor.registry import create_default_registry
 
 
 class MarketESTests(unittest.TestCase):
@@ -186,6 +187,35 @@ class MarketESFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketESDisclosureFollowupTests(unittest.TestCase):
+    def test_es_disclosure_connectors_remain_registered(self) -> None:
+        registry = create_default_registry()
+
+        self.assertIsNotNone(registry.factory_for("cnmv_hr"))
+        self.assertIsNotNone(registry.factory_for("bme_relevant_facts"))
+
+    def test_no_paid_or_fake_es_disclosure_connector_is_registered(self) -> None:
+        """Lock the ES-4 second-source boundary.
+
+        ES-4 re-verified (2026-08-10): the official BME relevant-facts JSON
+        API is wired as the second key-free disclosure source (it carries
+        the same CNMV registration numbers). Paid BME market-data services
+        (real-time/historical data) and other not-verified sources must not
+        be registered. Remove entries from the blocked list only when a real
+        key-free source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "bme_realtime",
+            "bme_historical_data",
+            "eqs_es",
+            "six_realtime",
+        ):
+            self.assertNotIn(blocked_name, names)
 
 
 if __name__ == "__main__":

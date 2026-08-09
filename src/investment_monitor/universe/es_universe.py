@@ -214,7 +214,7 @@ def refresh_es_universe(
 def es_universe_name_map(
     path: Optional[Path] = None,
 ) -> Mapping[str, Mapping[str, str]]:
-    """Return normalized ticker -> {name, exchange, board, isin}."""
+    """Return normalized ticker -> {name, exchange, board, isin, company_key}."""
     payload = load_es_universe(path)
     if not payload:
         return {}
@@ -237,6 +237,7 @@ def es_universe_name_map(
             "exchange": board,
             "board": board,
             "isin": str(item.get("isin") or ""),
+            "company_key": str(item.get("company_key") or ""),
         }
     return result
 

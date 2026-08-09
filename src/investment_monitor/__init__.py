@@ -195,6 +195,13 @@ from .sources.cnmv_hr import (
     CnmvHrError,
     CnmvHrRequestError,
 )
+from .sources.bme_relevant_facts import (
+    BmeRelevantFactsClient,
+    BmeRelevantFactsConnector,
+    BmeRelevantFactsDataError,
+    BmeRelevantFactsError,
+    BmeRelevantFactsRequestError,
+)
 from .sources.eqs_dgap import (
     EqsDgapClient,
     EqsDgapConnector,

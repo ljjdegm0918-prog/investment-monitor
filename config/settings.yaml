@@ -112,6 +112,10 @@ sources:
     label: CNMV (hechos relevantes)
     source_type: filings
     enabled: true          # key-free official CNMV RSS (IP + OIR); needs universe name/ISIN to match
+  - name: bme_relevant_facts
+    label: BME Relevant Facts
+    source_type: filings
+    enabled: true          # key-free official BME relevant-facts JSON; needs universe company key; ~31 day range cap
   - name: yahoo_fr
     label: Yahoo Finance FR
     source_type: news
