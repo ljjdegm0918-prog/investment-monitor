@@ -232,7 +232,13 @@ Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` / `ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA` are stripped at add time, Dutch ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. Euronext Amsterdam disclosure, an NL universe cache, and NL news connectors are planned but not wired yet (NL-1 … NL-5). Finnhub is **US only** and never queried for NL. |
+| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). Needs ISIN from the NL universe cache or a typed Dutch ISIN. An NL universe cache and NL news connectors are planned but not wired yet (NL-2, NL-3). |
+
+`market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` /
+`ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA`
+are stripped at add time, Dutch ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped. Finnhub is **US only** and
+never queried for NL.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

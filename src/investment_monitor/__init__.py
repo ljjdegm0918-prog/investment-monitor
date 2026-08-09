@@ -194,6 +194,13 @@ from .sources.eqs_dgap import (
     EqsDgapError,
     EqsDgapRequestError,
 )
+from .sources.eqs_nl import (
+    EqsNlClient,
+    EqsNlConnector,
+    EqsNlDataError,
+    EqsNlError,
+    EqsNlRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,
@@ -329,6 +336,11 @@ __all__ = [
     "EqsDgapDataError",
     "EqsDgapError",
     "EqsDgapRequestError",
+    "EqsNlClient",
+    "EqsNlConnector",
+    "EqsNlDataError",
+    "EqsNlError",
+    "EqsNlRequestError",
     "AuUniverseError",
     "CaUniverseError",
     "DeUniverseError",

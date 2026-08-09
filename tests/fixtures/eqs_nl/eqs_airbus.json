@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "records": [
+    {
+      "id": "73f3a9ba-6003-4506-900b-50bc834927d6_en",
+      "dtcreated": "2026-08-05 09:30:15",
+      "date": "2026-08-05 09:30:15",
+      "dateUtc": "2026-08-05 07:30:00",
+      "apiType": "news",
+      "locale": ["en"],
+      "category": "Ad-hoc",
+      "categoryCode": "adhoc",
+      "category_id": "adhoc",
+      "companyName": "Airbus SE",
+      "companyUUID": "5b746e62-ea7c-11e8-902f-2c44fd856d8c",
+      "isin": "NL0000235190",
+      "timezone": "Europe/Berlin",
+      "headline": "Airbus reports Half-Year (H1) 2026 results",
+      "language": "en",
+      "totalItem": 80
+    },
+    {
+      "id": "7b803cb1-6003-4506-900b-50bc834927d7_en",
+      "date": "2026-07-20 10:00:00",
+      "dateUtc": "2026-07-20 08:00:00",
+      "apiType": "news",
+      "locale": ["en"],
+      "category": "Annual report",
+      "categoryCode": "annualreport",
+      "companyName": "Airbus SE",
+      "isin": "NL0000235190",
+      "headline": "Airbus publishes 2025 Annual Report",
+      "language": "en"
+    }
+  ]
+}

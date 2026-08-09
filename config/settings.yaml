@@ -128,6 +128,10 @@ sources:
     label: Google News (DE)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=de); may be loosely related / break without notice
+  - name: eqs_nl
+    label: EQS News (NL)
+    source_type: filings
+    enabled: true          # key-free EQS News JSON by NL ISIN (unofficial; partial Dutch coverage; not AFM official); needs ISIN from universe or typed ISIN
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.
