@@ -119,7 +119,7 @@ function bindManagement() {
 const MARKET_HINTS = {
   us: "US candidates come from the local official SEC mapping.",
   jp: "Japan companies are added as unmapped. Use Add ticker with the local code; EDINET/TDnet collect by market=jp.",
-  hk: "Hong Kong companies are added as unmapped (no SEC mapping).",
+  hk: "HKEXnews announcement search is connected (unofficial page API; may change). HKEX DI is available but disabled by default (legacy archive 2003-2017). Yahoo Finance HK news via public RSS. Universe cache can backfill names. Finnhub is US-only.",
   cn: "A-share companies are added as unmapped (no SEC mapping).",
   kr: "Korea companies resolve via OpenDART when configured; otherwise add as unmapped.",
   uk: "UK companies resolve via Companies House when configured.",

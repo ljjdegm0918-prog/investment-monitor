@@ -134,6 +134,19 @@ UK feed soft-dedupe (display only, all rows kept): filings annotate on RNS ids
 same-source only, so Companies House and Investegate are never cross-annotated
 by title. News pairs on ticker + London day + normalized title.
 
+### Hong Kong sources (HK)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| hkexnews | filings | none | Unofficial HKEXnews title-search JSON; may change without notice |
+| hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
+| yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
+| hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
+
+HK tickers are canonical five-digit codes (`700` / `0700` / `00700.HK` →
+`00700`). Finnhub is **US only**. Soft-dedupe: hkexnews on NEWS_ID, hkex_di on
+form serial (never cross-paired by title); yahoo_hk on ticker + Hong Kong day.
+
 ### Canada sources (CA)
 
 **Not a full Canadian market track.** Wired today: TSX/TSXV universe cache +

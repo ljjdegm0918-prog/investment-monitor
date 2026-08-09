@@ -38,6 +38,9 @@ from .sources.au_news import (
     GoogleAuNewsConnector,
     YahooAuNewsConnector,
 )
+from .sources.hkexnews import HkexNewsConnector
+from .sources.hkex_di import HkexDiConnector
+from .sources.hk_news import YahooHkNewsConnector
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 
@@ -150,10 +153,13 @@ def create_default_registry() -> SourceRegistry:
         configuration_error=CompaniesHouseConnector.configuration_error,
     )
     registry.register(InvestegateConnector.name, InvestegateConnector)
+    registry.register(HkexNewsConnector.name, HkexNewsConnector)
+    registry.register(HkexDiConnector.name, HkexDiConnector)
     registry.register(NaverNewsConnector.name, NaverNewsConnector)
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
     registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
     registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
     registry.register(TwseMaterialConnector.name, TwseMaterialConnector)

@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -42,10 +42,13 @@ SOURCE_LABELS = {
     "kind": "KIND (KRX)",
     "companies_house": "Companies House",
     "investegate": "Investegate",
+    "hkexnews": "HKEXnews (HKEX)",
+    "hkex_di": "Disclosure of Interests (HKEX)",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
     "yahoo_ca": "Yahoo Finance CA",
     "google_news_ca": "Google News (CA)",
     "twse_material": "TWSE OpenAPI (material)",
@@ -69,10 +72,13 @@ PROVIDER_LABELS = {
     "kind": "KIND (KRX)",
     "companies_house": "Companies House",
     "investegate": "Investegate",
+    "hkexnews": "HKEXnews (HKEX)",
+    "hkex_di": "Disclosure of Interests (HKEX)",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
     "yahoo_ca": "Yahoo Finance CA",
     "google_news_ca": "Google News (CA)",
     "twse_material": "TWSE OpenAPI (material)",
@@ -522,6 +528,10 @@ class WebRepository:
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
             )
         board_hints: Dict[str, str] = {}
+        if market == MARKET_HK:
+            tickers = tuple(
+                dict.fromkeys(normalize_hk_ticker(ticker) for ticker in tickers)
+            )
         if market == MARKET_AU:
             tickers = tuple(
                 dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
@@ -1891,6 +1901,24 @@ def normalize_au_ticker(ticker: str) -> str:
 
 _AU_TICKER_SUFFIXES = ("ASX", "AX")
 _AU_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def normalize_hk_ticker(ticker: str) -> str:
+    """Normalize a Hong Kong stock code to its canonical five-digit form.
+
+    Accepts 700, 0700, 00700 and 0700.HK (also with a space or dash before
+    HK) and stores the stable form 00700. Non-numeric input is preserved
+    unchanged rather than silently dropped.
+    """
+    cleaned = str(ticker).strip().upper()
+    core = (
+        cleaned.removesuffix(".HK")
+        .removesuffix(" HK")
+        .removesuffix("-HK")
+    )
+    if core.isdigit():
+        return core.zfill(5)
+    return cleaned
 
 
 def normalize_tw_ticker(ticker: str) -> str:

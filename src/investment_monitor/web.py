@@ -26,13 +26,23 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError
 from .au_universe import au_universe_name_map
 from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_universe
+from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_AU, MARKET_CA, MARKET_KR, MARKET_TW, MARKET_UK, MARKET_US
+from .models import (
+    MARKET_AU,
+    MARKET_CA,
+    MARKET_HK,
+    MARKET_KR,
+    MARKET_TW,
+    MARKET_UK,
+    MARKET_US,
+)
 from .tw_universe import tw_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
+from .sources.hkexnews import HKEXNewsCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -173,6 +183,7 @@ class WebApplication:
                     companies_house_cache_path
                 )
             )
+        self.hkexnews_resolver = HKEXNewsCompanyResolver()
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -248,6 +259,8 @@ class WebApplication:
                     name_fallback = kr_universe_name_map()
                 elif market == MARKET_UK:
                     name_fallback = uk_universe_name_map()
+                elif market == MARKET_HK:
+                    name_fallback = hk_universe_name_map()
                 elif market == MARKET_TW:
                     name_fallback = tw_universe_name_map()
                 elif market == MARKET_AU:
@@ -489,6 +502,10 @@ class WebApplication:
             # UK maps through Companies House; never let SEC map a UK ticker
             # to a same-named US company.
             return self.companies_house_resolver
+        if market == MARKET_HK:
+            # HK maps through the HKEXnews active stock list; never let SEC
+            # map a Hong Kong code to a same-named US company.
+            return self.hkexnews_resolver
         if market == MARKET_TW:
             # TW disclosure mapping is not connected yet; never let SEC map
             # a Taiwan code to a same-named US company.

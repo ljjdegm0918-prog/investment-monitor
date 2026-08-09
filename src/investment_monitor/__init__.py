@@ -40,6 +40,12 @@ from .au_universe import (
     refresh_au_universe,
     search_au_universe,
 )
+from .hk_universe import (
+    HkUniverseError,
+    hk_universe_name_map,
+    load_hk_universe,
+    refresh_hk_universe,
+)
 from .tw_universe import (
     TwUniverseError,
     load_tw_universe,
@@ -173,6 +179,28 @@ from .sources.au_news import (
     YahooAuNewsError,
     YahooAuNewsRequestError,
 )
+from .sources.hkexnews import (
+    HKEXNewsCompanyResolver,
+    HkexNewsClient,
+    HkexNewsConnector,
+    HkexNewsDataError,
+    HkexNewsError,
+    HkexNewsRequestError,
+)
+from .sources.hkex_di import (
+    HkexDiClient,
+    HkexDiConnector,
+    HkexDiDataError,
+    HkexDiError,
+    HkexDiRequestError,
+)
+from .sources.hk_news import (
+    YahooHkNewsClient,
+    YahooHkNewsConnector,
+    YahooHkNewsDataError,
+    YahooHkNewsError,
+    YahooHkNewsRequestError,
+)
 from .sources.sec import (
     SECClient,
     SECConfigurationError,
@@ -236,6 +264,18 @@ __all__ = [
     "AsxAnnouncementsRequestError",
     "AuUniverseError",
     "CaUniverseError",
+    "HKEXNewsCompanyResolver",
+    "HkUniverseError",
+    "HkexDiClient",
+    "HkexDiConnector",
+    "HkexDiDataError",
+    "HkexDiError",
+    "HkexDiRequestError",
+    "HkexNewsClient",
+    "HkexNewsConnector",
+    "HkexNewsDataError",
+    "HkexNewsError",
+    "HkexNewsRequestError",
     "CompaniesHouseClient",
     "CompaniesHouseCompanyResolver",
     "CompaniesHouseConnector",
@@ -349,6 +389,11 @@ __all__ = [
     "YahooAuNewsDataError",
     "YahooAuNewsError",
     "YahooAuNewsRequestError",
+    "YahooHkNewsClient",
+    "YahooHkNewsConnector",
+    "YahooHkNewsDataError",
+    "YahooHkNewsError",
+    "YahooHkNewsRequestError",
     "GoogleTwNewsClient",
     "GoogleTwNewsConnector",
     "GoogleTwNewsDataError",
@@ -359,9 +404,11 @@ __all__ = [
     "create_default_registry",
     "au_universe_name_map",
     "ca_universe_name_map",
+    "hk_universe_name_map",
     "kr_universe_name_map",
     "load_au_universe",
     "load_ca_universe",
+    "load_hk_universe",
     "load_kr_universe",
     "load_tw_universe",
     "load_uk_universe",
@@ -370,6 +417,7 @@ __all__ = [
     "load_universe",
     "refresh_au_universe",
     "refresh_ca_universe",
+    "refresh_hk_universe",
     "refresh_kr_universe",
     "refresh_tw_universe",
     "refresh_uk_universe",

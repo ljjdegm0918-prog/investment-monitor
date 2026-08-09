@@ -20,6 +20,14 @@ sources:
     label: Investegate
     source_type: filings
     enabled: true          # RNS-class public mirror; page scrape, may break without notice
+  - name: hkexnews
+    label: HKEXnews (HKEX)
+    source_type: filings
+    enabled: true          # key-free HKEXnews announcement search; unofficial page API, may change without notice
+  - name: hkex_di
+    label: Disclosure of Interests (HKEX)
+    source_type: filings
+    enabled: false         # default off: legacy archive 2003-2017 only; enable explicitly for historical backfill
   - name: news
     label: News
     source_type: news
@@ -40,6 +48,10 @@ sources:
     label: Yahoo Finance UK
     source_type: news
     enabled: true          # key-free public RSS; may break without notice
+  - name: yahoo_hk
+    label: Yahoo Finance HK
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
   - name: yahoo_ca
     label: Yahoo Finance CA
     source_type: news
