@@ -48,6 +48,7 @@ from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
+from .sources.eqs_dgap import EqsDgapConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -189,4 +190,5 @@ def create_default_registry() -> SourceRegistry:
         secret_fields=EDINETConnector.secret_fields,
         configuration_error=EDINETConnector.configuration_error,
     )
+    registry.register(EqsDgapConnector.name, EqsDgapConnector)
     return registry

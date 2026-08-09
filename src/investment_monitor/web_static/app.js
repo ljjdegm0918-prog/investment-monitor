@@ -129,7 +129,7 @@ const MARKET_HINTS = {
   ca: "CA market (partial — not a full Canadian stack): root tickers strip .TO/.TSX/.V/.TSXV/.CN/.NE/.NEO; board backfills from ca_universe (TSX/TSXV) or typed suffix when cold. Universe does NOT cover CSE/NEO directories. Disclosure is NOT wired: SEDAR+/CSE/NEO filings unwired. News: Yahoo Finance CA + Google News CA. Finnhub is US-only.",
   au: "AU market: root tickers strip .AX/.ASX. ASX announcements via key-free research API (latest 5 per company; may change). Universe backfills names/board. News: Yahoo Finance AU + Google News AU. Finnhub is US-only.",
   fr: "FR market (Euronext Paris): root tickers strip .PA/.PAR; French ISINs kept as-is. AMF OAM disclosure + Euronext Paris/Growth/Access universe cache + Yahoo/Google FR news. Companies stay unmapped. Finnhub is US-only.",
-  de: "DE market (XETRA/Frankfurt): root tickers strip .DE/.XETRA/.XE/.F; German ISINs kept as-is. Disclosure / news / universe are not wired in DE-0. Companies stay unmapped. Finnhub is US-only.",
+  de: "DE market (XETRA/Frankfurt): root tickers strip .DE/.XETRA/.XE/.F; German ISINs kept as-is. EQS/DGAP disclosure is stubbed (status: stub, not wired yet); news / universe are not wired in DE-0. Companies stay unmapped. Finnhub is US-only.",
 };
 
 function updateMarketHint() {

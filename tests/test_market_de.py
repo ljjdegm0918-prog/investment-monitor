@@ -13,6 +13,8 @@ from investment_monitor import (
 )
 from investment_monitor.web_repository import normalize_de_ticker
 from investment_monitor.sources.news import FinnhubNewsConnector
+from investment_monitor.sources.eqs_dgap import EqsDgapConnector
+from investment_monitor.registry import create_default_registry
 
 
 class MarketDETests(unittest.TestCase):
@@ -167,6 +169,34 @@ class MarketDEFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketDEDisclosureStubTests(unittest.TestCase):
+    def test_eqs_dgap_stub_is_registered(self) -> None:
+        registry = create_default_registry()
+        self.assertIn("eqs_dgap", registry.registered_names)
+        self.assertIsNotNone(registry.factory_for("eqs_dgap"))
+
+    def test_eqs_dgap_stub_collects_nothing_without_network(self) -> None:
+        connector = EqsDgapConnector()
+
+        items = connector.collect(
+            CollectionRequest(
+                tickers=("SAP",),
+                start_date=date(2026, 8, 1),
+                end_date=date(2026, 8, 2),
+                markets={"SAP": "de"},
+            )
+        )
+
+        self.assertEqual(items, [])
+        self.assertEqual(connector.last_errors, ())
+
+    def test_eqs_dgap_stub_marks_status_and_url_templates(self) -> None:
+        self.assertEqual(EqsDgapConnector.status, "stub")
+        self.assertEqual(EqsDgapConnector.provider, "EQS Group / DGAP")
+        self.assertIn("search", EqsDgapConnector.URL_TEMPLATES)
+        self.assertIn("detail", EqsDgapConnector.URL_TEMPLATES)
 
 
 if __name__ == "__main__":
