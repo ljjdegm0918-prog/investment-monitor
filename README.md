@@ -232,13 +232,15 @@ Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). Needs ISIN from the NL universe cache or a typed Dutch ISIN. An NL universe cache and NL news connectors are planned but not wired yet (NL-2, NL-3). |
+| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). Needs ISIN from the NL universe cache or a typed Dutch ISIN. |
+| nl_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Amsterdam segment rows (key-free; live 2026-08-10: ~119 `Euronext Amsterdam` + ~16 multi-venue rows mentioning Amsterdam, e.g. `Euronext Amsterdam, Brussels`; non-Amsterdam boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. NL news connectors are planned (NL-3). |
 
 `market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` /
 `ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA`
 are stripped at add time, Dutch ISINs are kept as-is, board goes into
-`exchange` when available) and remain unmapped. Finnhub is **US only** and
-never queried for NL.
+`exchange` when available) and remain unmapped;
+`nl_universe_name_map()` backfills names, board and ISIN for add-company.
+Finnhub is **US only** and never queried for NL.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_NL
+from ...universe.nl_universe import nl_universe_name_map
 from ...web_repository import normalize_nl_ticker
 from .client import (
     EqsNlClient,
@@ -41,10 +42,10 @@ class EqsNlConnector:
         universe: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> None:
         self._client = client or EqsNlClient.from_environment()
-        # NL-1 ships before nl_universe (NL-2); the universe default is
-        # replaced by nl_universe_name_map() in the NL-2 slice.
         self._universe = (
-            dict(universe) if universe is not None else {}
+            dict(universe)
+            if universe is not None
+            else nl_universe_name_map()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 
