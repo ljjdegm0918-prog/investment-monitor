@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_IT
+from ...universe.it_universe import it_universe_name_map
 from ...web_repository import normalize_it_ticker
 from .client import (
     EqsItClient,
@@ -41,10 +42,10 @@ class EqsItConnector:
         universe: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> None:
         self._client = client or EqsItClient.from_environment()
-        # IT-1 ships before it_universe (IT-2); the universe default is
-        # replaced by it_universe_name_map() in the IT-2 slice.
         self._universe = (
-            dict(universe) if universe is not None else {}
+            dict(universe)
+            if universe is not None
+            else it_universe_name_map()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 

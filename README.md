@@ -258,13 +258,15 @@ totals and page sizes are never shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_it | filings | none | EQS News JSON by Italian ISIN (key-free, unofficial WP API — may change; partial Italian-issuer coverage; empty for issuers not on the platform; NOT a Consob official feed). Consob public registers and Borsa Italiana/Euronext Milan announcement pages are not wired (no stable key-free JSON). Needs ISIN from the IT universe cache or a typed Italian ISIN. An IT universe cache and IT news connectors are planned but not wired yet (IT-2, IT-3). |
+| eqs_it | filings | none | EQS News JSON by Italian ISIN (key-free, unofficial WP API — may change; partial Italian-issuer coverage; empty for issuers not on the platform; NOT a Consob official feed). Consob public registers and Borsa Italiana/Euronext Milan announcement pages are not wired (no stable key-free JSON). Needs ISIN from the IT universe cache or a typed Italian ISIN. |
+| it_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Milan segment rows (key-free; live 2026-08-10: ~204 `Euronext Milan` + ~243 `Euronext Growth Milan`; filter also accepts `Borsa Italiana`/`Milano` labels if they ever appear; non-Italian boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. IT news connectors are planned (IT-3). |
 
 `market=it` companies use canonical root tickers (`ENI` / `ENI.MI` /
 `ENI-MIL` all store as `ENI`; exchange suffixes `.MI` / `.MIL` / `.BIT`
 are stripped at add time, Italian ISINs are kept as-is, board goes into
 `exchange` when available) and remain unmapped. Finnhub is **US only** and
-never queried for IT.
+never queried for IT. `it_universe_name_map()` backfills names, board and
+ISIN for add-company.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

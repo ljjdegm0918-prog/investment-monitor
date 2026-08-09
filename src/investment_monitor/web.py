@@ -45,6 +45,7 @@ from .tw_universe import tw_universe_name_map
 from .universe.fr_universe import fr_universe_name_map
 from .universe.de_universe import de_universe_name_map
 from .universe.nl_universe import nl_universe_name_map
+from .universe.it_universe import it_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -278,6 +279,8 @@ class WebApplication:
                     name_fallback = de_universe_name_map()
                 elif market == MARKET_NL:
                     name_fallback = nl_universe_name_map()
+                elif market == MARKET_IT:
+                    name_fallback = it_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:

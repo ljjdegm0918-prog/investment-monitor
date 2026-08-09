@@ -265,6 +265,13 @@ from .universe.nl_universe import (
     refresh_nl_universe,
     search_nl_universe,
 )
+from .universe.it_universe import (
+    ItUniverseError,
+    it_universe_name_map,
+    load_it_universe,
+    refresh_it_universe,
+    search_it_universe,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -383,6 +390,7 @@ __all__ = [
     "DeUniverseError",
     "FrUniverseError",
     "NlUniverseError",
+    "ItUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -555,6 +563,7 @@ __all__ = [
     "de_universe_name_map",
     "fr_universe_name_map",
     "nl_universe_name_map",
+    "it_universe_name_map",
     "hk_universe_name_map",
     "kr_universe_name_map",
     "load_au_universe",
@@ -573,6 +582,7 @@ __all__ = [
     "refresh_de_universe",
     "refresh_fr_universe",
     "refresh_nl_universe",
+    "refresh_it_universe",
     "refresh_hk_universe",
     "refresh_kr_universe",
     "refresh_tw_universe",
@@ -582,6 +592,7 @@ __all__ = [
     "search_de_universe",
     "search_fr_universe",
     "search_nl_universe",
+    "search_it_universe",
     "search_tw_universe",
     "generate_html_report",
     "run_configured_collection",
