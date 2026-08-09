@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_HK, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -535,6 +535,10 @@ class WebRepository:
         if market == MARKET_AU:
             tickers = tuple(
                 dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_FR:
+            tickers = tuple(
+                dict.fromkeys(normalize_fr_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -1982,6 +1986,43 @@ def normalize_ca_ticker(ticker: str) -> str:
         changed = False
         for separator in _CA_TICKER_SEPARATORS:
             for suffix in _CA_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_FR_TICKER_SUFFIXES = ("PAR", "PA")
+_FR_TICKER_SEPARATORS = (".", " ", "-")
+_FR_ISIN_PATTERN = re.compile(r"FR[0-9A-Z]{10}")
+
+
+def normalize_fr_ticker(ticker: str) -> str:
+    """Normalize a French (Euronext Paris) symbol to its canonical form.
+
+    Accepts plain symbols (``MC``) and the common Euronext Paris suffixes
+    used by data providers (``MC.PA``, ``MC.PAR``; space or dash separators
+    are tolerated too, and stacked suffixes like ``MC.PA.PA`` collapse to
+    ``MC``). The suffix is stripped and the root symbol is uppercased; a
+    plain symbol without a suffix is preserved as-is. Suffix words without
+    a separator (``PA``, ``PAR``) are never erased. When the input contains
+    a French ISIN (``FR`` followed by 10 alphanumeric characters, e.g.
+    ``FR0000120271``), the ISIN is extracted and returned instead, since an
+    ISIN is a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _FR_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _FR_TICKER_SEPARATORS:
+            for suffix in _FR_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

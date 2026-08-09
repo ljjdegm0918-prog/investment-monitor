@@ -85,6 +85,7 @@ async function renderManage() {
             <option value="tw">TW</option>
             <option value="ca">CA</option>
             <option value="au">AU</option>
+            <option value="fr">France (Euronext)</option>
           </select>
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
           <button class="button primary" type="submit">Search</button>
@@ -126,6 +127,7 @@ const MARKET_HINTS = {
   tw: "TWSE (listed) and TPEx (OTC) OpenAPI material-information are connected (key-free; not a paid MOPS push). 興櫃 disclosure is not wired. Yahoo Finance TW and Google News (TW) via key-free RSS. Universe cache can backfill names/board. Finnhub is US-only.",
   ca: "CA market (partial — not a full Canadian stack): root tickers strip .TO/.TSX/.V/.TSXV/.CN/.NE/.NEO; board backfills from ca_universe (TSX/TSXV) or typed suffix when cold. Universe does NOT cover CSE/NEO directories. Disclosure is NOT wired: SEDAR+/CSE/NEO filings unwired. News: Yahoo Finance CA + Google News CA. Finnhub is US-only.",
   au: "AU market: root tickers strip .AX/.ASX. ASX announcements via key-free research API (latest 5 per company; may change). Universe backfills names/board. News: Yahoo Finance AU + Google News AU. Finnhub is US-only.",
+  fr: "FR market (Euronext Paris): root tickers strip .PA/.PAR; French ISINs (FR + 10 chars) are kept as-is. CAC 40 universe, EUR currency, Europe/Paris timezone. Companies are added as unmapped. Finnhub is US-only.",
 };
 
 function updateMarketHint() {
