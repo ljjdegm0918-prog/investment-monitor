@@ -116,6 +116,16 @@ sources:
     label: BME Relevant Facts
     source_type: filings
     enabled: true          # key-free official BME relevant-facts JSON; needs universe company key; ~31 day range cap
+  # Singapore disclosure - deliberately not wired (SG-1 spike A3):
+  # SGX company announcements are a JS SPA; api.sgx.com routes return 403
+  # (undocumented AWS Gateway, no stable free list endpoint), the legacy
+  # infopub.sgx.com SGXNet JSON is retired (TLS handshake fails), and
+  # links.sgx.com only serves per-announcement deep links/PDFs. MAS/ACRA
+  # have no stable key-free per-issuer announcement feed.
+  - name: sgx_announcements
+    label: SGX announcements (not wired)
+    source_type: filings
+    enabled: false
   - name: yahoo_fr
     label: Yahoo Finance FR
     source_type: news

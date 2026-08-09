@@ -313,7 +313,8 @@ shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=sg` companies use canonical root tickers (`D05` / `D05.SI` / `D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no fixed width is assumed) and remain unmapped. SGX / MAS disclosure, an SG universe cache, and SG news connectors are planned but not wired yet (SG-1 … SG-5). Finnhub is **US only** and never queried for SG. |
+| sgx_announcements | filings | none | **Not wired (SG-1 spike A3, re-verified in SG-4)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector is registered; SGX DataLink / paid market-data products are not used. |
+| (universe + news) | — | — | Market skeleton only so far: `market=sg` companies use canonical root tickers (`D05` / `D05.SI` / `D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no fixed width is assumed) and remain unmapped. An SG universe cache and SG news connectors are planned but not wired yet (SG-2 … SG-5). Finnhub is **US only** and never queried for SG. |
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

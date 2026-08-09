@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_sg_ticker
 
 
@@ -186,6 +187,32 @@ class MarketSGFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketSGDisclosureLockTests(unittest.TestCase):
+    def test_no_sg_disclosure_connector_is_registered(self) -> None:
+        """Lock the SG-1 A3 spike decision.
+
+        SG-1 spike (2026-08-10): SGX company announcements are served by a
+        JS SPA; ``api.sgx.com`` routes return 403 (undocumented AWS Gateway
+        routes, no stable free list endpoint), the legacy
+        ``infopub.sgx.com`` SGXNet JSON is retired (TLS handshake fails),
+        and ``links.sgx.com/1.0.0/corporate-announcements`` serves only
+        per-announcement deep links/PDFs with no public list/search API.
+        MAS/ACRA have no stable key-free per-issuer announcement feed.
+        Remove this test when a real key-free SGX/regulator disclosure
+        source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "sgx_announcements",
+            "sgxnet",
+            "infopub_sgx",
+            "acra_filings",
+        ):
+            self.assertNotIn(blocked_name, names)
 
 
 if __name__ == "__main__":
