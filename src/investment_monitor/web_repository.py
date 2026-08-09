@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_NL, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -555,6 +555,10 @@ class WebRepository:
         if market == MARKET_DE:
             tickers = tuple(
                 dict.fromkeys(normalize_de_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_NL:
+            tickers = tuple(
+                dict.fromkeys(normalize_nl_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2078,6 +2082,44 @@ def normalize_de_ticker(ticker: str) -> str:
         changed = False
         for separator in _DE_TICKER_SEPARATORS:
             for suffix in _DE_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_NL_TICKER_SUFFIXES = ("AS", "AMS", "AEA")
+_NL_TICKER_SEPARATORS = (".", " ", "-")
+_NL_ISIN_PATTERN = re.compile(r"NL[0-9A-Z]{10}")
+
+
+def normalize_nl_ticker(ticker: str) -> str:
+    """Normalize a Dutch (Euronext Amsterdam) symbol to its canonical form.
+
+    Accepts plain symbols (``ASML``) and the common Euronext Amsterdam
+    suffixes used by data providers (``ASML.AS``, ``ASML.AMS``,
+    ``ASML-AEA``; space or dash separators are tolerated too, and stacked
+    suffixes collapse to the root). The suffix is stripped and the root
+    symbol is uppercased; a plain symbol without a suffix is preserved
+    as-is. Suffix words without a separator (``AS``, ``AMS``, ``AEA``) are
+    never erased. When the input contains a Dutch ISIN (``NL`` followed by
+    10 alphanumeric characters, e.g. ``NL0000235190``), the ISIN is
+    extracted and returned instead, since an ISIN is a stable identifier in
+    its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _NL_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _NL_TICKER_SEPARATORS:
+            for suffix in _NL_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

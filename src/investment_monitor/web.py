@@ -35,6 +35,7 @@ from .models import (
     MARKET_DE,
     MARKET_HK,
     MARKET_KR,
+    MARKET_NL,
     MARKET_TW,
     MARKET_UK,
     MARKET_US,
@@ -529,6 +530,10 @@ class WebApplication:
         if market == MARKET_DE:
             # DE stays unmapped via SEC; EQS matches by ISIN from the universe,
             # never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_NL:
+            # NL stays unmapped via SEC; disclosure matches by ISIN/name from
+            # the universe, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

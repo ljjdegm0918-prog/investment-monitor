@@ -228,6 +228,12 @@ when warm. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
 (or same-source title fallback); news pairs on ticker + Berlin day.
 Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON).
 
+### Netherlands sources (NL)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` / `ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA` are stripped at add time, Dutch ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. Euronext Amsterdam disclosure, an NL universe cache, and NL news connectors are planned but not wired yet (NL-1 … NL-5). Finnhub is **US only** and never queried for NL. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

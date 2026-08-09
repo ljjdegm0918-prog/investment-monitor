@@ -292,6 +292,7 @@ from .models import (
     MARKET_AU,
     MARKET_FR,
     MARKET_DE,
+    MARKET_NL,
     MARKET_UNKNOWN,
     MARKET_US,
 )
@@ -412,6 +413,7 @@ __all__ = [
     "MARKET_AU",
     "MARKET_FR",
     "MARKET_DE",
+    "MARKET_NL",
     "MARKET_UNKNOWN",
     "MARKET_US",
     "MockConnector",
