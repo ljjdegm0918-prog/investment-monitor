@@ -279,6 +279,12 @@ disclosure source wired there is no cross-source filing pairing. Every row
 stays in the feed with an "Also seen on …" label; totals and page sizes are
 never shrunk.
 
+### Spain sources (ES)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=es` companies use canonical root tickers (`SAN` / `SAN.MC` / `SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME` are stripped at add time, Spanish ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. BME / CNMV disclosure, an ES universe cache, and ES news connectors are planned but not wired yet (ES-1 … ES-5). Finnhub is **US only** and never queried for ES. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
