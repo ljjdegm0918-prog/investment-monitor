@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_it_ticker
 
 
@@ -186,6 +187,33 @@ class MarketITFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketITDisclosureFollowupTests(unittest.TestCase):
+    def test_eqs_it_remains_registered(self) -> None:
+        registry = create_default_registry()
+
+        self.assertIsNotNone(registry.factory_for("eqs_it"))
+
+    def test_no_second_it_disclosure_connector_is_registered(self) -> None:
+        """Lock the IT-4 D2 spike decision.
+
+        IT-4 re-verified (2026-08-10): Consob serves a Radware captcha page
+        (no keyless JSON), Borsa Italiana is HTML-only, and the Euronext
+        Milan announcement page is antibot HTML with no JSON endpoint.
+        EQS News (IT) by Italian ISIN stays the only wired IT disclosure
+        source. Remove this test when a real second source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "consob_it",
+            "euronext_it_announcements",
+            "eqs_it_alt",
+        ):
+            self.assertNotIn(blocked_name, names)
+
 
 if __name__ == "__main__":
     unittest.main()
