@@ -23,6 +23,29 @@ from .sources.kr_news import (
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.ca_news import (
+    GoogleCaNewsConnector,
+    YahooCaNewsConnector,
+)
+from .sources.twse_material import TwseMaterialConnector
+from .sources.tpex_material import TpexMaterialConnector
+from .sources.tw_news import (
+    GoogleTwNewsConnector,
+    YahooTwNewsConnector,
+)
+from .sources.asx_announcements import AsxAnnouncementsConnector
+from .sources.au_news import (
+    GoogleAuNewsConnector,
+    YahooAuNewsConnector,
+)
+from .sources.amf_oam import AmfOamConnector
+from .sources.fr_news import (
+    GoogleFrNewsConnector,
+    YahooFrNewsConnector,
+)
+from .sources.hkexnews import HkexNewsConnector
+from .sources.hkex_di import HkexDiConnector
+from .sources.hk_news import YahooHkNewsConnector
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 
@@ -135,10 +158,25 @@ def create_default_registry() -> SourceRegistry:
         configuration_error=CompaniesHouseConnector.configuration_error,
     )
     registry.register(InvestegateConnector.name, InvestegateConnector)
+    registry.register(HkexNewsConnector.name, HkexNewsConnector)
+    registry.register(HkexDiConnector.name, HkexDiConnector)
     registry.register(NaverNewsConnector.name, NaverNewsConnector)
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
+    registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
+    registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
+    registry.register(TwseMaterialConnector.name, TwseMaterialConnector)
+    registry.register(TpexMaterialConnector.name, TpexMaterialConnector)
+    registry.register(YahooTwNewsConnector.name, YahooTwNewsConnector)
+    registry.register(GoogleTwNewsConnector.name, GoogleTwNewsConnector)
+    registry.register(AsxAnnouncementsConnector.name, AsxAnnouncementsConnector)
+    registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
+    registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
+    registry.register(AmfOamConnector.name, AmfOamConnector)
+    registry.register(YahooFrNewsConnector.name, YahooFrNewsConnector)
+    registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

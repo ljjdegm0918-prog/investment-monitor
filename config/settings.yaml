@@ -20,6 +20,14 @@ sources:
     label: Investegate
     source_type: filings
     enabled: true          # RNS-class public mirror; page scrape, may break without notice
+  - name: hkexnews
+    label: HKEXnews (HKEX)
+    source_type: filings
+    enabled: true          # key-free HKEXnews announcement search; unofficial page API, may change without notice
+  - name: hkex_di
+    label: Disclosure of Interests (HKEX)
+    source_type: filings
+    enabled: false         # default off: legacy archive 2003-2017 only; enable explicitly for historical backfill
   - name: news
     label: News
     source_type: news
@@ -40,6 +48,74 @@ sources:
     label: Yahoo Finance UK
     source_type: news
     enabled: true          # key-free public RSS; may break without notice
+  - name: yahoo_hk
+    label: Yahoo Finance HK
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: yahoo_ca
+    label: Yahoo Finance CA
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_ca
+    label: Google News (CA)
+    source_type: news
+    enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  # Canada disclosure / extra boards — deliberately not wired (CA-1/CA-4 spike):
+  # SEDAR+ has no stable free public API (Radware 403 to stdlib clients);
+  # CSE directory TLS handshake fails; NEO origin times out (Cloudflare 522).
+  # Listed here so Settings shows Not implemented instead of pretending coverage.
+  - name: sedar_plus
+    label: SEDAR+ (not wired)
+    source_type: filings
+    enabled: false
+  - name: cse_filings
+    label: CSE filings (not wired)
+    source_type: filings
+    enabled: false
+  - name: neo_filings
+    label: NEO filings (not wired)
+    source_type: filings
+    enabled: false
+  - name: twse_material
+    label: TWSE OpenAPI (material)
+    source_type: filings
+    enabled: true          # key-free TWSE OpenAPI material-information; listed companies only; OTC via tpex_material; 興櫃 not wired
+  - name: tpex_material
+    label: TPEx OpenAPI (material)
+    source_type: filings
+    enabled: true          # key-free TPEx OpenAPI material-information; OTC (上櫃); 興櫃 not covered yet
+  - name: yahoo_tw
+    label: Yahoo Finance TW
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_tw
+    label: Google News (TW)
+    source_type: news
+    enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  - name: asx_announcements
+    label: ASX Market Announcements
+    source_type: filings
+    enabled: true          # key-free ASX site research API (undocumented; may change; latest 5 per company)
+  - name: yahoo_au
+    label: Yahoo Finance AU
+    source_type: news
+    enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_au
+    label: Google News (AU)
+    source_type: news
+    enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  - name: amf_oam
+    label: AMF OAM
+    source_type: filings
+    enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: yahoo_fr
+    label: Yahoo Finance FR
+    source_type: news
+    enabled: true          # key-free public RSS mirror (fr-FR + en-US); may be loosely related / break without notice
+  - name: google_news_fr
+    label: Google News (FR)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=fr); may be loosely related / break without notice
   - name: community
     label: Community
     source_type: community

@@ -117,8 +117,8 @@ A-share or HK resolution.
   coverage is partial. FSC/data.go.kr is skipped because registration
   requires Korean identity.
 - Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
-  sharing a 14-digit receipt number fold in the feed with an "Also from"
-  label; all database rows are kept.
+  sharing a 14-digit receipt number are annotated in the feed with an
+  "Also seen on" label; every row stays (totals unchanged).
 
 ### UK sources (UK)
 | Source | Type | Key | Boundaries |
@@ -129,10 +129,89 @@ A-share or HK resolution.
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
-UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+UK feed soft-dedupe (display only, all rows kept): filings annotate on RNS ids
 (Investegate) or Companies House transaction ids; title fallback is
-same-source only, so Companies House and Investegate are never cross-folded
-by title. News folds on ticker + London day + normalized title.
+same-source only, so Companies House and Investegate are never cross-annotated
+by title. News pairs on ticker + London day + normalized title.
+
+### Hong Kong sources (HK)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| hkexnews | filings | none | Unofficial HKEXnews title-search JSON; may change without notice |
+| hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
+| yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
+| hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
+
+HK tickers are canonical five-digit codes (`700` / `0700` / `00700.HK` →
+`00700`). Finnhub is **US only**. Soft-dedupe: hkexnews on NEWS_ID, hkex_di on
+form serial (never cross-paired by title); yahoo_hk on ticker + Hong Kong day.
+
+### Canada sources (CA)
+
+**Not a full Canadian market track.** Wired today: TSX/TSXV universe cache +
+Yahoo/Google CA news + soft-dedupe. **Not wired:** SEDAR+ disclosure, CSE
+universe/filings, NEO universe/filings (see boundaries below).
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| ca_universe | breadth cache | none | TSX + TSXV company directories via key-free official TMX JSON; **CSE** / **NEO** directories are not wired (TLS / origin failures); never enters the feed |
+| yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); may be loosely related and break without notice |
+| google_news_ca | news | none | Key-free Google News RSS search (`hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
+| sedar_plus / cse_filings / neo_filings | filings | — | Listed in Settings as **Not implemented**. Regulatory disclosure is **deliberately not wired** (CA-1 spike, re-verified CA-4): SEDAR+ has no stable free public API (Radware 403); CSE/NEO filings share the same network blockers as their directories |
+
+`market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO`
+all store as `RY`). Board is written into `exchange` from
+`ca_universe_name_map()` when warm, or inferred from the typed suffix when
+cold. Companies remain unmapped. Finnhub is **US only** and never queried for
+CA.
+
+CA feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch, default on): `yahoo_ca` / `google_news_ca` news pairs across sources
+on ticker + Toronto day (`America/Toronto`) + normalized title. Regulatory
+filings are never annotated because no CA disclosure connector is wired.
+
+### Taiwan sources (TW)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| twse_material | filings | none | TWSE OpenAPI material-information for **listed companies only**; key-free; OTC via tpex_material; 興櫃 not wired |
+| tpex_material | filings | none | TPEx OpenAPI material-information for **OTC (上櫃)**; 興櫃 not wired |
+| tw_universe | breadth cache | none | TWSE listed + TPEx OTC directories; emerging opt-in via env only; never enters the feed |
+| yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW`/`.TWO` at request time from board; may break without notice |
+| google_news_tw | news | none | Key-free Google News RSS (`q={ticker}.TW`, zh-TW); may break without notice |
+
+`market=tw` uses canonical four-digit tickers (`2330` / `02330` / `2330.TW`
+→ `2330`). Finnhub is **US only**. Soft-dedupe: TWSE/TPEx filings are
+same-source only (never cross-board by title); news pairs on ticker + Taipei
+day + normalized title.
+
+### Australia sources (AU)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| asx_announcements | filings | none | ASX company announcements via key-free research API; undocumented; latest 5 per company; may change without notice |
+| au_universe | breadth cache | none | ASX company directory; never enters the feed |
+| yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
+| google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
+
+`market=au` uses canonical root tickers (`BHP` / `BHP.AX` → `BHP`). Finnhub
+is **US only**. Soft-dedupe: ASX filings pair on document key (or same-source
+title fallback); news pairs on ticker + Sydney day + normalized title.
+
+### France sources (FR)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| amf_oam | filings | none | AMF OAM information feed (key-free; undocumented page API; may change); only wired FR disclosure source |
+| fr_universe | breadth cache | none | Euronext live all-stocks CSV (Paris / Growth Paris / Access Paris); never enters the feed |
+| yahoo_fr | news | none | Yahoo Finance FR public RSS (`region=FR`); `.PA` at request time |
+| google_news_fr | news | none | Key-free Google News RSS (`hl=fr&gl=FR&ceid=FR:fr`) |
+
+`market=fr` uses canonical root tickers (`MC` / `MC.PA` → `MC`; French ISINs
+kept as-is). Add-company can backfill name/board from `fr_universe_name_map()`
+when warm. Finnhub is **US only**. Soft-dedupe: AMF filings pair on OAM
+document id (or same-source title fallback); news pairs on ticker + Paris day.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

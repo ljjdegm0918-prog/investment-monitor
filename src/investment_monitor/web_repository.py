@@ -25,8 +25,8 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
-from .dedupe import fold_feed_items
-from .models import ALLOWED_MARKETS, MARKET_US
+from .dedupe import annotate_feed_items
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -42,10 +42,28 @@ SOURCE_LABELS = {
     "kind": "KIND (KRX)",
     "companies_house": "Companies House",
     "investegate": "Investegate",
+    "hkexnews": "HKEXnews (HKEX)",
+    "hkex_di": "Disclosure of Interests (HKEX)",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
+    "yahoo_ca": "Yahoo Finance CA",
+    "google_news_ca": "Google News (CA)",
+    "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
+    "asx_announcements": "ASX Market Announcements",
+    "yahoo_au": "Yahoo Finance AU",
+    "google_news_au": "Google News (AU)",
+    "amf_oam": "AMF OAM",
+    "yahoo_fr": "Yahoo Finance FR",
+    "google_news_fr": "Google News (FR)",
+    "sedar_plus": "SEDAR+ (not wired)",
+    "cse_filings": "CSE filings (not wired)",
+    "neo_filings": "NEO filings (not wired)",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -57,10 +75,25 @@ PROVIDER_LABELS = {
     "kind": "KIND (KRX)",
     "companies_house": "Companies House",
     "investegate": "Investegate",
+    "hkexnews": "HKEXnews (HKEX)",
+    "hkex_di": "Disclosure of Interests (HKEX)",
     "naver_news": "Naver Finance",
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_hk": "Yahoo Finance HK",
+    "yahoo_ca": "Yahoo Finance CA",
+    "google_news_ca": "Google News (CA)",
+    "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
+    "asx_announcements": "ASX Market Announcements",
+    "yahoo_au": "Yahoo Finance AU",
+    "google_news_au": "Google News (AU)",
+    "amf_oam": "AMF OAM",
+    "yahoo_fr": "Yahoo Finance FR",
+    "google_news_fr": "Google News (FR)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -500,6 +533,35 @@ class WebRepository:
             raise ValueError(
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
             )
+        board_hints: Dict[str, str] = {}
+        if market == MARKET_HK:
+            tickers = tuple(
+                dict.fromkeys(normalize_hk_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_AU:
+            tickers = tuple(
+                dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_FR:
+            tickers = tuple(
+                dict.fromkeys(normalize_fr_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_TW:
+            tickers = tuple(
+                dict.fromkeys(normalize_tw_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_CA:
+            ordered: List[str] = []
+            for raw in tickers:
+                board = infer_ca_board(raw)
+                root = normalize_ca_ticker(raw)
+                if not root:
+                    continue
+                if root not in ordered:
+                    ordered.append(root)
+                if board and root not in board_hints:
+                    board_hints[root] = board
+            tickers = tuple(ordered)
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
         if not destinations or any(slug not in valid_lists for slug in destinations):
@@ -545,9 +607,15 @@ class WebRepository:
                             ),
                             {},
                         )
+                    exchange = str(
+                        entry.get("exchange")
+                        or entry.get("board")
+                        or board_hints.get(ticker)
+                        or "Unavailable"
+                    )
                     identity = {
                         "name": str(entry.get("name") or ticker),
-                        "exchange": str(entry.get("exchange") or "Unavailable"),
+                        "exchange": exchange,
                         "cik": "",
                         "mapping_status": "unmapped",
                     }
@@ -683,7 +751,7 @@ class WebRepository:
     def query_feed_display(self, filters: FeedFilters) -> PageResult:
         """Return a feed page with cross-source soft dedupe applied."""
         result = self.query_feed(filters)
-        items = fold_feed_items(
+        items = annotate_feed_items(
             result.items,
             enabled=self._kr_soft_dedupe_enabled(),
         )
@@ -1807,7 +1875,169 @@ def _market_region(market: str) -> str:
         "jp": "Japan",
         "hk": "Hong Kong",
         "cn": "China",
+        "kr": "Korea",
+        "uk": "United Kingdom",
+        "tw": "Taiwan",
+        "ca": "Canada",
+        "au": "Australia",
+        "fr": "France",
     }.get(market, "Unavailable")
+
+
+def normalize_au_ticker(ticker: str) -> str:
+    """Normalize an Australian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``BHP``) and the common exchange suffixes used by
+    Australian data providers (``BHP.AX``, ``BHP.ASX``; space or dash
+    separators are tolerated too, and stacked suffixes like ``BHP.AX.AX``
+    collapse to ``BHP``). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``AX``, ``ASX``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AU_TICKER_SEPARATORS:
+            for suffix in _AU_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_AU_TICKER_SUFFIXES = ("ASX", "AX")
+_AU_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def normalize_hk_ticker(ticker: str) -> str:
+    """Normalize a Hong Kong stock code to its canonical five-digit form.
+
+    Accepts 700, 0700, 00700 and 0700.HK (also with a space or dash before
+    HK) and stores the stable form 00700. Non-numeric input is preserved
+    unchanged rather than silently dropped.
+    """
+    cleaned = str(ticker).strip().upper()
+    core = (
+        cleaned.removesuffix(".HK")
+        .removesuffix(" HK")
+        .removesuffix("-HK")
+    )
+    if core.isdigit():
+        return core.zfill(5)
+    return cleaned
+
+
+def normalize_tw_ticker(ticker: str) -> str:
+    """Normalize a Taiwan stock code to its canonical four-digit form.
+
+    Accepts 2330, 02330, 2330.TW and 2330.TWO and stores the stable form
+    2330. Non-numeric input is preserved unchanged rather than silently
+    dropped (a non-numeric ``VOD.TW`` stays as typed).
+    """
+    cleaned = str(ticker).strip().upper()
+    core = cleaned.removesuffix(".TW").removesuffix(".TWO")
+    if core.isdigit():
+        return core.lstrip("0").zfill(4)
+    return cleaned
+
+
+_CA_TICKER_SUFFIXES = ("TSXV", "TSX", "NEO", "TO", "CN", "NE", "V")
+_CA_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def infer_ca_board(ticker: str) -> Optional[str]:
+    """Infer listing board from a CA symbol suffix before it is stripped.
+
+    Universe cache remains authoritative when present; this recovers board for
+    add-company when the user typed ``RY.TO`` / ``AUMB.V`` / ``X.CN`` /
+    ``HUT.NEO`` but the local ca_universe cache is cold. Plain roots with no
+    suffix return ``None`` (unknown — not the same as inventing TSX).
+    """
+    cleaned = str(ticker).strip().upper()
+    for separator in _CA_TICKER_SEPARATORS:
+        for suffix, board in (
+            ("TSXV", "TSXV"),
+            ("TSX", "TSX"),
+            ("NEO", "NEO"),
+            ("TO", "TSX"),
+            ("CN", "CSE"),
+            ("NE", "NEO"),
+            ("V", "TSXV"),
+        ):
+            marker = separator + suffix
+            if cleaned.endswith(marker):
+                root = cleaned[: -len(marker)].strip()
+                if root:
+                    return board
+    return None
+
+
+def normalize_ca_ticker(ticker: str) -> str:
+    """Normalize a Canadian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``RY``) and the common exchange suffixes used by
+    Canadian data providers (``RY.TO``, ``SHOP.TSX``, ``ABX.V``,
+    ``CVE.TSXV``, ``TD.CN``, ``Q.NE``, ``HUT.NEO``; space or dash separators
+    are tolerated too). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``TO``, ``V``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _CA_TICKER_SEPARATORS:
+            for suffix in _CA_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_FR_TICKER_SUFFIXES = ("PAR", "PA")
+_FR_TICKER_SEPARATORS = (".", " ", "-")
+_FR_ISIN_PATTERN = re.compile(r"FR[0-9A-Z]{10}")
+
+
+def normalize_fr_ticker(ticker: str) -> str:
+    """Normalize a French (Euronext Paris) symbol to its canonical form.
+
+    Accepts plain symbols (``MC``) and the common Euronext Paris suffixes
+    used by data providers (``MC.PA``, ``MC.PAR``; space or dash separators
+    are tolerated too, and stacked suffixes like ``MC.PA.PA`` collapse to
+    ``MC``). The suffix is stripped and the root symbol is uppercased; a
+    plain symbol without a suffix is preserved as-is. Suffix words without
+    a separator (``PA``, ``PAR``) are never erased. When the input contains
+    a French ISIN (``FR`` followed by 10 alphanumeric characters, e.g.
+    ``FR0000120271``), the ISIN is extracted and returned instead, since an
+    ISIN is a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _FR_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _FR_TICKER_SEPARATORS:
+            for suffix in _FR_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
 
 
 def _company_dict(row: sqlite3.Row) -> Mapping[str, Any]:

@@ -1,0 +1,46 @@
+{
+  "data": {
+    "displayName": "BHP GROUP LIMITED",
+    "issueType": "CS",
+    "symbol": "BHP",
+    "xid": "bhp",
+    "items": [
+      {
+        "announcementType": "QUARTERLY ACTIVITIES REPORT",
+        "date": "2026-08-05T02:30:00.000Z",
+        "documentKey": "2924-03111504-3A697237",
+        "fileSize": "633KB",
+        "headline": "Quarterly Activities Report",
+        "isPriceSensitive": true,
+        "url": ""
+      },
+      {
+        "announcementType": "CHAIRMAN'S ADDRESS",
+        "date": "2026-08-04T00:00:00.000Z",
+        "documentKey": "2924-03111504-3A697238",
+        "fileSize": "120KB",
+        "headline": "Chairman's Address",
+        "isPriceSensitive": false,
+        "url": ""
+      },
+      {
+        "announcementType": "DIVIDEND",
+        "date": "2026-08-01T05:00:00.000Z",
+        "documentKey": "2924-03111504-3A697239",
+        "fileSize": "45KB",
+        "headline": "Dividend announcement",
+        "isPriceSensitive": true,
+        "url": ""
+      },
+      {
+        "announcementType": "RELEASE",
+        "date": "2026-06-30T23:59:00.000Z",
+        "documentKey": "2924-03111504-3A697240",
+        "fileSize": "30KB",
+        "headline": "Old announcement outside window",
+        "isPriceSensitive": false,
+        "url": ""
+      }
+    ]
+  }
+}

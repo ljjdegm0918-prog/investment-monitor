@@ -1,0 +1,9 @@
+{
+  "result": "[{\"NEWS_ID\":\"20260303001234\",\"TITLE\":\"董事會會議日期\",\"DATE_TIME\":\"2026-03-03 16:40:00\",\"FILE_LINK\":\"/listedco/listconews/sehk/2026/0303/20260303001234.htm\",\"STOCK_CODE\":\"00700\",\"STOCK_NAME\":\"騰訊控股\",\"FILE_TYPE\":\"公告及通告\"},{\"NEWS_ID\":\"20260303001236\",\"TITLE\":\"翌日披露報表\",\"DATE_TIME\":\"2026-03-04 09:15:00\",\"FILE_LINK\":\"/listedco/listconews/sehk/2026/0304/20260303001236.htm\",\"STOCK_CODE\":\"00700\",\"STOCK_NAME\":\"騰訊控股\",\"FILE_TYPE\":\"公告及通告\"}]",
+  "hasNextRow": false,
+  "sortList": "[[0,0]]",
+  "rowRange": 50,
+  "lang": "C",
+  "loadedRecord": 2,
+  "recordCnt": 2
+}

@@ -1,0 +1,79 @@
+{
+  "hits": {
+    "total": {
+      "value": 3,
+      "relation": "eq"
+    },
+    "hits": [
+      {
+        "_index": "informations",
+        "_type": "_doc",
+        "_id": "a1",
+        "_source": {
+          "numeroConcatene": "26-000321",
+          "datePublication": "2026-08-04T09:15:00+02:00",
+          "titre": "Publication d'un rapport financier",
+          "typesDocument": [
+            "Rapport financier"
+          ],
+          "societes": [
+            {
+              "raisonSociale": "LVMH MOET HENNESSY LOUIS VUITTON"
+            }
+          ],
+          "documents": [
+            {
+              "path": "2026/08/04/LVMH-26-000321.pdf"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "informations",
+        "_type": "_doc",
+        "_id": "b2",
+        "_source": {
+          "numeroConcatene": "26-000654",
+          "datePublication": "2026-07-20T12:00:00+02:00",
+          "titre": "Ancien rapport hors fenetre",
+          "typesDocument": [
+            "Rapport financier"
+          ],
+          "societes": [
+            {
+              "raisonSociale": "LVMH MOET HENNESSY LOUIS VUITTON"
+            }
+          ],
+          "documents": [
+            {
+              "path": "2026/07/20/LVMH-26-000654.pdf"
+            }
+          ]
+        }
+      },
+      {
+        "_index": "informations",
+        "_type": "_doc",
+        "_id": "c3",
+        "_source": {
+          "numeroConcatene": "26-000987",
+          "datePublication": "2026-08-03T14:45:00+02:00",
+          "titre": "Declaration des transactions des dirigeants",
+          "typesDocument": [
+            "Information privilegiee"
+          ],
+          "societes": [
+            {
+              "raisonSociale": "COMPAGNIE DE SAINT-GOBAIN"
+            }
+          ],
+          "documents": [
+            {
+              "path": "2026/08/03/SAINT-GOBAIN-26-000987.pdf"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

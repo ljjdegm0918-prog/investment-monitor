@@ -1,0 +1,9 @@
+{
+  "result": "[{\"NEWS_ID\":\"20260303001234\",\"TITLE\":\"Board Meeting Date\",\"DATE_TIME\":\"2026-03-03 16:40:00\",\"FILE_LINK\":\"/listedco/listconews/sehk/2026/0303/20260303001234.htm\",\"STOCK_CODE\":\"00700\",\"STOCK_NAME\":\"TENCENT\",\"FILE_TYPE\":\"Announcements and Notices\"},{\"NEWS_ID\":\"20260303001235\",\"TITLE\":\"Monthly Return of Equity Issuer\",\"DATE_TIME\":\"03/03/2026 18:05\",\"FILE_LINK\":\"/listedco/listconews/sehk/2026/0303/20260303001235.htm\",\"STOCK_CODE\":\"00700\",\"STOCK_NAME\":\"TENCENT\",\"FILE_TYPE\":\"Financial Statements/ESG Information\"}]",
+  "hasNextRow": false,
+  "sortList": "[[0,0]]",
+  "rowRange": 50,
+  "lang": "E",
+  "loadedRecord": 2,
+  "recordCnt": 2
+}

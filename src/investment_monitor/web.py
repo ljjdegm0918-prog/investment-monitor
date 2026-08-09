@@ -24,12 +24,27 @@ from .config import (
     load_universe,
 )
 from .connectors.base import ConnectorUnavailableError
+from .au_universe import au_universe_name_map
+from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_universe
+from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_KR, MARKET_UK, MARKET_US
+from .models import (
+    MARKET_AU,
+    MARKET_CA,
+    MARKET_FR,
+    MARKET_HK,
+    MARKET_KR,
+    MARKET_TW,
+    MARKET_UK,
+    MARKET_US,
+)
+from .tw_universe import tw_universe_name_map
+from .universe.fr_universe import fr_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
+from .sources.hkexnews import HKEXNewsCompanyResolver
 from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
@@ -170,6 +185,7 @@ class WebApplication:
                     companies_house_cache_path
                 )
             )
+        self.hkexnews_resolver = HKEXNewsCompanyResolver()
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
@@ -245,6 +261,29 @@ class WebApplication:
                     name_fallback = kr_universe_name_map()
                 elif market == MARKET_UK:
                     name_fallback = uk_universe_name_map()
+                elif market == MARKET_HK:
+                    name_fallback = hk_universe_name_map()
+                elif market == MARKET_TW:
+                    name_fallback = tw_universe_name_map()
+                elif market == MARKET_AU:
+                    name_fallback = au_universe_name_map()
+                elif market == MARKET_FR:
+                    name_fallback = fr_universe_name_map()
+                elif market == MARKET_CA:
+                    name_fallback = ca_universe_name_map()
+                    if not name_fallback:
+                        # Cold cache: try one refresh so board/name backfill
+                        # works on first add without a manual universe warm-up.
+                        try:
+                            refresh_ca_universe()
+                        except CaUniverseError:
+                            pass
+                        except Exception:
+                            logging.getLogger(__name__).warning(
+                                "ca_universe refresh skipped on add-company",
+                                exc_info=True,
+                            )
+                        name_fallback = ca_universe_name_map() or None
                 result = dict(self.repository.add_companies_batch(
                     str(payload.get("tickers", "")),
                     tuple(payload.get("lists") or ()),
@@ -467,6 +506,26 @@ class WebApplication:
             # UK maps through Companies House; never let SEC map a UK ticker
             # to a same-named US company.
             return self.companies_house_resolver
+        if market == MARKET_HK:
+            # HK maps through the HKEXnews active stock list; never let SEC
+            # map a Hong Kong code to a same-named US company.
+            return self.hkexnews_resolver
+        if market == MARKET_TW:
+            # TW disclosure mapping is not connected yet; never let SEC map
+            # a Taiwan code to a same-named US company.
+            return None
+        if market == MARKET_AU:
+            # AU companies stay unmapped; never let SEC map an Australian
+            # symbol to a same-named US company.
+            return None
+        if market == MARKET_FR:
+            # FR stays unmapped via SEC; AMF OAM matches by company name /
+            # universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_CA:
+            # CA disclosure mapping is not connected yet; never let SEC map
+            # a Canadian symbol to a same-named US company.
+            return None
         return self.resolver
 
     @staticmethod
@@ -610,7 +669,7 @@ class WebApplication:
         items: List[Mapping[str, Any]] = []
         page = 1
         while True:
-            result = self.repository.query_feed(FeedFilters(
+            result = self.repository.query_feed_display(FeedFilters(
                 list_slug=list_slug,
                 start_date=selected_date,
                 end_date=selected_date,
@@ -631,12 +690,14 @@ class WebApplication:
                 "market": item["market"],
                 "items": [],
             })
+            also_seen = item.get("also_seen_on_labels") or item.get("also_from_labels") or ()
             group["items"].append({
                 "time": item["effective_at"],
                 "type": _daily_item_type(str(item["source_type"])),
                 "source": _daily_source_label(item),
                 "title": item["title"],
                 "url": item["url"],
+                "also_seen_on": list(also_seen),
             })
         return {
             "date": selected_date.isoformat(),

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: 0700.HK News</title>
+    <item>
+      <title>Tencent announces quarterly results</title>
+      <link>https://hk.finance.yahoo.com/news/tencent-quarterly-110000001.html</link>
+      <pubDate>Wed, 05 Aug 2026 09:30:00 +0000</pubDate>
+      <description>Tencent published quarterly results.</description>
+    </item>
+    <item>
+      <title>New listing announcement</title>
+      <link>https://hk.finance.yahoo.com/news/new-listing-110000004.html</link>
+      <pubDate>Thu, 06 Aug 2026 01:00:00 +0000</pubDate>
+      <description>An English-only announcement.</description>
+    </item>
+  </channel>
+</rss>
