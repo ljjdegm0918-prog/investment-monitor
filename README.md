@@ -158,6 +158,21 @@ switch, default on): `yahoo_ca` / `google_news_ca` news pairs across sources
 on ticker + Toronto day (`America/Toronto`) + normalized title. Regulatory
 filings are never annotated because no CA disclosure connector is wired.
 
+### Taiwan sources (TW)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| twse_material | filings | none | TWSE OpenAPI material-information for **listed companies only**; key-free; OTC via tpex_material; 興櫃 not wired |
+| tpex_material | filings | none | TPEx OpenAPI material-information for **OTC (上櫃)**; 興櫃 not wired |
+| tw_universe | breadth cache | none | TWSE listed + TPEx OTC directories; emerging opt-in via env only; never enters the feed |
+| yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW`/`.TWO` at request time from board; may break without notice |
+| google_news_tw | news | none | Key-free Google News RSS (`q={ticker}.TW`, zh-TW); may break without notice |
+
+`market=tw` uses canonical four-digit tickers (`2330` / `02330` / `2330.TW`
+→ `2330`). Finnhub is **US only**. Soft-dedupe: TWSE/TPEx filings are
+same-source only (never cross-board by title); news pairs on ticker + Taipei
+day + normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -48,6 +48,10 @@ SOURCE_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_ca": "Yahoo Finance CA",
     "google_news_ca": "Google News (CA)",
+    "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
     "sedar_plus": "SEDAR+ (not wired)",
     "cse_filings": "CSE filings (not wired)",
     "neo_filings": "NEO filings (not wired)",
@@ -68,6 +72,10 @@ PROVIDER_LABELS = {
     "yahoo_uk": "Yahoo Finance UK",
     "yahoo_ca": "Yahoo Finance CA",
     "google_news_ca": "Google News (CA)",
+    "twse_material": "TWSE OpenAPI (material)",
+    "tpex_material": "TPEx OpenAPI (material)",
+    "yahoo_tw": "Yahoo Finance TW",
+    "google_news_tw": "Google News (TW)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -508,6 +516,10 @@ class WebRepository:
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
             )
         board_hints: Dict[str, str] = {}
+        if market == MARKET_TW:
+            tickers = tuple(
+                dict.fromkeys(normalize_tw_ticker(ticker) for ticker in tickers)
+            )
         if market == MARKET_CA:
             ordered: List[str] = []
             for raw in tickers:
@@ -1835,8 +1847,23 @@ def _market_region(market: str) -> str:
         "cn": "China",
         "kr": "Korea",
         "uk": "United Kingdom",
+        "tw": "Taiwan",
         "ca": "Canada",
     }.get(market, "Unavailable")
+
+
+def normalize_tw_ticker(ticker: str) -> str:
+    """Normalize a Taiwan stock code to its canonical four-digit form.
+
+    Accepts 2330, 02330, 2330.TW and 2330.TWO and stores the stable form
+    2330. Non-numeric input is preserved unchanged rather than silently
+    dropped (a non-numeric ``VOD.TW`` stays as typed).
+    """
+    cleaned = str(ticker).strip().upper()
+    core = cleaned.removesuffix(".TW").removesuffix(".TWO")
+    if core.isdigit():
+        return core.lstrip("0").zfill(4)
+    return cleaned
 
 
 _CA_TICKER_SUFFIXES = ("TSXV", "TSX", "NEO", "TO", "CN", "NE", "V")

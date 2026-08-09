@@ -27,6 +27,12 @@ from .sources.ca_news import (
     GoogleCaNewsConnector,
     YahooCaNewsConnector,
 )
+from .sources.twse_material import TwseMaterialConnector
+from .sources.tpex_material import TpexMaterialConnector
+from .sources.tw_news import (
+    GoogleTwNewsConnector,
+    YahooTwNewsConnector,
+)
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 
@@ -145,6 +151,10 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
     registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
     registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
+    registry.register(TwseMaterialConnector.name, TwseMaterialConnector)
+    registry.register(TpexMaterialConnector.name, TpexMaterialConnector)
+    registry.register(YahooTwNewsConnector.name, YahooTwNewsConnector)
+    registry.register(GoogleTwNewsConnector.name, GoogleTwNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

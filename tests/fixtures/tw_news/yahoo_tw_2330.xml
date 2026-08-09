@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: 2330.TW News</title>
+    <item>
+      <title>台積電公布一一五年七月營收</title>
+      <link>https://tw.finance.yahoo.com/news/tsmc-july-110000001.html</link>
+      <pubDate>Wed, 05 Aug 2026 09:30:00 +0000</pubDate>
+      <description>台積電七月合併營收創新高。</description>
+    </item>
+    <item>
+      <title>外資買超台積電</title>
+      <link>https://tw.finance.yahoo.com/news/foreign-buying-110000002.html</link>
+      <pubDate>Tue, 04 Aug 2026 02:15:00 +0000</pubDate>
+      <description>外資連續買超。</description>
+    </item>
+    <item>
+      <title>舊聞：台積電股東會</title>
+      <link>https://tw.finance.yahoo.com/news/tsmc-old-109900003.html</link>
+      <pubDate>Mon, 20 Jul 2026 09:00:00 +0000</pubDate>
+      <description>窗口外舊聞。</description>
+    </item>
+  </channel>
+</rss>

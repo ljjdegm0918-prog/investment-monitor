@@ -26,7 +26,8 @@ from .config import (
 from .connectors.base import ConnectorUnavailableError
 from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_universe
 from .kr_universe import kr_universe_name_map
-from .models import MARKET_CA, MARKET_KR, MARKET_UK, MARKET_US
+from .models import MARKET_CA, MARKET_KR, MARKET_TW, MARKET_UK, MARKET_US
+from .tw_universe import tw_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -246,6 +247,8 @@ class WebApplication:
                     name_fallback = kr_universe_name_map()
                 elif market == MARKET_UK:
                     name_fallback = uk_universe_name_map()
+                elif market == MARKET_TW:
+                    name_fallback = tw_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -483,6 +486,10 @@ class WebApplication:
             # UK maps through Companies House; never let SEC map a UK ticker
             # to a same-named US company.
             return self.companies_house_resolver
+        if market == MARKET_TW:
+            # TW disclosure mapping is not connected yet; never let SEC map
+            # a Taiwan code to a same-named US company.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
