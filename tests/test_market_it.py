@@ -12,7 +12,6 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
-from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_it_ticker
 
 
@@ -187,13 +186,6 @@ class MarketITFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
-
-    def test_registry_has_no_it_news_connectors_yet(self) -> None:
-        registry = create_default_registry()
-
-        for blocked in ("yahoo_it", "google_news_it"):
-            self.assertNotIn(blocked, registry.registered_names)
-
 
 if __name__ == "__main__":
     unittest.main()

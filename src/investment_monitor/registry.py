@@ -59,6 +59,10 @@ from .sources.nl_news import (
     GoogleNlNewsConnector,
     YahooNlNewsConnector,
 )
+from .sources.it_news import (
+    GoogleItNewsConnector,
+    YahooItNewsConnector,
+)
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -193,6 +197,8 @@ def create_default_registry() -> SourceRegistry:
     registry.register(EqsItConnector.name, EqsItConnector)
     registry.register(YahooNlNewsConnector.name, YahooNlNewsConnector)
     registry.register(GoogleNlNewsConnector.name, GoogleNlNewsConnector)
+    registry.register(YahooItNewsConnector.name, YahooItNewsConnector)
+    registry.register(GoogleItNewsConnector.name, GoogleItNewsConnector)
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(

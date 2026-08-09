@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: ENI.MI News</title>
+    <item>
+      <title>Eni alza le previsioni sul flusso di cassa</title>
+      <link>https://it.finance.yahoo.com/news/eni-previsioni-110000401.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Eni aggiorna le guidance.</description>
+    </item>
+    <item>
+      <title>Piazza Affari chiude in rialzo</title>
+      <link>https://it.finance.yahoo.com/news/piazza-affari-110000402.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>L'indice principale è salito.</description>
+    </item>
+    <item>
+      <title>Vecchio articolo fuori finestra</title>
+      <link>https://it.finance.yahoo.com/news/vecchio-110000403.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Troppo vecchio.</description>
+    </item>
+  </channel>
+</rss>

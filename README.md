@@ -259,14 +259,16 @@ totals and page sizes are never shrunk.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | eqs_it | filings | none | EQS News JSON by Italian ISIN (key-free, unofficial WP API — may change; partial Italian-issuer coverage; empty for issuers not on the platform; NOT a Consob official feed). Consob public registers and Borsa Italiana/Euronext Milan announcement pages are not wired (no stable key-free JSON). Needs ISIN from the IT universe cache or a typed Italian ISIN. |
-| it_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Milan segment rows (key-free; live 2026-08-10: ~204 `Euronext Milan` + ~243 `Euronext Growth Milan`; filter also accepts `Borsa Italiana`/`Milano` labels if they ever appear; non-Italian boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. IT news connectors are planned (IT-3). |
+| it_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Milan segment rows (key-free; live 2026-08-10: ~204 `Euronext Milan` + ~243 `Euronext Growth Milan`; filter also accepts `Borsa Italiana`/`Milano` labels if they ever appear; non-Italian boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. |
+| yahoo_it | news | none | Yahoo Finance IT public RSS (`region=IT`, `lang=it-IT` + `en-US` merged; identical titles stay single-language); `.MI` at request time; may be loosely related and break without notice |
+| google_news_it | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=it&gl=IT&ceid=IT:it`); may be loosely related and break without notice |
 
 `market=it` companies use canonical root tickers (`ENI` / `ENI.MI` /
 `ENI-MIL` all store as `ENI`; exchange suffixes `.MI` / `.MIL` / `.BIT`
 are stripped at add time, Italian ISINs are kept as-is, board goes into
 `exchange` when available) and remain unmapped. Finnhub is **US only** and
 never queried for IT. `it_universe_name_map()` backfills names, board and
-ISIN for add-company.
+ISIN for add-company. News comes from `yahoo_it` / `google_news_it`.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
