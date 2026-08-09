@@ -215,5 +215,34 @@ class MarketSGDisclosureLockTests(unittest.TestCase):
             self.assertNotIn(blocked_name, names)
 
 
+class MarketSGDisclosureFollowupTests(unittest.TestCase):
+    def test_sg_first_disclosure_source_still_not_registered(self) -> None:
+        """Lock the SG-1 A3 decision across later slices."""
+        registry = create_default_registry()
+
+        self.assertNotIn("sgx_announcements", registry.registered_names)
+
+    def test_no_paid_or_fake_sg_disclosure_connector_is_registered(self) -> None:
+        """Lock the SG-4 second-source boundary.
+
+        SG-4 re-verified (2026-08-10): SGX still exposes no stable key-free
+        disclosure list API (SPA + 403 api.sgx.com; infopub.sgx.com retired;
+        links.sgx.com deep links only). Paid SGX DataLink / real-time
+        market-data products and other not-verified sources must not be
+        registered. Remove entries from the blocked list only when a real
+        key-free source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "sgx_datalink",
+            "sgx_realtime",
+            "lseg_sgx",
+            "eqs_sg",
+        ):
+            self.assertNotIn(blocked_name, names)
+
+
 if __name__ == "__main__":
     unittest.main()
