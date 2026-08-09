@@ -32,6 +32,7 @@ from .models import (
     MARKET_AU,
     MARKET_CA,
     MARKET_FR,
+    MARKET_DE,
     MARKET_HK,
     MARKET_KR,
     MARKET_TW,
@@ -521,6 +522,10 @@ class WebApplication:
         if market == MARKET_FR:
             # FR stays unmapped via SEC; AMF OAM matches by company name /
             # universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_DE:
+            # DE stays unmapped via SEC; no German authority resolver is wired
+            # yet, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
