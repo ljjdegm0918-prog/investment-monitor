@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: ASML.AS News</title>
+    <item>
+      <title>ASML boekt recordwinst in tweede kwartaal</title>
+      <link>https://nl.finance.yahoo.com/news/asml-recordwinst-110000301.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>ASML rapporteert sterke kwartaalcijfers.</description>
+    </item>
+    <item>
+      <title>Amsterdamse beurs sluit hoger</title>
+      <link>https://nl.finance.yahoo.com/news/amsterdam-hoger-110000302.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>De AEX sloot hoger.</description>
+    </item>
+    <item>
+      <title>Oud bericht buiten venster</title>
+      <link>https://nl.finance.yahoo.com/news/oud-buiten-110000303.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Te oud.</description>
+    </item>
+  </channel>
+</rss>

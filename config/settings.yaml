@@ -128,6 +128,14 @@ sources:
     label: Google News (DE)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=de); may be loosely related / break without notice
+  - name: yahoo_nl
+    label: Yahoo Finance NL
+    source_type: news
+    enabled: true          # key-free public RSS mirror (nl-NL + en-US); may be loosely related / break without notice
+  - name: google_news_nl
+    label: Google News (NL)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=nl); may be loosely related / break without notice
   - name: eqs_nl
     label: EQS News (NL)
     source_type: filings

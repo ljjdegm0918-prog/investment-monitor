@@ -131,7 +131,7 @@ const MARKET_HINTS = {
   au: "AU market: root tickers strip .AX/.ASX. ASX announcements via key-free research API (latest 5 per company; may change). Universe backfills names/board. News: Yahoo Finance AU + Google News AU. Finnhub is US-only.",
   fr: "FR market (Euronext Paris): root tickers strip .PA/.PAR; French ISINs kept as-is. AMF OAM disclosure + Euronext Paris/Growth/Access universe cache + Yahoo/Google FR news. Companies stay unmapped. Finnhub is US-only.",
   de: "DE market (Xetra): root tickers strip .DE/.XETRA/.XE/.F; German ISINs kept as-is. EQS News (DGAP) disclosure via key-free JSON (needs ISIN from universe or typed ISIN). Xetra CS universe cache backfills name/board/ISIN. News: Yahoo DE + Google News DE. Unternehmensregister/BaFin HTML not wired. Companies stay unmapped. Finnhub is US-only.",
-  nl: "NL market (Euronext Amsterdam): root tickers strip .AS/.AMS/.AEA; Dutch ISINs kept as-is. Disclosure, universe, and news connectors are not fully wired yet (NL-1 through NL-5 in progress); NL companies are added as unmapped. Finnhub is US-only and never queried for NL.",
+  nl: "NL market (Euronext Amsterdam): root tickers strip .AS/.AMS/.AEA; Dutch ISINs kept as-is. EQS News (NL) disclosure via key-free JSON by Dutch ISIN (partial coverage; not AFM official). Universe cache backfills names/board/ISIN from Euronext Amsterdam directories. News: Yahoo Finance NL + Google News NL. Companies stay unmapped. Finnhub is US-only and never queried for NL.",
 };
 
 function updateMarketHint() {

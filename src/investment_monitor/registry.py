@@ -54,6 +54,10 @@ from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 from .sources.eqs_dgap import EqsDgapConnector
 from .sources.eqs_nl import EqsNlConnector
+from .sources.nl_news import (
+    GoogleNlNewsConnector,
+    YahooNlNewsConnector,
+)
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -185,6 +189,8 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(EqsDgapConnector.name, EqsDgapConnector)
     registry.register(EqsNlConnector.name, EqsNlConnector)
+    registry.register(YahooNlNewsConnector.name, YahooNlNewsConnector)
+    registry.register(GoogleNlNewsConnector.name, GoogleNlNewsConnector)
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(
