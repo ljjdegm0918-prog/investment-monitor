@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -567,6 +567,10 @@ class WebRepository:
         if market == MARKET_ES:
             tickers = tuple(
                 dict.fromkeys(normalize_es_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_SG:
+            tickers = tuple(
+                dict.fromkeys(normalize_sg_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2202,6 +2206,45 @@ def normalize_es_ticker(ticker: str) -> str:
         changed = False
         for separator in _ES_TICKER_SEPARATORS:
             for suffix in _ES_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_SG_TICKER_SUFFIXES = ("SI", "SG")
+_SG_TICKER_SEPARATORS = (".", " ", "-")
+_SG_ISIN_PATTERN = re.compile(r"SG[0-9A-Z]{10}")
+
+
+def normalize_sg_ticker(ticker: str) -> str:
+    """Normalize a Singapore (SGX) symbol.
+
+    Accepts plain symbols (``D05``) and the common SGX exchange suffixes
+    used by data providers (``D05.SI``, ``D05.SG``, ``D05-SI``; space or
+    dash separators are tolerated too, and stacked suffixes collapse to the
+    root). The suffix is stripped and the root symbol is uppercased; a plain
+    symbol without a suffix is preserved as-is. Suffix words without a
+    separator (``SI``, ``SG``) are never erased. SGX codes vary in length
+    (typically 1-5 alphanumeric characters), so no fixed width is assumed.
+    When the input contains a Singapore ISIN (``SG`` followed by 10
+    alphanumeric characters, e.g. ``SG1J49008955``), the ISIN is extracted
+    and returned instead, since an ISIN is a stable identifier in its own
+    right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _SG_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _SG_TICKER_SEPARATORS:
+            for suffix in _SG_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

@@ -309,6 +309,12 @@ source-scoped (ticker + Madrid day + normalized title). Every row stays in
 the feed with an "Also seen on —" label; totals and page sizes are never
 shrunk.
 
+### Singapore sources (SG)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=sg` companies use canonical root tickers (`D05` / `D05.SI` / `D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no fixed width is assumed) and remain unmapped. SGX / MAS disclosure, an SG universe cache, and SG news connectors are planned but not wired yet (SG-1 … SG-5). Finnhub is **US only** and never queried for SG. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
