@@ -61,6 +61,9 @@ SOURCE_LABELS = {
     "amf_oam": "AMF OAM",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
+    "eqs_dgap": "EQS News (DGAP)",
+    "yahoo_de": "Yahoo Finance DE",
+    "google_news_de": "Google News (DE)",
     "sedar_plus": "SEDAR+ (not wired)",
     "cse_filings": "CSE filings (not wired)",
     "neo_filings": "NEO filings (not wired)",
@@ -94,6 +97,9 @@ PROVIDER_LABELS = {
     "amf_oam": "AMF OAM",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
+    "eqs_dgap": "EQS News (DGAP)",
+    "yahoo_de": "Yahoo Finance DE",
+    "google_news_de": "Google News (DE)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

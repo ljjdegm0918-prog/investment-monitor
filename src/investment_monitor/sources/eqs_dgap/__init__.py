@@ -1,5 +1,17 @@
-"""EQS Group / DGAP 德国监管披露源（market=de）。"""
+"""EQS News / DGAP German disclosure package."""
 
+from .client import (
+    EqsDgapClient,
+    EqsDgapDataError,
+    EqsDgapError,
+    EqsDgapRequestError,
+)
 from .connector import EqsDgapConnector
 
-__all__ = ["EqsDgapConnector"]
+__all__ = [
+    "EqsDgapClient",
+    "EqsDgapConnector",
+    "EqsDgapDataError",
+    "EqsDgapError",
+    "EqsDgapRequestError",
+]

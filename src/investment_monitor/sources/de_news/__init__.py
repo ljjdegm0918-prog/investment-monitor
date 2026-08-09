@@ -1,4 +1,4 @@
-"""德国市场新闻连接器（DE-3 留桩，market=de only）。"""
+"""Germany market news connectors (Yahoo DE + Google News DE)."""
 
 from .google.client import (
     GoogleDeNewsClient,

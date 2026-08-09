@@ -14,17 +14,14 @@ from investment_monitor import (
 from investment_monitor.web_repository import normalize_de_ticker
 from investment_monitor.sources.news import FinnhubNewsConnector
 from investment_monitor.sources.eqs_dgap import EqsDgapConnector
-from investment_monitor.sources.de_community import DeCommunityConnector
 from investment_monitor.registry import create_default_registry
 from investment_monitor.sources.de_news.google.client import (
     DEFAULT_BASE_URL as GOOGLE_DE_BASE_URL,
-    GoogleDeNewsClient,
 )
 from investment_monitor.sources.de_news.google.connector import GoogleDeNewsConnector
 from investment_monitor.sources.de_news.symbols import de_yahoo_symbol
 from investment_monitor.sources.de_news.yahoo.client import (
     DEFAULT_BASE_URL as YAHOO_DE_BASE_URL,
-    YahooDeNewsClient,
 )
 from investment_monitor.sources.de_news.yahoo.connector import YahooDeNewsConnector
 
@@ -183,15 +180,26 @@ class MarketDEFinnhubSkipTests(unittest.TestCase):
         self.assertEqual(connector.last_errors, ())
 
 
-class MarketDEDisclosureStubTests(unittest.TestCase):
-    def test_eqs_dgap_stub_is_registered(self) -> None:
+class MarketDESourceRegistrationTests(unittest.TestCase):
+    def test_de_sources_are_registered(self) -> None:
         registry = create_default_registry()
-        self.assertIn("eqs_dgap", registry.registered_names)
-        self.assertIsNotNone(registry.factory_for("eqs_dgap"))
+        for name in ("eqs_dgap", "yahoo_de", "google_news_de"):
+            self.assertIn(name, registry.registered_names)
+            self.assertIsNotNone(registry.factory_for(name))
+        self.assertNotIn("de_community", registry.registered_names)
 
-    def test_eqs_dgap_stub_collects_nothing_without_network(self) -> None:
-        connector = EqsDgapConnector()
+    def test_de_yahoo_symbol_uses_dot_de_suffix(self) -> None:
+        self.assertEqual(de_yahoo_symbol("SAP"), "SAP.DE")
+        self.assertEqual(de_yahoo_symbol("sap.xetra"), "SAP.DE")
 
+    def test_de_news_url_templates(self) -> None:
+        self.assertTrue(YAHOO_DE_BASE_URL.startswith("https://"))
+        self.assertTrue(GOOGLE_DE_BASE_URL.startswith("https://"))
+        self.assertIn("feeds.finance.yahoo.com", YAHOO_DE_BASE_URL)
+        self.assertIn("news.google.com", GOOGLE_DE_BASE_URL)
+
+    def test_eqs_without_isin_records_honest_error(self) -> None:
+        connector = EqsDgapConnector(universe={})
         items = connector.collect(
             CollectionRequest(
                 tickers=("SAP",),
@@ -200,56 +208,8 @@ class MarketDEDisclosureStubTests(unittest.TestCase):
                 markets={"SAP": "de"},
             )
         )
-
         self.assertEqual(items, [])
-        self.assertEqual(connector.last_errors, ())
-
-    def test_eqs_dgap_stub_marks_status_and_url_templates(self) -> None:
-        self.assertEqual(EqsDgapConnector.status, "stub")
-        self.assertEqual(EqsDgapConnector.provider, "EQS Group / DGAP")
-        self.assertIn("search", EqsDgapConnector.URL_TEMPLATES)
-        self.assertIn("detail", EqsDgapConnector.URL_TEMPLATES)
-
-
-class MarketDENewsStubTests(unittest.TestCase):
-    def test_de_news_connectors_are_registered(self) -> None:
-        registry = create_default_registry()
-
-        self.assertIn("yahoo_de", registry.registered_names)
-        self.assertIn("google_news_de", registry.registered_names)
-        self.assertIsNotNone(registry.factory_for("yahoo_de"))
-        self.assertIsNotNone(registry.factory_for("google_news_de"))
-
-    def test_de_yahoo_symbol_uses_dot_de_suffix(self) -> None:
-        self.assertEqual(de_yahoo_symbol("SAP"), "SAP.DE")
-        self.assertEqual(de_yahoo_symbol("sap.xetra"), "SAP.DE")
-
-    def test_de_news_stub_url_templates_are_placeholders(self) -> None:
-        yahoo_url = YahooDeNewsClient().url_for("SAP.DE")
-        google_url = GoogleDeNewsClient().url_for("SAP.DE")
-
-        self.assertTrue(YAHOO_DE_BASE_URL.startswith("https://"))
-        self.assertTrue(GOOGLE_DE_BASE_URL.startswith("https://"))
-        self.assertIn("SAP.DE", yahoo_url)
-        self.assertIn("region=DE", yahoo_url)
-        self.assertIn("lang=de-DE", yahoo_url)
-        self.assertIn("SAP.DE", google_url)
-        self.assertIn("hl=de", google_url)
-        self.assertIn("gl=DE", google_url)
-        self.assertIn("ceid=DE:de", google_url)
-
-    def test_de_news_stub_raises_not_implemented(self) -> None:
-        request = CollectionRequest(
-            tickers=("SAP",),
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 2),
-            markets={"SAP": "de"},
-        )
-
-        with self.assertRaises(NotImplementedError):
-            YahooDeNewsConnector().collect(request)
-        with self.assertRaises(NotImplementedError):
-            GoogleDeNewsConnector().collect(request)
+        self.assertEqual(connector.last_errors, (("SAP", "no_universe_isin"),))
 
     def test_de_news_connectors_skip_non_de_without_http(self) -> None:
         class ExplodingClient:
@@ -268,34 +228,6 @@ class MarketDENewsStubTests(unittest.TestCase):
 
         self.assertEqual(yahoo_items, [])
         self.assertEqual(google_items, [])
-
-
-class MarketDECommunityStubTests(unittest.TestCase):
-    def test_de_community_stub_is_registered(self) -> None:
-        registry = create_default_registry()
-        self.assertIn("de_community", registry.registered_names)
-        self.assertIsNotNone(registry.factory_for("de_community"))
-
-    def test_de_community_stub_collects_nothing_without_network(self) -> None:
-        connector = DeCommunityConnector()
-
-        items = connector.collect(
-            CollectionRequest(
-                tickers=("SAP",),
-                start_date=date(2026, 8, 1),
-                end_date=date(2026, 8, 2),
-                markets={"SAP": "de"},
-            )
-        )
-
-        self.assertEqual(items, [])
-        self.assertEqual(connector.last_errors, ())
-
-    def test_de_community_stub_marks_status_and_url_templates(self) -> None:
-        self.assertEqual(DeCommunityConnector.status, "stub")
-        self.assertEqual(DeCommunityConnector.provider, "DE Community")
-        self.assertIn("search", DeCommunityConnector.URL_TEMPLATES)
-        self.assertIn("detail", DeCommunityConnector.URL_TEMPLATES)
 
 
 if __name__ == "__main__":

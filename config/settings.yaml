@@ -116,6 +116,21 @@ sources:
     label: Google News (FR)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=fr); may be loosely related / break without notice
+  - name: eqs_dgap
+    label: EQS News (DGAP)
+    source_type: filings
+    enabled: true          # key-free EQS News JSON (ex-DGAP); unofficial WP API; may change without notice
+  - name: yahoo_de
+    label: Yahoo Finance DE
+    source_type: news
+    enabled: true          # key-free public RSS mirror (de-DE + en-US); may be loosely related / break without notice
+  - name: google_news_de
+    label: Google News (DE)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=de); may be loosely related / break without notice
+  # Germany second disclosure — deliberately not wired (DE-4):
+  # Unternehmensregister / BaFin HTML portals have no stable free JSON for
+  # issuer filings; EQS News is the only wired DE disclosure source.
   - name: community
     label: Community
     source_type: community

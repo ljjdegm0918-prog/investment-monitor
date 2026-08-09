@@ -1,14 +1,18 @@
-"""Google News DE 新闻连接器（DE-3 留桩，仅 market=de 收集）。"""
+"""Google News (FR) connector for market=de companies."""
 
 from __future__ import annotations
 
 import logging
-from typing import Callable, List, Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Callable, List, Mapping, Optional, Tuple
 
 from ....models import CollectionRequest, InformationItem, MARKET_DE
 from ....web_repository import normalize_de_ticker
 from ..symbols import de_yahoo_symbol
-from .client import GoogleDeNewsClient
+from .client import (
+    GoogleDeNewsClient,
+    GoogleDeNewsRequestError,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,14 +20,10 @@ MAX_LOOKBACK_DAYS = 30
 
 
 class GoogleDeNewsConnector:
-    """Google News 德国市场新闻连接器（留桩）。
-
-    只接受 market=de；其余市场零 HTTP 直接跳过。DE-3 阶段对 market=de
-    显式抛 ``NotImplementedError``（诚实留桩，不伪造结果）。
-    """
+    """Collect Google News RSS items for market=de companies."""
 
     name = "google_news_de"
-    provider = "Google News (DE)"
+    provider = "Google News (FR)"
     max_lookback_days = MAX_LOOKBACK_DAYS
 
     def __init__(
@@ -31,8 +31,8 @@ class GoogleDeNewsConnector:
         client: Optional[GoogleDeNewsClient] = None,
         symbol_for: Optional[Callable[[str], str]] = None,
     ) -> None:
-        self._client = client or GoogleDeNewsClient()
-        self._symbol_for = symbol_for or de_yahoo_symbol
+        self._client = client or GoogleDeNewsClient.from_environment()
+        self._symbol_for = symbol_for or _default_symbol_for
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 
     @property
@@ -40,17 +40,81 @@ class GoogleDeNewsConnector:
         return self._last_errors
 
     def collect(self, request: CollectionRequest) -> List[InformationItem]:
+        items: List[InformationItem] = []
+        failures: List[Tuple[str, str]] = []
+        collected_at = datetime.now(timezone.utc)
         for ticker in request.tickers:
-            if request.market_for(ticker) != MARKET_DE:
+            market = request.market_for(ticker)
+            if market != MARKET_DE:
                 LOGGER.info(
                     "google_news_de ticker=%s market=%s skipped not_de_market",
                     ticker,
-                    request.market_for(ticker),
+                    market,
                 )
                 continue
             code = normalize_de_ticker(ticker)
-            self._symbol_for(code)
-            raise NotImplementedError(
-                "Google DE news is a stub in DE-3; collect is not implemented."
+            symbol = self._symbol_for(code)
+            try:
+                records = self._client.fetch_news(
+                    symbol,
+                    request.start_date,
+                    request.end_date,
+                )
+                items.extend(
+                    _map_news(
+                        records,
+                        code=code,
+                        collected_at=collected_at,
+                    )
+                )
+            except Exception as error:
+                message = str(error) or error.__class__.__name__
+                failures.append((ticker, message))
+                LOGGER.warning(
+                    "google_news_de ticker=%s status=failure error=%s",
+                    ticker,
+                    message,
+                )
+        self._last_errors = tuple(failures)
+        if len(request.tickers) == 1 and failures:
+            raise GoogleDeNewsRequestError(failures[0][1])
+        return items
+
+
+def _default_symbol_for(ticker: str) -> str:
+    """Request-time symbol: canonical DE root plus the .DE suffix."""
+    return de_yahoo_symbol(ticker)
+
+
+def _map_news(
+    records: List[Mapping[str, Any]],
+    *,
+    code: str,
+    collected_at: datetime,
+) -> List[InformationItem]:
+    items: List[InformationItem] = []
+    for record in records:
+        items.append(
+            InformationItem(
+                source="google_news_de",
+                source_type="news",
+                external_id=str(record["external_id"]),
+                tickers=(code,),
+                issuer=code,
+                published_at=record["published"],
+                title=str(record["title"]),
+                document_type="news",
+                url=str(record["url"]),
+                collected_at=collected_at,
+                raw_metadata={
+                    "provider": "google_news_rss",
+                    "stock_code": code,
+                    "langs": "de",
+                    "scraped": True,
+                },
+                market=MARKET_DE,
+                summary=record.get("summary"),
+                effective_at=record["published"],
             )
-        return []
+        )
+    return items
