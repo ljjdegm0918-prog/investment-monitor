@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: SAN.MC News</title>
+    <item>
+      <title>Santander amplia su programa de recompra</title>
+      <link>https://es.finance.yahoo.com/noticias/santander-recompra-110000401.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>El banco amplia el programa.</description>
+    </item>
+    <item>
+      <title>La bolsa espanola cierra al alza</title>
+      <link>https://es.finance.yahoo.com/noticias/bolsa-cierre-110000402.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>El IBEX 35 sube.</description>
+    </item>
+    <item>
+      <title>Articulo fuera de la ventana</title>
+      <link>https://es.finance.yahoo.com/noticias/antiguo-110000403.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Demasiado antiguo.</description>
+    </item>
+  </channel>
+</rss>

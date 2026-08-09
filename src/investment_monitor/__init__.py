@@ -240,6 +240,18 @@ from .sources.it_news import (
     YahooItNewsError,
     YahooItNewsRequestError,
 )
+from .sources.es_news import (
+    GoogleEsNewsClient,
+    GoogleEsNewsConnector,
+    GoogleEsNewsDataError,
+    GoogleEsNewsError,
+    GoogleEsNewsRequestError,
+    YahooEsNewsClient,
+    YahooEsNewsConnector,
+    YahooEsNewsDataError,
+    YahooEsNewsError,
+    YahooEsNewsRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,

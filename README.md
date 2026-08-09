@@ -285,7 +285,17 @@ never shrunk.
 |---|---|---|---|
 | cnmv_hr | filings | none | CNMV official relevant-information RSS — inside information (IP) + other relevant information (OIR) feeds (key-free, official; live 2026-08-10). Records are keyed by issuer legal name (`Title`) with a stable `nreg` registration number; matched to requested tickers via the ES universe name/ISIN. The IP feed is sometimes empty for a day (honest `[]`). Not a paid MOPS-style push. |
 | es_universe | breadth cache | none | Official BME equity API (key-free; live 2026-08-10): `SIBE` (~123) + `Floor` (~5) + `Latibex` (~14) kept in full; `MTF` filtered to `BMEGrowth` (~111) + `BMEScaleUp` (~52); funds (SICAV/HedgeFunds/VCC) and other non-equity rows excluded. Tickers are enriched per ISIN from `ShareDetailsInfo` (rate-limited; reuses cached tickers; failed entries stay until next refresh). BME is a SIX company — the Euronext CSV family is NOT reused and no Madrid segment exists there. Not an IBKR-complete universe; never enters the feed. |
-| (news) | — | — | Market skeleton, disclosure and universe are wired; ES news connectors are planned but not wired yet (ES-3 … ES-5). `market=es` companies use canonical root tickers (`SAN` / `SAN.MC` / `SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME` are stripped at add time, Spanish ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. Finnhub is **US only** and never queried for ES. |
+| yahoo_es | news | none | Yahoo Finance ES public RSS (`region=ES`, `lang=es-ES` + `en-US` merged; identical titles stay single-language); `.MC` at request time; may be loosely related and break without notice |
+| google_news_es | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=es&gl=ES&ceid=ES:es`); may be loosely related (the `.MC` suffix also matches unrelated "MC" text) and break without notice |
+
+`market=es` companies use canonical root tickers (`SAN` / `SAN.MC` /
+`SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME`
+are stripped at add time, Spanish ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped. Finnhub is **US only** and
+never queried for ES. `es_universe_name_map()` backfills names, board and
+ISIN for add-company; disclosure matching uses the universe identity. News
+comes from `yahoo_es` / `google_news_es`. ES feed soft-dedupe lands with
+ES-5.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
