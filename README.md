@@ -117,8 +117,8 @@ A-share or HK resolution.
   coverage is partial. FSC/data.go.kr is skipped because registration
   requires Korean identity.
 - Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
-  sharing a 14-digit receipt number fold in the feed with an "Also from"
-  label; all database rows are kept.
+  sharing a 14-digit receipt number are annotated in the feed with an
+  "Also seen on" label; every row stays (totals unchanged).
 
 ### UK sources (UK)
 | Source | Type | Key | Boundaries |
@@ -129,10 +129,34 @@ A-share or HK resolution.
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
-UK feed soft-dedupe (display only, all rows kept): filings fold on RNS ids
+UK feed soft-dedupe (display only, all rows kept): filings annotate on RNS ids
 (Investegate) or Companies House transaction ids; title fallback is
-same-source only, so Companies House and Investegate are never cross-folded
-by title. News folds on ticker + London day + normalized title.
+same-source only, so Companies House and Investegate are never cross-annotated
+by title. News pairs on ticker + London day + normalized title.
+
+### Canada sources (CA)
+
+**Not a full Canadian market track.** Wired today: TSX/TSXV universe cache +
+Yahoo/Google CA news + soft-dedupe. **Not wired:** SEDAR+ disclosure, CSE
+universe/filings, NEO universe/filings (see boundaries below).
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| ca_universe | breadth cache | none | TSX + TSXV company directories via key-free official TMX JSON; **CSE** / **NEO** directories are not wired (TLS / origin failures); never enters the feed |
+| yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); may be loosely related and break without notice |
+| google_news_ca | news | none | Key-free Google News RSS search (`hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
+| sedar_plus / cse_filings / neo_filings | filings | — | Listed in Settings as **Not implemented**. Regulatory disclosure is **deliberately not wired** (CA-1 spike, re-verified CA-4): SEDAR+ has no stable free public API (Radware 403); CSE/NEO filings share the same network blockers as their directories |
+
+`market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO`
+all store as `RY`). Board is written into `exchange` from
+`ca_universe_name_map()` when warm, or inferred from the typed suffix when
+cold. Companies remain unmapped. Finnhub is **US only** and never queried for
+CA.
+
+CA feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch, default on): `yahoo_ca` / `google_news_ca` news pairs across sources
+on ticker + Toronto day (`America/Toronto`) + normalized title. Regulatory
+filings are never annotated because no CA disclosure connector is wired.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

@@ -126,7 +126,7 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(daily["companies"][0]["name"], "Apple Inc.")
         self.assertEqual(
             set(daily["companies"][0]["items"][0]),
-            {"time", "type", "source", "title", "url"},
+            {"time", "type", "source", "title", "url", "also_seen_on"},
         )
         self.assertEqual(daily["companies"][0]["items"][0]["type"], "Filing")
         sec = next(source for source in sources["sources"] if source["name"] == "sec")

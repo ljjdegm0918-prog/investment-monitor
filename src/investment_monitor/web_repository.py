@@ -25,8 +25,8 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
-from .dedupe import fold_feed_items
-from .models import ALLOWED_MARKETS, MARKET_US
+from .dedupe import annotate_feed_items
+from .models import ALLOWED_MARKETS, MARKET_CA, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -46,6 +46,11 @@ SOURCE_LABELS = {
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_ca": "Yahoo Finance CA",
+    "google_news_ca": "Google News (CA)",
+    "sedar_plus": "SEDAR+ (not wired)",
+    "cse_filings": "CSE filings (not wired)",
+    "neo_filings": "NEO filings (not wired)",
     "news": "News",
     "community": "Community",
     "research": "Research",
@@ -61,6 +66,8 @@ PROVIDER_LABELS = {
     "hankyung": "Hankyung",
     "thebell": "TheBell",
     "yahoo_uk": "Yahoo Finance UK",
+    "yahoo_ca": "Yahoo Finance CA",
+    "google_news_ca": "Google News (CA)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -500,6 +507,19 @@ class WebRepository:
             raise ValueError(
                 "market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS))
             )
+        board_hints: Dict[str, str] = {}
+        if market == MARKET_CA:
+            ordered: List[str] = []
+            for raw in tickers:
+                board = infer_ca_board(raw)
+                root = normalize_ca_ticker(raw)
+                if not root:
+                    continue
+                if root not in ordered:
+                    ordered.append(root)
+                if board and root not in board_hints:
+                    board_hints[root] = board
+            tickers = tuple(ordered)
         valid_lists = {row["slug"] for row in self.fixed_lists()}
         destinations = tuple(dict.fromkeys(list_slugs))
         if not destinations or any(slug not in valid_lists for slug in destinations):
@@ -545,9 +565,15 @@ class WebRepository:
                             ),
                             {},
                         )
+                    exchange = str(
+                        entry.get("exchange")
+                        or entry.get("board")
+                        or board_hints.get(ticker)
+                        or "Unavailable"
+                    )
                     identity = {
                         "name": str(entry.get("name") or ticker),
-                        "exchange": str(entry.get("exchange") or "Unavailable"),
+                        "exchange": exchange,
                         "cik": "",
                         "mapping_status": "unmapped",
                     }
@@ -683,7 +709,7 @@ class WebRepository:
     def query_feed_display(self, filters: FeedFilters) -> PageResult:
         """Return a feed page with cross-source soft dedupe applied."""
         result = self.query_feed(filters)
-        items = fold_feed_items(
+        items = annotate_feed_items(
             result.items,
             enabled=self._kr_soft_dedupe_enabled(),
         )
@@ -1807,7 +1833,67 @@ def _market_region(market: str) -> str:
         "jp": "Japan",
         "hk": "Hong Kong",
         "cn": "China",
+        "kr": "Korea",
+        "uk": "United Kingdom",
+        "ca": "Canada",
     }.get(market, "Unavailable")
+
+
+_CA_TICKER_SUFFIXES = ("TSXV", "TSX", "NEO", "TO", "CN", "NE", "V")
+_CA_TICKER_SEPARATORS = (".", " ", "-")
+
+
+def infer_ca_board(ticker: str) -> Optional[str]:
+    """Infer listing board from a CA symbol suffix before it is stripped.
+
+    Universe cache remains authoritative when present; this recovers board for
+    add-company when the user typed ``RY.TO`` / ``AUMB.V`` / ``X.CN`` /
+    ``HUT.NEO`` but the local ca_universe cache is cold. Plain roots with no
+    suffix return ``None`` (unknown — not the same as inventing TSX).
+    """
+    cleaned = str(ticker).strip().upper()
+    for separator in _CA_TICKER_SEPARATORS:
+        for suffix, board in (
+            ("TSXV", "TSXV"),
+            ("TSX", "TSX"),
+            ("NEO", "NEO"),
+            ("TO", "TSX"),
+            ("CN", "CSE"),
+            ("NE", "NEO"),
+            ("V", "TSXV"),
+        ):
+            marker = separator + suffix
+            if cleaned.endswith(marker):
+                root = cleaned[: -len(marker)].strip()
+                if root:
+                    return board
+    return None
+
+
+def normalize_ca_ticker(ticker: str) -> str:
+    """Normalize a Canadian stock symbol to its canonical root form.
+
+    Accepts plain symbols (``RY``) and the common exchange suffixes used by
+    Canadian data providers (``RY.TO``, ``SHOP.TSX``, ``ABX.V``,
+    ``CVE.TSXV``, ``TD.CN``, ``Q.NE``, ``HUT.NEO``; space or dash separators
+    are tolerated too). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``TO``, ``V``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    changed = True
+    while changed:
+        changed = False
+        for separator in _CA_TICKER_SEPARATORS:
+            for suffix in _CA_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
 
 
 def _company_dict(row: sqlite3.Row) -> Mapping[str, Any]:

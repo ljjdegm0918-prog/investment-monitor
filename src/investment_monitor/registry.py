@@ -23,6 +23,10 @@ from .sources.kr_news import (
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.ca_news import (
+    GoogleCaNewsConnector,
+    YahooCaNewsConnector,
+)
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 
@@ -139,6 +143,8 @@ def create_default_registry() -> SourceRegistry:
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
+    registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

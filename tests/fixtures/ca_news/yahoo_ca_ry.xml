@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: RY.TO News</title>
+    <item>
+      <title>Royal Bank of Canada raises dividend</title>
+      <link>https://ca.finance.yahoo.com/news/royal-bank-dividend-110000101.html</link>
+      <pubDate>Wed, 05 Aug 2026 13:30:00 +0000</pubDate>
+      <description>Royal Bank of Canada announced a dividend increase.</description>
+    </item>
+    <item>
+      <title>Canadian banks rally</title>
+      <link>https://ca.finance.yahoo.com/news/canadian-banks-rally-110000102.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Bank stocks moved higher in Toronto trading.</description>
+    </item>
+    <item>
+      <title>Old item outside window</title>
+      <link>https://ca.finance.yahoo.com/news/old-outside-110000103.html</link>
+      <pubDate>Mon, 27 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Too old to include.</description>
+    </item>
+  </channel>
+</rss>

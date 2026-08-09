@@ -10,7 +10,7 @@ from investment_monitor import (
     WebRepository,
 )
 from investment_monitor.config import SourceConfig
-from investment_monitor.dedupe import dedupe_key, fold_feed_items
+from investment_monitor.dedupe import annotate_feed_items, dedupe_key
 from investment_monitor.web_repository import FeedFilters
 
 
@@ -143,39 +143,45 @@ class DedupeKeyTests(unittest.TestCase):
         self.assertNotEqual(dedupe_key(first), dedupe_key(second))
 
 
-class FoldFeedItemsTests(unittest.TestCase):
-    def test_fold_picks_dart_primary_and_lists_also_from(self) -> None:
+class AnnotateFeedItemsTests(unittest.TestCase):
+    def test_same_receipt_keeps_both_rows_and_annotates_each_other(self) -> None:
         kind = feed_item("kind", "kind-1", rcept_no="20260805000501")
         dart = feed_item("dart", "20260805000501", rcept_no="20260805000501")
 
-        folded = fold_feed_items([kind, dart])
+        annotated = annotate_feed_items([kind, dart])
 
-        self.assertEqual(len(folded), 1)
-        self.assertEqual(folded[0]["source"], "dart")
-        self.assertEqual(folded[0]["also_from"], ["kind"])
-        self.assertEqual(folded[0]["also_from_labels"], ["KIND (KRX)"])
-        self.assertEqual(folded[0]["dedupe_count"], 2)
+        self.assertEqual(len(annotated), 2)
+        self.assertEqual(annotated[0]["source"], "kind")
+        self.assertEqual(annotated[0]["also_seen_on"], ["dart"])
+        self.assertEqual(annotated[0]["also_seen_on_labels"], ["OpenDART"])
+        self.assertEqual(annotated[1]["source"], "dart")
+        self.assertEqual(annotated[1]["also_seen_on"], ["kind"])
+        self.assertEqual(annotated[1]["also_seen_on_labels"], ["KIND (KRX)"])
+        self.assertEqual(annotated[0]["dedupe_count"], 2)
+        self.assertEqual(annotated[1]["dedupe_count"], 2)
 
-    def test_fold_keeps_single_items(self) -> None:
+    def test_annotate_keeps_single_items(self) -> None:
         single = feed_item("dart", "20260805000501", rcept_no="20260805000501")
         sec = feed_item("sec", "sec-1", market="us")
 
-        folded = fold_feed_items([single, sec])
+        annotated = annotate_feed_items([single, sec])
 
-        self.assertEqual(len(folded), 2)
-        self.assertNotIn("also_from", folded[0])
+        self.assertEqual(len(annotated), 2)
+        self.assertNotIn("also_seen_on", annotated[0])
 
-    def test_fold_disabled_returns_every_row(self) -> None:
+    def test_annotate_disabled_returns_every_row_without_fields(self) -> None:
         kind = feed_item("kind", "kind-1", rcept_no="20260805000501")
         dart = feed_item("dart", "20260805000501", rcept_no="20260805000501")
 
-        folded = fold_feed_items([kind, dart], enabled=False)
+        annotated = annotate_feed_items([kind, dart], enabled=False)
 
-        self.assertEqual(len(folded), 2)
+        self.assertEqual(len(annotated), 2)
+        self.assertNotIn("also_seen_on", annotated[0])
+        self.assertNotIn("also_seen_on", annotated[1])
 
 
 class WebRepositoryDedupeTests(unittest.TestCase):
-    def test_display_folds_while_raw_query_keeps_rows(self) -> None:
+    def test_display_keeps_both_rows_and_annotates(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "web.sqlite3"
             items = SQLiteInformationRepository(database_path)
@@ -204,9 +210,13 @@ class WebRepositoryDedupeTests(unittest.TestCase):
             display = repository.query_feed_display(FeedFilters())
 
             self.assertEqual(raw.total, 2)
-            self.assertEqual(len(display.items), 1)
-            self.assertEqual(display.items[0]["source"], "dart")
-            self.assertEqual(display.items[0]["also_from"], ["kind"])
+            self.assertEqual(len(display.items), 2)
+            by_source = {
+                item["source"]: item
+                for item in display.items
+            }
+            self.assertEqual(by_source["dart"]["also_seen_on"], ["kind"])
+            self.assertEqual(by_source["kind"]["also_seen_on"], ["dart"])
 
             with patch.dict(
                 os_environ(),
@@ -216,6 +226,39 @@ class WebRepositoryDedupeTests(unittest.TestCase):
                 display_disabled = repository.query_feed_display(FeedFilters())
 
             self.assertEqual(len(display_disabled.items), 2)
+            self.assertNotIn("also_seen_on", display_disabled.items[0])
+
+    def test_pagination_is_not_shrunk_by_annotation(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "web.sqlite3"
+            items = SQLiteInformationRepository(database_path)
+            repository = WebRepository(
+                database_path,
+                allowed_sources=("dart",),
+                known_sources=(
+                    SourceConfig("dart", "OpenDART", "filings", True),
+                ),
+                implemented_sources=("dart",),
+            )
+            repository.add_companies_batch(
+                "005930",
+                ("holdings",),
+                None,
+                market="kr",
+                name_fallback={"005930": {"name": "靷检劚鞝勳瀽", "exchange": "KRX"}},
+            )
+            items.save([
+                info_item("dart", "20260805000501", rcept_no="20260805000501"),
+                info_item("dart", "20260805000502", rcept_no="20260805000502"),
+                info_item("dart", "20260805000503", rcept_no="20260805000503"),
+            ])
+
+            display = repository.query_feed_display(
+                FeedFilters(page_size=2)
+            )
+
+            self.assertEqual(display.total, 3)
+            self.assertEqual(len(display.items), 2)
 
 
 def os_environ():

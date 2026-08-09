@@ -55,7 +55,7 @@ function dailyContent(data) {
         <article class="information-row">
           <time datetime="${escAttr(item.time)}">${formatTime(item.time)}</time>
           <span class="type type-${item.type.toLowerCase()}">${esc(item.type)}</span>
-          <span class="source">${esc(item.source)}</span>
+          <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · Also seen on ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
           <a class="title" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
           <a class="raw-url" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.url)}</a>
         </article>`).join("")}</div>
@@ -72,7 +72,24 @@ async function renderManage() {
     </section>
     <section class="management-section" aria-labelledby="companies-title">
       <div class="section-heading"><div><h2 id="companies-title">Companies</h2><p id="company-context"></p></div></div>
-      <form id="company-search" class="search-form"><label for="company-query">Search by company name or ticker</label><div><input id="company-query" autocomplete="off" placeholder="e.g. Apple or AAPL" required><button class="button primary">Search</button></div><small>Candidate data comes from the local official SEC mapping. Unknown exchange values are not inferred.</small></form>
+      <form id="company-search" class="search-form">
+        <label for="company-query">Search by company name or ticker</label>
+        <div>
+          <select id="market-select" aria-label="Market">
+            <option value="us" selected>US</option>
+            <option value="jp">JP</option>
+            <option value="hk">HK</option>
+            <option value="cn">CN</option>
+            <option value="kr">KR</option>
+            <option value="uk">UK</option>
+            <option value="ca">CA</option>
+          </select>
+          <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
+          <button class="button primary" type="submit">Search</button>
+          <button class="button" id="add-ticker-direct" type="button">Add ticker</button>
+        </div>
+        <small id="market-hint">US candidates come from the local official SEC mapping. Non-US markets are added as unmapped.</small>
+      </form>
       <div id="candidate-results"></div><div id="company-table"></div>
     </section>
     <section class="management-section" aria-labelledby="sources-title">
@@ -92,6 +109,24 @@ function bindManagement() {
     } catch (error) { toast(error.message, true); }
   });
   document.getElementById("company-search").addEventListener("submit", searchCompanies);
+  document.getElementById("market-select").addEventListener("change", updateMarketHint);
+  document.getElementById("add-ticker-direct").addEventListener("click", addTickerDirect);
+  updateMarketHint();
+}
+
+const MARKET_HINTS = {
+  us: "US candidates come from the local official SEC mapping.",
+  jp: "Japan companies are added as unmapped. Use Add ticker with the local code; EDINET/TDnet collect by market=jp.",
+  hk: "Hong Kong companies are added as unmapped (no SEC mapping).",
+  cn: "A-share companies are added as unmapped (no SEC mapping).",
+  kr: "Korea companies resolve via OpenDART when configured; otherwise add as unmapped.",
+  uk: "UK companies resolve via Companies House when configured.",
+  ca: "CA market (partial — not a full Canadian stack): root tickers strip .TO/.TSX/.V/.TSXV/.CN/.NE/.NEO; board backfills from ca_universe (TSX/TSXV) or typed suffix when cold. Universe does NOT cover CSE/NEO directories. Disclosure is NOT wired: SEDAR+/CSE/NEO filings unwired. News: Yahoo Finance CA + Google News CA. Finnhub is US-only.",
+};
+
+function updateMarketHint() {
+  const market = document.getElementById("market-select").value;
+  document.getElementById("market-hint").textContent = MARKET_HINTS[market] || MARKET_HINTS.us;
 }
 
 async function refreshManagement() {
@@ -140,12 +175,32 @@ function renderCompanies() {
 async function searchCompanies(event) {
   event.preventDefault();
   if (!state.selectedList) { toast("Create or select a list first.", true); return; }
+  const market = document.getElementById("market-select").value;
+  if (market !== "us") {
+    toast("Non-US markets: use Add ticker (SEC search is US-only).", true);
+    return;
+  }
   const target = document.getElementById("candidate-results"); target.innerHTML = `<p class="loading">Searching candidates…</p>`;
   try {
     const data = await api(`/api/companies/search?q=${encodeURIComponent(document.getElementById("company-query").value.trim())}`);
     target.innerHTML = data.candidates.length ? `<div class="candidate-list">${data.candidates.map(candidate => `<article><div><strong>${esc(candidate.name)}</strong><p>${esc(candidate.ticker)} · ${esc(candidate.exchange)} · ${esc(candidate.region)}</p></div><button class="button add-candidate" data-ticker="${escAttr(candidate.ticker)}" data-market="${escAttr(candidate.market)}">Confirm &amp; add</button></article>`).join("")}</div>` : `<div class="empty compact"><p>No matching official candidates.</p></div>`;
     document.querySelectorAll(".add-candidate").forEach(button => button.addEventListener("click", () => addCandidate(button.dataset.ticker, button.dataset.market)));
   } catch (error) { target.innerHTML = errorState("Search returned no results", error.message); }
+}
+
+async function addTickerDirect() {
+  if (!state.selectedList) { toast("Create or select a list first.", true); return; }
+  const tickers = document.getElementById("company-query").value.trim();
+  if (!tickers) { toast("Enter a ticker first.", true); return; }
+  const market = document.getElementById("market-select").value;
+  try {
+    const result = await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers, lists:[state.selectedList], market})});
+    const added = (result.added || []).map(row => row.ticker).join(", ") || tickers;
+    toast(`${added} added (${market}).`);
+    document.getElementById("candidate-results").innerHTML = "";
+    await reloadBootstrap();
+    await refreshManagement();
+  } catch (error) { toast(error.message, true); }
 }
 
 async function addCandidate(ticker, market) {
@@ -167,7 +222,7 @@ function renderSources(sources) {
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
 function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
-function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China"})[market] || "Unavailable"; }
+function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",ca:"Canada"})[market] || "Unavailable"; }
 function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
 function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
