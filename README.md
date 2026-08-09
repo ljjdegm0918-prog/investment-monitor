@@ -254,6 +254,12 @@ with only one disclosure source wired there is no cross-source filing
 pairing. Every row stays in the feed with an "Also seen on …" label;
 totals and page sizes are never shrunk.
 
+### Italy sources (IT)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=it` companies use canonical root tickers (`ENI` / `ENI.MI` / `ENI-MIL` all store as `ENI`; exchange suffixes `.MI` / `.MIL` / `.BIT` are stripped at add time, Italian ISINs are kept as-is, board goes into `exchange` when available) and remain unmapped. Euronext Milan / Borsa Italiana disclosure, an IT universe cache, and IT news connectors are planned but not wired yet (IT-1 … IT-5). Finnhub is **US only** and never queried for IT. |
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

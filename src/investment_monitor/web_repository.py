@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_NL, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -559,6 +559,10 @@ class WebRepository:
         if market == MARKET_NL:
             tickers = tuple(
                 dict.fromkeys(normalize_nl_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_IT:
+            tickers = tuple(
+                dict.fromkeys(normalize_it_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2120,6 +2124,43 @@ def normalize_nl_ticker(ticker: str) -> str:
         changed = False
         for separator in _NL_TICKER_SEPARATORS:
             for suffix in _NL_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_IT_TICKER_SUFFIXES = ("MI", "MIL", "BIT")
+_IT_TICKER_SEPARATORS = (".", " ", "-")
+_IT_ISIN_PATTERN = re.compile(r"IT[0-9A-Z]{10}")
+
+
+def normalize_it_ticker(ticker: str) -> str:
+    """Normalize an Italian (Euronext Milan / Borsa Italiana) symbol.
+
+    Accepts plain symbols (``ENI``) and the common Italian exchange suffixes
+    used by data providers (``ENI.MI``, ``ENI.MIL``, ``ENI-BIT``; space or
+    dash separators are tolerated too, and stacked suffixes collapse to the
+    root). The suffix is stripped and the root symbol is uppercased; a plain
+    symbol without a suffix is preserved as-is. Suffix words without a
+    separator (``MI``, ``MIL``, ``BIT``) are never erased. When the input
+    contains an Italian ISIN (``IT`` followed by 10 alphanumeric characters,
+    e.g. ``IT0003132476``), the ISIN is extracted and returned instead,
+    since an ISIN is a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _IT_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _IT_TICKER_SEPARATORS:
+            for suffix in _IT_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
