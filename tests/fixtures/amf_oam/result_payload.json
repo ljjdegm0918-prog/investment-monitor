@@ -1,0 +1,77 @@
+{
+  "result": [
+    {
+      "numeroConcatene": "26-000123",
+      "datePublication": "2026-08-05T08:30:00+02:00",
+      "titre": "Information relative au nombre total de droits de vote et d'actions",
+      "typesDocument": [
+        "Information reglementee"
+      ],
+      "societes": [
+        {
+          "raisonSociale": "LVMH MOET HENNESSY LOUIS VUITTON"
+        }
+      ],
+      "documents": [
+        {
+          "path": "2026/08/05/LVMH-26-000123.pdf"
+        }
+      ]
+    },
+    {
+      "numeroConcatene": "26-000456",
+      "datePublication": "2026-07-10T17:00:00+02:00",
+      "titre": "Ancien document hors fenetre",
+      "typesDocument": [
+        "Rapport financier"
+      ],
+      "societes": [
+        {
+          "raisonSociale": "LVMH MOET HENNESSY LOUIS VUITTON"
+        }
+      ],
+      "documents": [
+        {
+          "path": "2026/07/10/LVMH-26-000456.pdf"
+        }
+      ]
+    },
+    {
+      "numeroConcatene": "26-000789",
+      "datePublication": "2026-08-01T00:00:00+02:00",
+      "titre": "Document a la borne de debut",
+      "typesDocument": [
+        "Information privilegiee"
+      ],
+      "societes": [
+        {
+          "raisonSociale": "AIRBUS SE"
+        }
+      ],
+      "documents": [
+        {
+          "path": "2026/08/01/AIRBUS-26-000789.pdf"
+        }
+      ]
+    },
+    {
+      "numeroConcatene": "26-000999",
+      "datePublication": "2026-08-06T23:59:00+02:00",
+      "titre": "Document a la borne de fin",
+      "typesDocument": [
+        "Information privilegiee"
+      ],
+      "societes": [
+        {
+          "raisonSociale": "LVMH MOET HENNESSY LOUIS VUITTON"
+        }
+      ],
+      "documents": [
+        {
+          "path": "2026/08/06/LVMH-26-000999.pdf"
+        }
+      ]
+    }
+  ],
+  "total": 4
+}

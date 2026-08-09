@@ -58,6 +58,9 @@ SOURCE_LABELS = {
     "asx_announcements": "ASX Market Announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
+    "amf_oam": "AMF OAM",
+    "yahoo_fr": "Yahoo Finance FR",
+    "google_news_fr": "Google News (FR)",
     "sedar_plus": "SEDAR+ (not wired)",
     "cse_filings": "CSE filings (not wired)",
     "neo_filings": "NEO filings (not wired)",
@@ -88,6 +91,9 @@ PROVIDER_LABELS = {
     "asx_announcements": "ASX Market Announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
+    "amf_oam": "AMF OAM",
+    "yahoo_fr": "Yahoo Finance FR",
+    "google_news_fr": "Google News (FR)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -1874,6 +1880,7 @@ def _market_region(market: str) -> str:
         "tw": "Taiwan",
         "ca": "Canada",
         "au": "Australia",
+        "fr": "France",
     }.get(market, "Unavailable")
 
 

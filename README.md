@@ -199,6 +199,20 @@ day + normalized title.
 is **US only**. Soft-dedupe: ASX filings pair on document key (or same-source
 title fallback); news pairs on ticker + Sydney day + normalized title.
 
+### France sources (FR)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| amf_oam | filings | none | AMF OAM information feed (key-free; undocumented page API; may change); only wired FR disclosure source |
+| fr_universe | breadth cache | none | Euronext live all-stocks CSV (Paris / Growth Paris / Access Paris); never enters the feed |
+| yahoo_fr | news | none | Yahoo Finance FR public RSS (`region=FR`); `.PA` at request time |
+| google_news_fr | news | none | Key-free Google News RSS (`hl=fr&gl=FR&ceid=FR:fr`) |
+
+`market=fr` uses canonical root tickers (`MC` / `MC.PA` → `MC`; French ISINs
+kept as-is). Add-company can backfill name/board from `fr_universe_name_map()`
+when warm. Finnhub is **US only**. Soft-dedupe: AMF filings pair on OAM
+document id (or same-source title fallback); news pairs on ticker + Paris day.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

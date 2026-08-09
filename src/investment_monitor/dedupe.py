@@ -20,7 +20,11 @@ pairs across sources on ticker + Toronto day + normalized title. For AU,
 the only wired disclosure source is asx_announcements, which pairs on its
 stable ASX document key, or on a source-scoped title fallback (ticker +
 Sydney day + normalized title); AU news (yahoo_au / google_news_au) pairs
-across sources on ticker + Sydney day + normalized title.
+across sources on ticker + Sydney day + normalized title. For FR,
+the only wired disclosure source is amf_oam, which pairs on its stable OAM
+document id, or on a source-scoped title fallback (ticker + Paris day +
+normalized title); FR news (yahoo_fr / google_news_fr) pairs across sources
+on ticker + Paris day + normalized title.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ HKT = ZoneInfo("Asia/Hong_Kong")
 TAIPEI = ZoneInfo("Asia/Taipei")
 TORONTO = ZoneInfo("America/Toronto")
 SYDNEY = ZoneInfo("Australia/Sydney")
+PARIS = ZoneInfo("Europe/Paris")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -49,6 +54,7 @@ FILING_SOURCE_PRIORITY = {
     "twse_material": 7,
     "tpex_material": 8,
     "asx_announcements": 9,
+    "amf_oam": 10,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -63,6 +69,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_ca": 9,
     "yahoo_au": 10,
     "google_news_au": 11,
+    "yahoo_fr": 12,
+    "google_news_fr": 13,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -87,6 +95,9 @@ SOURCE_DISPLAY_LABELS = {
     "asx_announcements": "ASX announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
+    "amf_oam": "AMF OAM",
+    "yahoo_fr": "Yahoo Finance FR",
+    "google_news_fr": "Google News (FR)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -97,7 +108,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk", "tw", "ca", "au"}:
+    if market not in {"kr", "uk", "hk", "tw", "ca", "au", "fr"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -190,7 +201,35 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "au":
         return _au_filing_key(item)
+    if market == "fr":
+        return _fr_filing_key(item)
     return _uk_filing_key(item)
+
+
+def _fr_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """FR filings pair on the stable AMF OAM document id, or a fallback.
+
+    ``amf_oam`` is the only wired FR disclosure source; its document id
+    (``raw_metadata.document_id`` or ``external_id``) is the primary
+    identity. Without one, the fallback is source-scoped (source + ticker +
+    Paris day + normalized title), so a hypothetical second FR disclosure
+    source is never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    document_id = str(
+        metadata.get("document_id") or item.get("external_id") or ""
+    ).strip()
+    if document_id:
+        return f"fr:filing:oam:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, PARIS)
+    if title and day:
+        return (
+            f"fr:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
 
 
 def _au_filing_key(item: Mapping[str, Any]) -> Optional[str]:
@@ -308,6 +347,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "ca"
         else SYDNEY
         if market == "au"
+        else PARIS
+        if market == "fr"
         else LONDON
     )
     title = normalize_title(item.get("title"))

@@ -1,0 +1,14 @@
+Name;ISIN;Symbol;Market;Currency;"Open Price";"High Price";"low Price";"last Price";"last Trade MIC Time";"Time Zone";Volume;Turnover;"Closing Price";"Closing Price DateTime"
+"European Equities"
+"09 Aug 2026"
+"All datapoints provided as of end of last active trading day."
+LVMH;FR0000121014;MC;"Euronext Paris";EUR;480.75;483.70;478.15;480.00;" 17:37";CET;404209;194198093.225;480.00;
+AIRBUS;NL0000235190;AIR;"Euronext Paris";EUR;213.50;216.20;212.85;213.60;" 17:35";CET;694849;148771400.10;213.60;
+2CRSI;FR0013341781;AL2SI;"Euronext Growth Paris";EUR;27.90;27.90;26.90;27.60;" 17:36";CET;146360;3999491.73;27.60;
+"AB SCIENCE BSA 25";FR00140118Z8;ABSBS;"Euronext Growth Paris";EUR;-;-;-;-;-;CET;-;-;0.274;
+"ACTIVIUM GROUP";FR0010979377;MLACT;"Euronext Access Paris";EUR;-;-;-;-;-;CET;-;-;-;
+TOTALENERGIES;FR0000120271;TTE;"Euronext Paris, Brussels";EUR;55.90;56.50;55.70;56.10;" 17:35";CET;2400000;134400000.00;56.10;
+LVMH;FR0000121014;1MC;"Euronext Global Equity Market";EUR;480.30;482.95;478.50;480.00;" 17:24";CET;1354;650320.00;479.85;
+LVMH;FR0000121014;2MC;"Trading After Hours";EUR;466.50;466.50;466.50;466.50;" 19:54";CET;1;466.50;475.05;
+SANOFI;FR0000120578;4SAN;EuroTLX;EUR;75.18;75.18;75.18;75.18;" 15:58";CET;500;37590.00;75.32;
+NMC;BE0035966762;-;"Euronext Expert Market";EUR;2250.60;2250.60;2250.60;2250.60;" 11:30";CET;18;40510.80;2260.00;

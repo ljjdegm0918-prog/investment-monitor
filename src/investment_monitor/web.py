@@ -31,6 +31,7 @@ from .kr_universe import kr_universe_name_map
 from .models import (
     MARKET_AU,
     MARKET_CA,
+    MARKET_FR,
     MARKET_HK,
     MARKET_KR,
     MARKET_TW,
@@ -38,6 +39,7 @@ from .models import (
     MARKET_US,
 )
 from .tw_universe import tw_universe_name_map
+from .universe.fr_universe import fr_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -265,6 +267,8 @@ class WebApplication:
                     name_fallback = tw_universe_name_map()
                 elif market == MARKET_AU:
                     name_fallback = au_universe_name_map()
+                elif market == MARKET_FR:
+                    name_fallback = fr_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -513,6 +517,10 @@ class WebApplication:
         if market == MARKET_AU:
             # AU companies stay unmapped; never let SEC map an Australian
             # symbol to a same-named US company.
+            return None
+        if market == MARKET_FR:
+            # FR stays unmapped via SEC; AMF OAM matches by company name /
+            # universe, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

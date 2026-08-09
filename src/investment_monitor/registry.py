@@ -38,6 +38,11 @@ from .sources.au_news import (
     GoogleAuNewsConnector,
     YahooAuNewsConnector,
 )
+from .sources.amf_oam import AmfOamConnector
+from .sources.fr_news import (
+    GoogleFrNewsConnector,
+    YahooFrNewsConnector,
+)
 from .sources.hkexnews import HkexNewsConnector
 from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
@@ -169,6 +174,9 @@ def create_default_registry() -> SourceRegistry:
     registry.register(AsxAnnouncementsConnector.name, AsxAnnouncementsConnector)
     registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
+    registry.register(AmfOamConnector.name, AmfOamConnector)
+    registry.register(YahooFrNewsConnector.name, YahooFrNewsConnector)
+    registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

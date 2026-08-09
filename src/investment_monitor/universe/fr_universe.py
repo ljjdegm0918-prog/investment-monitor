@@ -1,0 +1,285 @@
+"""FR tradeable universe cache (breadth only) from the Euronext live CSV.
+
+Source (live verified 2026-08-09): the key-free Euronext live "all stocks"
+CSV download (``live.euronext.com/en/pd_es/data/stocks/download?mics=
+dm_all_stock``; the same endpoint family public Euronext tooling has used
+for years). It is a semicolon-delimited CSV with a UTF-8 BOM, three metadata
+rows, one header row (``Name;ISIN;Symbol;Market;...``), then one row per
+listed instrument with ISIN, mnemonic symbol and market segment. A plain
+User-Agent suffices (verified without a Referer header). The other free
+candidates were checked and not wired: data.gouv.fr has no stable machine
+readable listing for Euronext Paris, and the Info-Financiere issuer pages
+are HTML-only with no durable structured export.
+
+Board coverage (breadth, as labeled by the source):
+- ``Euronext Paris`` - the regulated main market (historically Compartments
+  A/B/C; the public feed no longer separates compartments).
+- ``Euronext Growth Paris`` - the SME growth segment (ex-Alternext; ``AL*``
+  symbols).
+- ``Euronext Access Paris`` - the access segment (ex-Marche Libre / Free
+  Market; ``ML*`` symbols).
+- Cross-listings whose segment label includes a Paris venue (for example
+  ``Euronext Paris, Brussels`` or ``Euronext Amsterdam, Paris``) are kept
+  with their raw label so Paris-tradeable breadth is honest.
+
+Rows on other venues are excluded: Euronext Global Equity Market (``1*``
+alternate symbols), Trading After Hours (``2*``), EuroTLX (``4*``), and the
+non-Paris national boards. The feed mixes shares with some non-equity
+instruments (warrants/BSA); they are kept as-is - this cache is breadth
+only and never flows into information_items / Today feed.
+
+Alignment with the FR-1 AMF OAM connector: the OAM feed is keyed by company
+name (``societes[].raisonSociale``), not ticker. Each cache entry stores
+the Euronext display name and ISIN under the normalized FR ticker, so a
+name/ISIN lookup is available for AMF matching once the universe is
+refreshed.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import json
+import logging
+import os
+import ssl
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Mapping, Optional
+from urllib.request import HTTPSHandler, Request, build_opener, urlopen
+
+from ..web_repository import normalize_fr_ticker
+
+LOGGER = logging.getLogger(__name__)
+
+DEFAULT_CACHE_PATH = ".cache/investment_monitor/fr_universe.json"
+DIRECTORY_URL = (
+    "https://live.euronext.com/en/pd_es/data/stocks/download"
+    "?mics=dm_all_stock"
+)
+DIRECTORY_URL_ENV = "FR_UNIVERSE_DIRECTORY_URL"
+DEFAULT_USER_AGENT = "InvestmentMonitor/0.1 (internal workspace)"
+
+
+class FrUniverseError(RuntimeError):
+    """Raised when the FR universe cannot be refreshed at all."""
+
+
+def load_fr_universe(
+    path: Optional[Path] = None,
+) -> Optional[Mapping[str, Any]]:
+    """Load the cached universe payload, or None when absent/invalid."""
+    cache_path = _cache_path(path)
+    try:
+        with cache_path.open("r", encoding="utf-8") as cache_file:
+            return json.load(cache_file)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def refresh_fr_universe(
+    *,
+    path: Optional[Path] = None,
+    opener: Optional[Callable[..., Any]] = None,
+    url: Optional[str] = None,
+    refreshed_at: Optional[str] = None,
+) -> Mapping[str, Any]:
+    """Refresh the FR universe from the Euronext live all-stocks CSV.
+
+    Rows whose market segment mentions a Paris venue are kept; other venues
+    are dropped. A full failure (network or no parseable Paris rows) raises
+    ``FrUniverseError``. The cache is written atomically (tmp + replace).
+    """
+    cache_path = _cache_path(path)
+    verify_ssl = (
+        os.environ.get("FR_UNIVERSE_VERIFY_SSL", "true")
+        .strip()
+        .lower()
+    ) not in {"0", "false", "no", "off"}
+    default_opener = _make_opener(verify_ssl)
+    directory_url = url or os.environ.get(DIRECTORY_URL_ENV, DIRECTORY_URL)
+
+    try:
+        rows = _fetch_directory_rows(
+            directory_url,
+            opener or default_opener,
+        )
+    except Exception as error:
+        LOGGER.warning(
+            "fr_universe source=euronext_live_csv failed: %s",
+            error,
+        )
+        raise FrUniverseError(
+            f"Euronext live stock list failed: {error}"
+        ) from error
+
+    entries: Dict[str, Mapping[str, Any]] = {}
+    counts: Dict[str, int] = {}
+    for row in rows:
+        ticker = str(row.get("ticker") or "")
+        if not ticker or ticker in entries:
+            continue
+        board = str(row.get("market") or "Euronext Paris")
+        entries[ticker] = {
+            "ticker": ticker,
+            "name": str(row.get("name") or ticker),
+            "isin": str(row.get("isin") or ""),
+            "board": board,
+            "exchange": board,
+            "status": "active",
+        }
+        counts[board] = counts.get(board, 0) + 1
+
+    if not entries:
+        raise FrUniverseError(
+            "FR universe source failed; no Paris entries available."
+        )
+
+    payload = {
+        "updated_at": (
+            refreshed_at
+            or datetime.now(timezone.utc).isoformat()
+        ),
+        "source": ["euronext_live_csv"],
+        "counts": counts,
+        "items": sorted(
+            entries.values(),
+            key=lambda item: item["ticker"],
+        ),
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = cache_path.with_suffix(cache_path.suffix + ".tmp")
+    with temporary_path.open("w", encoding="utf-8") as cache_file:
+        json.dump(payload, cache_file, ensure_ascii=False)
+    temporary_path.replace(cache_path)
+    return payload
+
+
+def fr_universe_name_map(
+    path: Optional[Path] = None,
+) -> Mapping[str, Mapping[str, str]]:
+    """Return normalized ticker -> {name, exchange, board, isin}.
+
+    ``exchange`` carries the Euronext segment (same value as ``board``, the
+    AU/TW convention); ``isin`` is kept so the FR-1 AMF connector can align
+    by ISIN/name once the universe is present.
+    """
+    payload = load_fr_universe(path)
+    if not payload:
+        return {}
+    result: Dict[str, Mapping[str, str]] = {}
+    for item in payload.get("items") or []:
+        ticker = str(item.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        board = str(
+            item.get("board")
+            or item.get("exchange")
+            or "Euronext Paris"
+        )
+        result[ticker] = {
+            "name": str(item.get("name") or ticker),
+            "exchange": board,
+            "board": board,
+            "isin": str(item.get("isin") or ""),
+        }
+    return result
+
+
+def search_fr_universe(
+    query: str,
+    path: Optional[Path] = None,
+) -> List[Mapping[str, Any]]:
+    """Search the cached FR universe by ticker, name, ISIN or board."""
+    payload = load_fr_universe(path)
+    if not payload:
+        return []
+    needle = str(query or "").strip().lower()
+    if not needle:
+        return []
+    matches: List[Mapping[str, Any]] = []
+    for item in payload.get("items") or []:
+        haystack = (
+            f"{item.get('ticker') or ''} "
+            f"{item.get('name') or ''} "
+            f"{item.get('isin') or ''} "
+            f"{item.get('board') or ''}"
+        ).lower()
+        if needle in haystack:
+            matches.append(dict(item))
+        if len(matches) >= 50:
+            break
+    return matches
+
+
+def _fetch_directory_rows(
+    url: str,
+    opener: Callable[..., Any],
+) -> List[Mapping[str, Any]]:
+    raw = _get_csv(url, opener)
+    reader = csv.reader(io.StringIO(raw), delimiter=";")
+    records: List[Mapping[str, Any]] = []
+    seen_header = False
+    for row in reader:
+        if not row or not row[0]:
+            continue
+        if not seen_header:
+            if str(row[0]).strip() == "Name" and len(row) >= 5:
+                seen_header = True
+            continue
+        if len(row) < 5:
+            continue
+        market = str(row[3]).strip()
+        if "Paris" not in market:
+            continue
+        symbol = str(row[2]).strip()
+        if not symbol or symbol == "-":
+            continue
+        ticker = normalize_fr_ticker(symbol)
+        if not ticker:
+            continue
+        records.append(
+            {
+                "ticker": ticker,
+                "name": str(row[0]).strip(),
+                "isin": str(row[1]).strip(),
+                "market": market,
+            }
+        )
+    if not records:
+        raise FrUniverseError(
+            "Euronext live CSV returned no parseable Paris entries."
+        )
+    return records
+
+
+def _get_csv(
+    url: str,
+    opener: Callable[..., Any],
+) -> str:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept": "text/csv",
+            "Accept-Language": "en,fr;q=0.8",
+        },
+        method="GET",
+    )
+    with opener(request, timeout=60) as response:
+        raw = response.read()
+    return raw.decode("utf-8-sig", errors="replace")
+
+
+def _make_opener(verify_ssl: bool) -> Callable[..., Any]:
+    if verify_ssl:
+        return urlopen
+    return build_opener(
+        HTTPSHandler(context=ssl._create_unverified_context())
+    ).open
+
+
+def _cache_path(path: Optional[Path]) -> Path:
+    return Path(
+        path or os.environ.get("FR_UNIVERSE_CACHE_PATH", DEFAULT_CACHE_PATH)
+    )

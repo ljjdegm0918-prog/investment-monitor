@@ -104,6 +104,18 @@ sources:
     label: Google News (AU)
     source_type: news
     enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  - name: amf_oam
+    label: AMF OAM
+    source_type: filings
+    enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: yahoo_fr
+    label: Yahoo Finance FR
+    source_type: news
+    enabled: true          # key-free public RSS mirror (fr-FR + en-US); may be loosely related / break without notice
+  - name: google_news_fr
+    label: Google News (FR)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=fr); may be loosely related / break without notice
   - name: community
     label: Community
     source_type: community
