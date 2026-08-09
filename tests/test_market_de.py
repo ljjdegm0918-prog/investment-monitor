@@ -14,6 +14,7 @@ from investment_monitor import (
 from investment_monitor.web_repository import normalize_de_ticker
 from investment_monitor.sources.news import FinnhubNewsConnector
 from investment_monitor.sources.eqs_dgap import EqsDgapConnector
+from investment_monitor.sources.de_community import DeCommunityConnector
 from investment_monitor.registry import create_default_registry
 from investment_monitor.sources.de_news.google.client import (
     DEFAULT_BASE_URL as GOOGLE_DE_BASE_URL,
@@ -267,6 +268,34 @@ class MarketDENewsStubTests(unittest.TestCase):
 
         self.assertEqual(yahoo_items, [])
         self.assertEqual(google_items, [])
+
+
+class MarketDECommunityStubTests(unittest.TestCase):
+    def test_de_community_stub_is_registered(self) -> None:
+        registry = create_default_registry()
+        self.assertIn("de_community", registry.registered_names)
+        self.assertIsNotNone(registry.factory_for("de_community"))
+
+    def test_de_community_stub_collects_nothing_without_network(self) -> None:
+        connector = DeCommunityConnector()
+
+        items = connector.collect(
+            CollectionRequest(
+                tickers=("SAP",),
+                start_date=date(2026, 8, 1),
+                end_date=date(2026, 8, 2),
+                markets={"SAP": "de"},
+            )
+        )
+
+        self.assertEqual(items, [])
+        self.assertEqual(connector.last_errors, ())
+
+    def test_de_community_stub_marks_status_and_url_templates(self) -> None:
+        self.assertEqual(DeCommunityConnector.status, "stub")
+        self.assertEqual(DeCommunityConnector.provider, "DE Community")
+        self.assertIn("search", DeCommunityConnector.URL_TEMPLATES)
+        self.assertIn("detail", DeCommunityConnector.URL_TEMPLATES)
 
 
 if __name__ == "__main__":

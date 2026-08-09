@@ -47,6 +47,7 @@ from .sources.de_news import (
     GoogleDeNewsConnector,
     YahooDeNewsConnector,
 )
+from .sources.de_community import DeCommunityConnector
 from .sources.hkexnews import HkexNewsConnector
 from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
@@ -184,6 +185,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
+    registry.register(DeCommunityConnector.name, DeCommunityConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,
