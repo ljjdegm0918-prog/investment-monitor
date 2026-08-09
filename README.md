@@ -245,6 +245,15 @@ are stripped at add time, Dutch ISINs are kept as-is, board goes into
 Finnhub is **US only** and never queried for NL. News comes from `yahoo_nl`
 / `google_news_nl`.
 
+NL feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_nl` / `google_news_nl` news
+pairs across sources on ticker + Amsterdam day (`Europe/Amsterdam`) +
+normalized title. `eqs_nl` filings pair on the stable EQS news id, or on a
+same-source title fallback (ticker + Amsterdam day + normalized title);
+with only one disclosure source wired there is no cross-source filing
+pairing. Every row stays in the feed with an "Also seen on …" label;
+totals and page sizes are never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
