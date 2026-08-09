@@ -178,6 +178,14 @@ sources:
     label: Google News (ES)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=es); may be loosely related / break without notice
+  - name: yahoo_sg
+    label: Yahoo Finance SG
+    source_type: news
+    enabled: true          # key-free public RSS mirror (en-SG + en-US); may be loosely related / break without notice
+  - name: google_news_sg
+    label: Google News (SG)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-SG); may be loosely related / break without notice
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.

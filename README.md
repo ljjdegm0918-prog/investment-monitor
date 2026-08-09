@@ -315,7 +315,15 @@ shrunk.
 |---|---|---|---|
 | sgx_announcements | filings | none | **Not wired (SG-1 spike A3, re-verified in SG-4)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector is registered; SGX DataLink / paid market-data products are not used. |
 | sg_universe | breadth cache | none | **Boundary stub (SG-2 spike B2)**: no stable key-free SGX securities directory exists (`www.sgx.com/securities/*` is a JS SPA, the screener is Refinitiv/LSEG-powered; `api.sgx.com` 403; `data.gov.sg` has only aggregate SINGSTAT turnover; ACRA is the full company register without SGX codes). `load_sg_universe` / `sg_universe_name_map` / `search_sg_universe` read a local cache if one ever exists; `refresh_sg_universe` raises `SgUniverseError` instead of faking an STI-only universe. Never enters the feed. |
-| (news) | — | — | Market skeleton plus disclosure boundary and universe stub so far: `market=sg` companies use canonical root tickers (`D05` / `D05.SI` / `D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no fixed width is assumed) and remain unmapped. SG news connectors are planned but not wired yet (SG-3 … SG-5). Finnhub is **US only** and never queried for SG. |
+| yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
+| google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
+
+`market=sg` companies use canonical root tickers (`D05` / `D05.SI` /
+`D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped
+at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no
+fixed width is assumed) and remain unmapped. Finnhub is **US only** and
+never queried for SG. News comes from `yahoo_sg` / `google_news_sg`. SG
+feed soft-dedupe lands with SG-5.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
