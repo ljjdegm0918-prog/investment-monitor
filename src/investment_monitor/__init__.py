@@ -292,6 +292,13 @@ from .universe.it_universe import (
     refresh_it_universe,
     search_it_universe,
 )
+from .universe.es_universe import (
+    EsUniverseError,
+    es_universe_name_map,
+    load_es_universe,
+    refresh_es_universe,
+    search_es_universe,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -417,6 +424,7 @@ __all__ = [
     "FrUniverseError",
     "NlUniverseError",
     "ItUniverseError",
+    "EsUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",

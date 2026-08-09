@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_ES
+from ...universe.es_universe import es_universe_name_map
 from ...web_repository import normalize_es_ticker
 from .client import (
     CnmvHrClient,
@@ -42,10 +43,10 @@ class CnmvHrConnector:
         universe: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> None:
         self._client = client or CnmvHrClient.from_environment()
-        # ES-1 ships before es_universe (ES-2); the universe default is
-        # replaced by es_universe_name_map() in the ES-2 slice.
         self._universe = (
-            dict(universe) if universe is not None else {}
+            dict(universe)
+            if universe is not None
+            else es_universe_name_map()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 

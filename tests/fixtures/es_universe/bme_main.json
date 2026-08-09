@@ -1,0 +1,68 @@
+{
+  "yearOfPriceData": 2026,
+  "totalResults": 5,
+  "params": {
+    "tradingSystem": "SIBE,Floor,Latibex",
+    "mtfSegment": null,
+    "sectorKey": null,
+    "subsectorKey": null,
+    "companyKey": null,
+    "isin": null,
+    "page": 0,
+    "pageSize": 0
+  },
+  "hasMoreResults": false,
+  "data": [
+    {
+      "name": "BANCO SANTANDER, S.A.",
+      "companyKey": "13900",
+      "isin": "ES0113900J37",
+      "shareName": "BANCO SANTANDER",
+      "sector": "05",
+      "subsector": "01",
+      "tradingSystem": "SIBE",
+      "indices": "IBEX 35\u00ae, IGBM"
+    },
+    {
+      "name": "TELEFONICA, S.A.",
+      "companyKey": "78430",
+      "isin": "ES0178430E18",
+      "shareName": "TELEFONICA",
+      "sector": "06",
+      "subsector": "01",
+      "tradingSystem": "SIBE",
+      "indices": "IBEX 35\u00ae, IGBM"
+    },
+    {
+      "name": "INDUSTRIA DE DISENO TEXTIL, SA \"INDITEX\"",
+      "companyKey": "48396",
+      "isin": "ES0148396007",
+      "shareName": "IND. DE DISENO TEXTIL (INDITEX)",
+      "sector": "03",
+      "subsector": "02",
+      "tradingSystem": "SIBE",
+      "indices": "IBEX 35\u00ae, IGBM"
+    },
+    {
+      "name": "AYCO GRUPO INMOBILIARIO, S.A.",
+      "companyKey": "52960",
+      "isin": "ES0152960045",
+      "shareName": "AYCO GRUPO INMOBILIARIO",
+      "sector": "07",
+      "subsector": "01",
+      "tradingSystem": "Floor",
+      "indices": ""
+    },
+    {
+      "name": "AXIA ENERGIA",
+      "companyKey": "ETACN",
+      "isin": "BRAXIAACNOR0",
+      "shareName": "AXIA ENERGIA ORD.",
+      "sector": "01",
+      "subsector": "02",
+      "tradingSystem": "Latibex",
+      "indices": "FTSE Latibex TOP",
+      "country": "Brazil"
+    }
+  ]
+}
