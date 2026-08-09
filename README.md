@@ -323,7 +323,13 @@ shrunk.
 at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no
 fixed width is assumed) and remain unmapped. Finnhub is **US only** and
 never queried for SG. News comes from `yahoo_sg` / `google_news_sg`. SG
-feed soft-dedupe lands with SG-5.
+feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_sg` / `google_news_sg`
+news pairs across sources on ticker + Singapore day (`Asia/Singapore`) +
+normalized title. No SG disclosure connector is wired, so regulatory
+filings never get a dedupe key and are never annotated. Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
