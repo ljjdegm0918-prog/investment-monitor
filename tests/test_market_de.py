@@ -15,6 +15,17 @@ from investment_monitor.web_repository import normalize_de_ticker
 from investment_monitor.sources.news import FinnhubNewsConnector
 from investment_monitor.sources.eqs_dgap import EqsDgapConnector
 from investment_monitor.registry import create_default_registry
+from investment_monitor.sources.de_news.google.client import (
+    DEFAULT_BASE_URL as GOOGLE_DE_BASE_URL,
+    GoogleDeNewsClient,
+)
+from investment_monitor.sources.de_news.google.connector import GoogleDeNewsConnector
+from investment_monitor.sources.de_news.symbols import de_yahoo_symbol
+from investment_monitor.sources.de_news.yahoo.client import (
+    DEFAULT_BASE_URL as YAHOO_DE_BASE_URL,
+    YahooDeNewsClient,
+)
+from investment_monitor.sources.de_news.yahoo.connector import YahooDeNewsConnector
 
 
 class MarketDETests(unittest.TestCase):
@@ -197,6 +208,65 @@ class MarketDEDisclosureStubTests(unittest.TestCase):
         self.assertEqual(EqsDgapConnector.provider, "EQS Group / DGAP")
         self.assertIn("search", EqsDgapConnector.URL_TEMPLATES)
         self.assertIn("detail", EqsDgapConnector.URL_TEMPLATES)
+
+
+class MarketDENewsStubTests(unittest.TestCase):
+    def test_de_news_connectors_are_registered(self) -> None:
+        registry = create_default_registry()
+
+        self.assertIn("yahoo_de", registry.registered_names)
+        self.assertIn("google_news_de", registry.registered_names)
+        self.assertIsNotNone(registry.factory_for("yahoo_de"))
+        self.assertIsNotNone(registry.factory_for("google_news_de"))
+
+    def test_de_yahoo_symbol_uses_dot_de_suffix(self) -> None:
+        self.assertEqual(de_yahoo_symbol("SAP"), "SAP.DE")
+        self.assertEqual(de_yahoo_symbol("sap.xetra"), "SAP.DE")
+
+    def test_de_news_stub_url_templates_are_placeholders(self) -> None:
+        yahoo_url = YahooDeNewsClient().url_for("SAP.DE")
+        google_url = GoogleDeNewsClient().url_for("SAP.DE")
+
+        self.assertTrue(YAHOO_DE_BASE_URL.startswith("https://"))
+        self.assertTrue(GOOGLE_DE_BASE_URL.startswith("https://"))
+        self.assertIn("SAP.DE", yahoo_url)
+        self.assertIn("region=DE", yahoo_url)
+        self.assertIn("lang=de-DE", yahoo_url)
+        self.assertIn("SAP.DE", google_url)
+        self.assertIn("hl=de", google_url)
+        self.assertIn("gl=DE", google_url)
+        self.assertIn("ceid=DE:de", google_url)
+
+    def test_de_news_stub_raises_not_implemented(self) -> None:
+        request = CollectionRequest(
+            tickers=("SAP",),
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            markets={"SAP": "de"},
+        )
+
+        with self.assertRaises(NotImplementedError):
+            YahooDeNewsConnector().collect(request)
+        with self.assertRaises(NotImplementedError):
+            GoogleDeNewsConnector().collect(request)
+
+    def test_de_news_connectors_skip_non_de_without_http(self) -> None:
+        class ExplodingClient:
+            def fetch_news(self, *args, **kwargs):
+                raise AssertionError("non-DE market must not trigger news HTTP")
+
+        request = CollectionRequest(
+            tickers=("MC",),
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            markets={"MC": "fr"},
+        )
+
+        yahoo_items = YahooDeNewsConnector(client=ExplodingClient()).collect(request)
+        google_items = GoogleDeNewsConnector(client=ExplodingClient()).collect(request)
+
+        self.assertEqual(yahoo_items, [])
+        self.assertEqual(google_items, [])
 
 
 if __name__ == "__main__":
