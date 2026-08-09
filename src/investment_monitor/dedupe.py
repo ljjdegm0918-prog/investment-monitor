@@ -35,7 +35,13 @@ google_news_nl) pairs across sources on ticker + Amsterdam day + normalized
 title. For IT, the only wired disclosure source is eqs_it, which pairs on
 its stable EQS news id, or on a source-scoped title fallback (ticker + Rome
 day + normalized title); IT news (yahoo_it / google_news_it) pairs across
-sources on ticker + Rome day + normalized title.
+sources on ticker + Rome day + normalized title. For ES, cnmv_hr pairs on
+its stable CNMV registration number and bme_relevant_facts pairs on its
+stable CNMV registration number (``es:filing:cnmv`` / ``es:filing:bme``);
+the two sources never pair against each other because their ids come from
+independent APIs, and the title fallback is source-scoped (ticker + Madrid
+day + normalized title). ES news (yahoo_es / google_news_es) pairs across
+sources on ticker + Madrid day + normalized title.
 """
 
 from __future__ import annotations
@@ -55,6 +61,7 @@ PARIS = ZoneInfo("Europe/Paris")
 BERLIN = ZoneInfo("Europe/Berlin")
 AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 ROME = ZoneInfo("Europe/Rome")
+MADRID = ZoneInfo("Europe/Madrid")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -72,6 +79,8 @@ FILING_SOURCE_PRIORITY = {
     "eqs_dgap": 11,
     "eqs_nl": 12,
     "eqs_it": 13,
+    "cnmv_hr": 14,
+    "bme_relevant_facts": 15,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -94,6 +103,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_nl": 17,
     "yahoo_it": 18,
     "google_news_it": 19,
+    "yahoo_es": 20,
+    "google_news_es": 21,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -130,6 +141,10 @@ SOURCE_DISPLAY_LABELS = {
     "eqs_it": "EQS News (IT)",
     "yahoo_it": "Yahoo Finance IT",
     "google_news_it": "Google News (IT)",
+    "cnmv_hr": "CNMV (hechos relevantes)",
+    "bme_relevant_facts": "BME Relevant Facts",
+    "yahoo_es": "Yahoo Finance ES",
+    "google_news_es": "Google News (ES)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -140,7 +155,9 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it"}:
+    if market not in {
+        "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
+    }:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -241,7 +258,43 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return _nl_filing_key(item)
     if market == "it":
         return _it_filing_key(item)
+    if market == "es":
+        return _es_filing_key(item)
     return _uk_filing_key(item)
+
+
+def _es_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """ES filings pair on a stable CNMV registration number, or a fallback.
+
+    ``cnmv_hr`` and ``bme_relevant_facts`` both carry the CNMV registration
+    number, but their ids come from two independent APIs (RSS vs BME JSON)
+    and are never paired across sources: the primary key is prefixed with
+    the source family. Without an id, the fallback is source-scoped
+    (source + ticker + Madrid day + normalized title), so the two sources
+    are never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    document_id = str(
+        metadata.get("document_id") or item.get("external_id") or ""
+    ).strip()
+    if document_id:
+        prefix = (
+            "cnmv"
+            if source == "cnmv_hr"
+            else "bme"
+            if source == "bme_relevant_facts"
+            else "es"
+        )
+        return f"es:filing:{prefix}:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, MADRID)
+    if title and day:
+        return (
+            f"es:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
 
 
 def _de_filing_key(item: Mapping[str, Any]) -> Optional[str]:
@@ -460,6 +513,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "nl"
         else ROME
         if market == "it"
+        else MADRID
+        if market == "es"
         else LONDON
     )
     title = normalize_title(item.get("title"))

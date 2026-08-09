@@ -294,9 +294,20 @@ never shrunk.
 are stripped at add time, Spanish ISINs are kept as-is, board goes into
 `exchange` when available) and remain unmapped. Finnhub is **US only** and
 never queried for ES. `es_universe_name_map()` backfills names, board and
-ISIN for add-company; disclosure matching uses the universe identity. News
-comes from `yahoo_es` / `google_news_es`. ES feed soft-dedupe lands with
-ES-5.
+ISIN for add-company; disclosure matching uses the universe identity
+(name/ISIN for CNMV, company key for BME). News comes from `yahoo_es` /
+`google_news_es`.
+
+ES feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_es` / `google_news_es` news
+pairs across sources on ticker + Madrid day (`Europe/Madrid`) + normalized
+title. `cnmv_hr` filings pair on the stable CNMV registration number
+(`es:filing:cnmv:...`) and `bme_relevant_facts` on the same registration
+number read from the BME JSON (`es:filing:bme:...`); the two sources are
+never cross-annotated (independent APIs), and the title fallback is
+source-scoped (ticker + Madrid day + normalized title). Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
