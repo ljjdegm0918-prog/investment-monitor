@@ -390,6 +390,13 @@ from .universe.ch_universe import (
     refresh_ch_universe,
     search_ch_universe,
 )
+from .universe.pl_universe import (
+    PlUniverseError,
+    load_pl_universe,
+    pl_universe_name_map,
+    refresh_pl_universe,
+    search_pl_universe,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -534,6 +541,7 @@ __all__ = [
     "EsUniverseError",
     "SgUniverseError",
     "ChUniverseError",
+    "PlUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
