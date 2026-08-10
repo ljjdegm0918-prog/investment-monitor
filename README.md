@@ -226,8 +226,8 @@ before the universe change lands in DETF-2.
 |---|---|---|---|
 | eqs_dgap | filings | none | EQS News JSON (ex-DGAP; key-free unofficial WP API; may change); only wired DE disclosure source; matched by ISIN. **DETF-1 live (2026-08-10): returns 0 records for sampled DE-domiciled Xetra ETF ISINs** (iShares Core DAX `DE0005933931`, iShares DivDAX `DE0002635273`, Deka DAX `DE000ETFL011`, iShares Core DAX EOD `DE000A2QP331`, iShares STOXX Europe 600 `DE0002635307`) — ETF disclosure is **not** deepened; EQS stays equity-side and the connector honestly returns empty. The EQS host also shows intermittent TLS EOFs (same host quirk as other EQS rails). No paid fund-document feed is wired. |
 | de_universe | breadth cache | none | Xetra `t7-xetr-allTradableInstruments.csv` **CS + ETF + ETN + ETC** (DETF-2; live 2026-08-10: 5,094 active XETR rows → CS 1,422 / ETF 3,082 / ETN 385 / ETC 205; each entry carries `instrument_type`, counts exposed as `counts` by board and `counts_by_type`); never enters the feed; backfills name/board/ISIN on add-company and for EQS ISIN matching |
-| yahoo_de | news | none | Yahoo Finance DE public RSS (`region=DE`); `.DE` at request time |
-| google_news_de | news | none | Key-free Google News RSS (`hl=de&gl=DE&ceid=DE:de`) |
+| yahoo_de | news | none | Yahoo Finance DE public RSS (`region=DE`); `.DE` at request time; shared by stocks and ETFs (DETF-3 live 2026-08-10: `EXS1.DE` / `EXSB.DE` return HTTP 200 but usually empty ETF feeds) |
+| google_news_de | news | none | Key-free Google News RSS (`hl=de&gl=DE&ceid=DE:de`); shared by stocks and ETFs (DETF-3 live: `EXS1.DE` returns items; may be loosely related) |
 
 `market=de` uses canonical root tickers (`SAP` / `SAP.DE` → `SAP`; German ISINs
 kept as-is). Add-company can backfill name/board/ISIN from `de_universe_name_map()`
