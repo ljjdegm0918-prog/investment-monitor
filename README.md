@@ -484,6 +484,24 @@ and never queried for TRQ.
 
 TRQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no TRQ disclosure connector is wired (TRQ-1 A3 / TRQ-4). News: `google_news_trq` pairs on ticker + London day (`Europe/London`) + normalized title (only one TRQ news source exists, so pairs are same-source).
 
+### Eurex Core (EUX)
+
+The "Eurex Core (NP, L1)" track is a **derivatives exchange** track
+(futures/options product codes), not a stock country track, not AEE
+(`cxe`/`trq`), not AQSE (`aq`), not Mutual Funds (`emf`), and not the
+Europe Display Value Bundle. The market short code is `eux`; no
+over-broad `fut`/`opt`/`deriv` code is used. Eurex product codes
+(`FDAX` / `FGBL` / `ESX5` / `2FE`) are the canonical identifiers (root /
+product level, not individual expiry contracts); `.EUX` suffixes are
+stripped at add time; product ISINs are kept as-is. Products are added as
+unmapped. Finnhub is **US only** and never queried for EUX.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `eux_disclosure` | Filings | none | **Not wired (EUX-1 spike pending)**. |
+| `eux_universe` | Universe | none | **Not wired yet (EUX-2 pending)**; no fake hand-written FDAX-style seed is shipped and no de/cxe directory is reused. |
+| `google_news_eux` | News | none | **Not wired yet (EUX-3 pending)**. |
+
 The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

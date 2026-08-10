@@ -45,6 +45,7 @@ from .models import (
     MARKET_CXE,
     MARKET_EMF,
     MARKET_TRQ,
+    MARKET_EUX,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -626,6 +627,10 @@ class WebApplication:
         if market == MARKET_TRQ:
             # TRQ stays unmapped via SEC; never let SEC map a Turquoise
             # symbol to a same-named US company.
+            return None
+        if market == MARKET_EUX:
+            # EUX stays unmapped via SEC; Eurex derivatives are product
+            # codes, never SEC CIKs.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
