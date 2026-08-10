@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -596,6 +596,10 @@ class WebRepository:
         if market == MARKET_PL:
             tickers = tuple(
                 dict.fromkeys(normalize_pl_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_SE:
+            tickers = tuple(
+                dict.fromkeys(normalize_se_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2383,6 +2387,46 @@ def normalize_pl_ticker(ticker: str) -> str:
         changed = False
         for separator in _PL_TICKER_SEPARATORS:
             for suffix in _PL_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_SE_TICKER_SUFFIXES = ("ST", "STO", "OMX")
+_SE_TICKER_SEPARATORS = (".", " ", "-")
+_SE_ISIN_PATTERN = re.compile(r"SE[0-9A-Z]{10}")
+
+
+def normalize_se_ticker(ticker: str) -> str:
+    """Normalize a Swedish (Nasdaq Stockholm) symbol.
+
+    Accepts plain symbols and the common Stockholm exchange suffixes used
+    by data providers (``ERIC-B.ST``, ``VOLV-B.STO``, ``ATB-OMX``; space
+    or dash separators are tolerated too, and stacked suffixes collapse to
+    the root). The exchange suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is.
+    Share-class suffixes are part of the mnemonic and are never treated as
+    exchange suffixes: ``ERIC-B`` / ``VOLV-B`` / ``SEB-A`` stay intact.
+    Suffix words without a separator (``ST``, ``STO``, ``OMX``) are never
+    erased. When the input contains a Swedish ISIN (``SE`` followed by 10
+    alphanumeric characters, e.g. ``SE0000108656`` for Ericsson B), the
+    ISIN is extracted and returned instead, since an ISIN is a stable
+    identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _SE_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _SE_TICKER_SEPARATORS:
+            for suffix in _SE_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

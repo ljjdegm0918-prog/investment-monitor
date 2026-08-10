@@ -366,6 +366,12 @@ sizes are never shrunk.
 
 PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings: `gpw_espi` pairs on its stable GPW report id (`geru_id`); the title fallback is source-scoped (source + ticker + Warsaw day + normalized title), so a hypothetical second PL disclosure source would never be cross-annotated by title. News: `yahoo_pl` ↔ `google_news_pl` pair across sources on ticker + Warsaw day + normalized title.
 
+### Sweden sources (SE)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. FI / Nasdaq Stockholm disclosure, a SE universe cache, and SE news connectors are planned but not wired yet (SE-1 … SE-5). Finnhub is **US only** and never queried for SE. |
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |
