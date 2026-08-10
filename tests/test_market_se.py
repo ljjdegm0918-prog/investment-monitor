@@ -195,14 +195,24 @@ class MarketSEDisclosureLockTests(unittest.TestCase):
         transactions (Insyn), not issuer announcements; Nasdaq Nordic
         company news is a Drupal SPA without a public JSON route; the
         legacy ``newsclient.omxgroup.com`` search is HTTP 500; EQS News
-        returns empty records for every sampled Swedish ISIN. Remove this
-        test when a real key-free FI/Nasdaq Stockholm disclosure source
-        lands.
+        returns empty records for every sampled Swedish ISIN. SE-4
+        re-verified 2026-08-10: no second disclosure source appeared (EQS
+        still empty; legacy Hugin host has no stable public API). Remove
+        this test when a real key-free FI/Nasdaq Stockholm disclosure
+        source lands.
         """
         registry = create_default_registry()
 
         names = registry.registered_names
         for blocked_name in ("fi_oam", "nasdaq_se_filings", "eqs_se"):
+            self.assertNotIn(blocked_name, names)
+
+    def test_paid_nasdaq_data_products_stay_unregistered(self) -> None:
+        """SE-4 regression lock: no paid Nasdaq Data Link / terminal."""
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in ("nasdaq_datalink", "nasdaq_terminal"):
             self.assertNotIn(blocked_name, names)
 
 

@@ -254,6 +254,8 @@ sources:
   # EQS News API returns empty records for every sampled Swedish ISIN
   # (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B /
   # Volvo Car-B verified 2026-08-10). Nasdaq paid data products are not used.
+  # SE-4 re-verified 2026-08-10: still no second disclosure source (EQS
+  # empty; legacy Hugin host exposes no stable public announcement API).
   - name: fi_oam
     label: FI OAM (not wired)
     source_type: filings
