@@ -1,10 +1,18 @@
-"""GPW ESPI/EBI connector for market=pl companies."""
+"""GPW ESPI/EBI connector for market=pl companies.
+
+Collects official GPW ESPI/EBI reports from ``www.gpw.pl/komunikaty``.
+Matching is by Polish ISIN: from the PL universe cache when available, or
+a Polish ISIN typed directly as the ticker (mirrors the EQS rail). A
+requested PL ticker without an ISIN is skipped honestly and recorded in
+``last_errors`` (never a fake success).
+"""
 
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
-from typing import Any, Callable, List, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_PL
 from ...web_repository import normalize_pl_ticker
@@ -16,15 +24,18 @@ from .client import (
 LOGGER = logging.getLogger(__name__)
 
 MAX_LOOKBACK_DAYS = 30
+_PL_ISIN_RE = re.compile(r"^PL[0-9A-Z]{10}$")
 
 
 class GpwEspiConnector:
     """Collect official GPW ESPI/EBI reports for market=pl companies.
 
-    Matching is by Polish ISIN supplied by the PL universe cache (the GPW
-    reports list shows issuer name + ISIN, not ticker mnemonics). A company
-    without a universe identity is skipped honestly with a
-    ``no_universe_identity`` last_error instead of guessing.
+    Matching is by Polish ISIN: from the PL universe cache by default
+    (loaded lazily through ``pl_universe_name_map()``), or a Polish ISIN
+    typed directly as the ticker. The GPW reports list shows issuer name +
+    ISIN, not ticker mnemonics, so a company without any ISIN identity is
+    skipped honestly with a ``no_universe_identity`` last_error instead of
+    guessing.
     """
 
     name = "gpw_espi"
@@ -37,7 +48,11 @@ class GpwEspiConnector:
         universe: Optional[Mapping[str, Mapping[str, str]]] = None,
     ) -> None:
         self._client = client or GpwEspiClient.from_environment()
-        self._universe = universe or {}
+        self._universe = (
+            dict(universe)
+            if universe is not None
+            else _default_universe()
+        )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 
     @property
@@ -58,9 +73,7 @@ class GpwEspiConnector:
                 )
                 continue
             code = normalize_pl_ticker(ticker)
-            isin = str(
-                (self._universe.get(code) or {}).get("isin") or ""
-            ).strip()
+            isin = self._isin_for(code)
             if not isin:
                 failures.append((ticker, "no_universe_identity"))
                 LOGGER.info(
@@ -93,6 +106,17 @@ class GpwEspiConnector:
         if len(request.tickers) == 1 and failures:
             raise GpwEspiRequestError(failures[0][1])
         return items
+
+    def _isin_for(self, code: str) -> Optional[str]:
+        if _PL_ISIN_RE.match(code):
+            return code
+        identity = self._universe.get(code)
+        if not identity:
+            return None
+        isin = str(identity.get("isin") or "").strip().upper()
+        if _PL_ISIN_RE.match(isin):
+            return isin
+        return None
 
 
 def _map_filings(
@@ -133,3 +157,12 @@ def _map_filings(
             )
         )
     return items
+
+
+def _default_universe() -> Mapping[str, Mapping[str, str]]:
+    """Return the PL universe name map (the default connector identity)."""
+    try:
+        from ...universe.pl_universe import pl_universe_name_map
+    except ImportError:
+        return {}
+    return pl_universe_name_map()

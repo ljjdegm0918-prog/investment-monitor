@@ -8,8 +8,11 @@ unreachable and EQS stays empty for Polish ISINs).
 """
 
 from datetime import date, datetime, timezone
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
 from urllib.parse import urlsplit
 
 from investment_monitor import (
@@ -229,6 +232,66 @@ class GpwEspiConnectorTests(unittest.TestCase):
 
         self.assertEqual(connector.last_errors, (("PKO", "no_universe_identity"),))
         self.assertEqual(opener.requested, [])
+
+    def test_default_universe_cache_is_loaded_without_injection(self) -> None:
+        """Production default: no universe argument means the PL cache."""
+        from investment_monitor import (
+            pl_universe_name_map,
+            refresh_pl_universe,
+        )
+        from investment_monitor.sources.gpw_espi.client import (
+            GpwEspiClient,
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            universe_path = Path(temporary_directory) / "pl_universe.json"
+            refresh_pl_universe(
+                path=universe_path,
+                opener=FakeOpener(
+                    {
+                        "/spolki": (
+                            Path(__file__).parent
+                            / "fixtures"
+                            / "pl_universe"
+                            / "gpw_main.html"
+                        ).read_bytes(),
+                    }
+                ),
+            )
+            self.assertIn("PKO", pl_universe_name_map(universe_path))
+
+            opener = client_opener()
+            with mock.patch.dict(
+                os.environ,
+                {"PL_UNIVERSE_CACHE_PATH": str(universe_path)},
+            ):
+                connector = GpwEspiConnector(
+                    client=GpwEspiClient(
+                        opener=opener,
+                        requests_per_second=1000,
+                    )
+                )
+                items = connector.collect(
+                    self.request(("PKO.WA",), {"PKO.WA": "pl"})
+                )
+
+            self.assertEqual(len(items), 3)
+            self.assertEqual(items[0].tickers, ("PKO",))
+            self.assertIn("searchText=PLPKO0000016", opener.requested[0])
+            self.assertEqual(connector.last_errors, ())
+
+    def test_typed_polish_isin_is_used_as_identity(self) -> None:
+        opener = client_opener()
+        connector = self.make_connector(opener=opener, universe={})
+
+        items = connector.collect(
+            self.request(("PLPKO0000016",), {"PLPKO0000016": "pl"})
+        )
+
+        self.assertEqual(len(items), 3)
+        self.assertEqual(items[0].tickers, ("PLPKO0000016",))
+        self.assertEqual(connector.last_errors, ())
+        self.assertIn("searchText=PLPKO0000016", opener.requested[0])
 
     def test_registry_registers_gpw_espi_without_secret_field(self) -> None:
         registry = create_default_registry()
