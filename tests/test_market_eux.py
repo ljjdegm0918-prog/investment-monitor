@@ -198,6 +198,11 @@ class MarketEUXDisclosureLockTests(unittest.TestCase):
             "eurex_circulars",
             "eux_disclosure",
             "eux_circulars",
+            "eurex_second_disclosure",
+            "eux_second_disclosure",
+            "eurex_data_paid",
+            "deutsche_boerse_paid",
+            "display_value_bundle",
         ):
             self.assertNotIn(blocked_name, names)
 
