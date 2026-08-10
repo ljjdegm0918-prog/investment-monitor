@@ -341,6 +341,8 @@ shrunk.
 | yahoo_be | news | none | Yahoo Finance BE public RSS (`region=BE`, `lang=fr-BE` + `en-US` merged; identical titles stay single-language); `.BR` at request time; may be loosely related and break without notice |
 | google_news_be | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-BE&gl=BE&ceid=BE:en`); may be loosely related and break without notice |
 
+`market=be` feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE` switch as the other markets, default on): `yahoo_be` / `google_news_be` news pairs across sources on ticker + Brussels day (`Europe/Brussels`) + normalized title. FSMA STORI filings pair on the stable STORI document id (`external_id` = `requiredReportingTopicId`); without an id the fallback is source-scoped (source + ticker + Brussels day + normalized title), so a hypothetical second BE disclosure source is never cross-annotated by title. Every row stays in the feed with an "Also seen on" label; totals and page sizes are never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

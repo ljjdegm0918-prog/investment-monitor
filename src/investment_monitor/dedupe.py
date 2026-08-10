@@ -45,6 +45,11 @@ sources on ticker + Madrid day + normalized title. For SG, no disclosure
 connector is wired (SGX A3 spike), so regulatory filings never get a key
 and are never annotated; SG news (yahoo_sg / google_news_sg) pairs across
 sources on ticker + Singapore day + normalized title.
+For BE, the only wired disclosure source is fsma_stori, which pairs on its
+stable FSMA STORI document id (``requiredReportingTopicId``), or on a
+source-scoped title fallback (ticker + Brussels day + normalized title);
+BE news (yahoo_be / google_news_be) pairs across sources on ticker +
+Brussels day + normalized title.
 """
 
 from __future__ import annotations
@@ -67,6 +72,7 @@ ROME = ZoneInfo("Europe/Rome")
 MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
 RECEIPT_LENGTH = 14
+BRUSSELS = ZoneInfo("Europe/Brussels")
 
 FILING_SOURCE_PRIORITY = {
     "dart": 0,
@@ -85,6 +91,7 @@ FILING_SOURCE_PRIORITY = {
     "eqs_it": 13,
     "cnmv_hr": 14,
     "bme_relevant_facts": 15,
+    "fsma_stori": 16,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -111,6 +118,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_es": 21,
     "yahoo_sg": 22,
     "google_news_sg": 23,
+    "yahoo_be": 24,
+    "google_news_be": 25,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -153,6 +162,9 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_es": "Google News (ES)",
     "yahoo_sg": "Yahoo Finance SG",
     "google_news_sg": "Google News (SG)",
+    "fsma_stori": "FSMA STORI",
+    "yahoo_be": "Yahoo Finance BE",
+    "google_news_be": "Google News (BE)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -165,7 +177,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg",
+        "sg", "be",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -273,6 +285,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return _it_filing_key(item)
     if market == "es":
         return _es_filing_key(item)
+    if market == "be":
+        return _be_filing_key(item)
     return _uk_filing_key(item)
 
 
@@ -305,6 +319,29 @@ def _es_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"es:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _be_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """BE filings pair on the stable FSMA STORI document id, or a fallback.
+
+    ``fsma_stori`` is the only wired BE disclosure source; its stable
+    document id (``external_id`` = STORI ``requiredReportingTopicId``) is
+    the primary identity. Without one, the fallback is source-scoped
+    (source + ticker + Brussels day + normalized title), so a hypothetical
+    second BE disclosure source is never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"be:filing:stori:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, BRUSSELS)
+    if title and day:
+        return (
+            f"be:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -530,6 +567,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "es"
         else SINGAPORE
         if market == "sg"
+        else BRUSSELS
+        if market == "be"
         else LONDON
     )
     title = normalize_title(item.get("title"))
