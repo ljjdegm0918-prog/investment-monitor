@@ -496,6 +496,13 @@ from .universe.trq_universe import (
     search_trq_universe,
     trq_universe_name_map,
 )
+from .universe.eux_universe import (
+    EuxUniverseError,
+    load_eux_universe,
+    refresh_eux_universe,
+    search_eux_universe,
+    eux_universe_name_map,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -652,6 +659,7 @@ __all__ = [
     "CxeUniverseError",
     "EmfUniverseError",
     "TrqUniverseError",
+    "EuxUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -902,5 +910,9 @@ __all__ = [
     "load_trq_universe",
     "refresh_trq_universe",
     "search_trq_universe",
+    "eux_universe_name_map",
+    "load_eux_universe",
+    "refresh_eux_universe",
+    "search_eux_universe",
     "ReportResult",
 ]
