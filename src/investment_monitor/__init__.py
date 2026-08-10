@@ -353,6 +353,13 @@ from .sources.cxe_news import (
     GoogleCxeNewsError,
     GoogleCxeNewsRequestError,
 )
+from .sources.emf_news import (
+    GoogleEmfNewsClient,
+    GoogleEmfNewsConnector,
+    GoogleEmfNewsDataError,
+    GoogleEmfNewsError,
+    GoogleEmfNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
