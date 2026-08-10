@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: PKO.WA News</title>
+    <item>
+      <title>PKO Bank Polski raportuje rekordowy zysk kwartalny</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Same title in en-US feed.</description>
+    </item>
+    <item>
+      <title>Warsaw stocks rally on rate cut hopes</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000604.html</link>
+      <pubDate>Thu, 06 Aug 2026 09:00:00 +0000</pubDate>
+      <description>Warsaw bourse rallies.</description>
+    </item>
+    <item>
+      <title>Polish banks post higher profits</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000602.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>English title for the same story.</description>
+    </item>
+  </channel>
+</rss>

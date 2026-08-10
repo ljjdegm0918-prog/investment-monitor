@@ -310,6 +310,18 @@ from .sources.ch_news import (
     YahooChNewsError,
     YahooChNewsRequestError,
 )
+from .sources.pl_news import (
+    GooglePlNewsClient,
+    GooglePlNewsConnector,
+    GooglePlNewsDataError,
+    GooglePlNewsError,
+    GooglePlNewsRequestError,
+    YahooPlNewsClient,
+    YahooPlNewsConnector,
+    YahooPlNewsDataError,
+    YahooPlNewsError,
+    YahooPlNewsRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,
