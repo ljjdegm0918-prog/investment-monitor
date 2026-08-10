@@ -42,6 +42,7 @@ from .models import (
     MARKET_PL,
     MARKET_SE,
     MARKET_AQ,
+    MARKET_CXE,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -602,6 +603,10 @@ class WebApplication:
         if market == MARKET_AQ:
             # AQ stays unmapped via SEC; never let SEC map an Aquis symbol
             # to a same-named US company.
+            return None
+        if market == MARKET_CXE:
+            # CXE stays unmapped via SEC; never let SEC map a Cboe Europe
+            # symbol to a same-named US company.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

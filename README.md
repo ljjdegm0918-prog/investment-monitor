@@ -423,6 +423,25 @@ only** and never queried for AQ.
 
 AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
 
+### Cboe Europe (CXE) - Alternative European Equities, first venue
+
+The IBKR "Alternative European Equities" package is a multi-venue bundle.
+This track lands **one venue only**: Cboe Europe equities (CXE and BXE
+order books, MICs `CXEM`/`CXET`/`BXEM`/`BXET`). There is **no** virtual
+`aee` / `eu` / `eu_alt` market code. Deferred venues (not wired in this
+track): Turquoise (LSEG MTF; the old turquoise.com domain is parked and
+the LSEG replacement path is not a stable key-free directory) and other
+alternative European books. `market=cxe` companies use canonical
+uppercased Cboe symbols (`AZNl` → `AZNL`; `.CXE`/`.BXE` suffixes are
+stripped at add time; pan-European ISINs kept as-is) and remain unmapped.
+Finnhub is **US only** and never queried for CXE.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `cxe_disclosure` | Filings | none | **Not wired (AEE-1 spike pending)**. Cboe Europe is an MTF without an independent issuer OAM; no key-free issuer announcement feed exists for the books. |
+| `cxe_universe` | Universe | none | **Not wired yet (AEE-2 pending)**; no fake hand-written seed is shipped. |
+| `google_news_cxe` | News | none | **Not wired yet (AEE-3 pending)**. |
+
 The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
