@@ -72,6 +72,10 @@ disclosure connector is wired (MTF A3 spike), so regulatory filings never
 get a key and are never annotated; CXE news (google_news_cxe only - no
 Yahoo suffix exists for Cboe Europe) pairs on ticker + London day +
 normalized title.
+For EMF (European Mutual Funds / UCITS), no disclosure connector is wired
+(ESMA A3 spike), so regulatory filings never get a key and are never
+annotated; EMF news (google_news_emf only - no Yahoo suffix exists for
+European funds) pairs on fund ISIN + Luxembourg day + normalized title.
 """
 
 from __future__ import annotations
@@ -96,6 +100,7 @@ SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
 WARSAW = ZoneInfo("Europe/Warsaw")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
+LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
@@ -156,6 +161,7 @@ NEWS_SOURCE_PRIORITY = {
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
+    "google_news_emf": 35,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -212,6 +218,7 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
+    "google_news_emf": "Google News (EMF)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -224,7 +231,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "aq", "cxe",
+        "sg", "be", "ch", "pl", "se", "aq", "cxe", "emf",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -323,6 +330,10 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "cxe":
         # No CXE disclosure connector is wired (MTF A3 spike); a stray
+        # regulatory_filing row must never be cross-annotated.
+        return None
+    if market == "emf":
+        # No EMF disclosure connector is wired (ESMA A3 spike); a stray
         # regulatory_filing row must never be cross-annotated.
         return None
     if market == "sg":
@@ -689,6 +700,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "aq"
         else LONDON
         if market == "cxe"
+        else LUXEMBOURG
+        if market == "emf"
         else LONDON
     )
     title = normalize_title(item.get("title"))
