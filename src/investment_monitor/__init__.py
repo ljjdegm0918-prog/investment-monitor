@@ -360,6 +360,13 @@ from .sources.emf_news import (
     GoogleEmfNewsError,
     GoogleEmfNewsRequestError,
 )
+from .sources.trq_news import (
+    GoogleTrqNewsClient,
+    GoogleTrqNewsConnector,
+    GoogleTrqNewsDataError,
+    GoogleTrqNewsError,
+    GoogleTrqNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
