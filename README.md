@@ -391,6 +391,23 @@ SE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and total
 
 `market=be` feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE` switch as the other markets, default on): `yahoo_be` / `google_news_be` news pairs across sources on ticker + Brussels day (`Europe/Brussels`) + normalized title. FSMA STORI filings pair on the stable STORI document id (`external_id` = `requiredReportingTopicId`); without an id the fallback is source-scoped (source + ticker + Brussels day + normalized title), so a hypothetical second BE disclosure source is never cross-annotated by title. Every row stays in the feed with an "Also seen on" label; totals and page sizes are never shrunk.
 
+### Aquis sources (AQ)
+
+`market=aq` targets **Aquis Stock Exchange (AQSE)** issuers, not the Aquis
+Exchange MTF pan-European trading venue. Companies use canonical root
+tickers (`ADB` / `ADB.AQ` / `adb-aq` all store as `ADB`; the `.AQ` exchange
+suffix is stripped at add time while AQSE mnemonics stay as-is and
+12-character ISINs are kept as-is) and remain unmapped. Finnhub is **US
+only** and never queried for AQ.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `aq_disclosure` | Filings | none | **Not wired (AQ-0 foundation; AQ-1 spike pending)**. The official AQSE announcements page (`www.aquis.eu/stock-exchange/announcements`) is a server-rendered HTML list, but `aquis.eu` / `embed.aquis.eu` sit behind a Vercel bot challenge (HTTP 429, `X-Vercel-Mitigated: challenge`) that blocks stdlib/curl clients; no key-free official JSON/RSS is published. LSE/Investegate/Companies House are deliberately **not** used as Aquis substitutes. |
+| `aq_universe` | Universe | none | **Not wired yet (AQ-2 pending)**; no fake hand-written AQSE seed is shipped. |
+| `yahoo_aq` | News | none | **Not wired yet (AQ-3 pending)**. |
+| `google_news_aq` | News | none | **Not wired yet (AQ-3 pending)**. |
+
+The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
