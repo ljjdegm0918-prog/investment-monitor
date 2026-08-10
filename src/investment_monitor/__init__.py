@@ -346,6 +346,13 @@ from .sources.aq_news import (
     YahooAqNewsError,
     YahooAqNewsRequestError,
 )
+from .sources.cxe_news import (
+    GoogleCxeNewsClient,
+    GoogleCxeNewsConnector,
+    GoogleCxeNewsDataError,
+    GoogleCxeNewsError,
+    GoogleCxeNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,

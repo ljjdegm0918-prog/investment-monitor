@@ -235,6 +235,10 @@ sources:
     label: Google News (AQ)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=en-GB, gl=GB); may be loosely related / break without notice
+  - name: google_news_cxe
+    label: Google News (CXE)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (company name from CXE universe, else Cboe symbol; hl=en-GB, gl=GB); may be loosely related / break without notice
   # Switzerland second disclosure - deliberately not wired (CH-4):
   # SIX official notices are a React SPA without a public JSON list,
   # api.six-group.com routes are undocumented, and SIX equity-issuer news
