@@ -59,6 +59,10 @@ stable GPW report id (``geru_id``), or on a source-scoped title fallback
 (ticker + Warsaw day + normalized title); PL news (yahoo_pl /
 google_news_pl) pairs across sources on ticker + Warsaw day + normalized
 title.
+For SE, no disclosure connector is wired (FI/Nasdaq/EQS A3 spike), so
+regulatory filings never get a key and are never annotated; SE news
+(yahoo_se / google_news_se) pairs across sources on ticker + Stockholm day
++ normalized title.
 """
 
 from __future__ import annotations
@@ -82,6 +86,7 @@ MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
 WARSAW = ZoneInfo("Europe/Warsaw")
+STOCKHOLM = ZoneInfo("Europe/Stockholm")
 RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
@@ -137,6 +142,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_ch": 27,
     "yahoo_pl": 28,
     "google_news_pl": 29,
+    "yahoo_se": 30,
+    "google_news_se": 31,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -188,6 +195,8 @@ SOURCE_DISPLAY_LABELS = {
     "gpw_espi": "GPW ESPI/EBI",
     "yahoo_pl": "Yahoo Finance PL",
     "google_news_pl": "Google News (PL)",
+    "yahoo_se": "Yahoo Finance SE",
+    "google_news_se": "Google News (SE)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -200,7 +209,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl",
+        "sg", "be", "ch", "pl", "se",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -295,6 +304,10 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     if market == "sg":
         # No SG disclosure connector is wired (SGX A3 spike); a stray
         # regulatory_filing row must never be cross-annotated.
+        return None
+    if market == "se":
+        # No SE disclosure connector is wired (FI/Nasdaq/EQS A3 spike); a
+        # stray regulatory_filing row must never be cross-annotated.
         return None
     if market == "ch":
         return _ch_filing_key(item)
@@ -644,6 +657,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "ch"
         else WARSAW
         if market == "pl"
+        else STOCKHOLM
+        if market == "se"
         else BRUSSELS
         if market == "be"
         else LONDON

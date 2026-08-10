@@ -377,6 +377,8 @@ PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and total
 
 `market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for SE.
 
+SE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no SE disclosure connector is wired (SE-1 A3 / SE-4 D2). News: `yahoo_se` ↔ `google_news_se` pair across sources on ticker + Stockholm day + normalized title.
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |
