@@ -464,6 +464,23 @@ added as unmapped. Finnhub is **US only** and never queried for EMF.
 
 EMF feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no EMF disclosure connector is wired (EMF-1 A3 / EMF-4). News: `google_news_emf` pairs on fund ISIN + Luxembourg day (`Europe/Luxembourg`) + normalized title (only one EMF news source exists, so pairs are same-source).
 
+### Turquoise (TRQ) - Alternative European Equities, second venue
+
+Turquoise (LSEG MTF; MICs `TRQX` / `TQEX`) is the **second** venue in the
+Alternative European Equities package, after Cboe Europe (`market=cxe`).
+There is **no** virtual `aee` / `eu` / `eu_alt` market code, and the
+`trq` market is not AQSE (`aq`), not LSE (`uk`), not Eurex. Common
+Turquoise symbols are kept uppercased (`AZN` / `SHEL`); `.TRQ` /
+`.TRQX` / `.TQEX` suffixes are stripped at add time; pan-European ISINs
+are kept as-is. Companies are added as unmapped. Finnhub is **US only**
+and never queried for TRQ.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `trq_disclosure` | Filings | none | **Not wired (TRQ-1 spike A3, 2026-08-11)**. |
+| `trq_universe` | Universe | none | **Not wired yet (TRQ-2 pending)**; no fake hand-written seed is shipped and no CXE CSV is reused as a Turquoise directory. |
+| `google_news_trq` | News | none | **Not wired yet (TRQ-3 pending)**. |
+
 The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
