@@ -457,7 +457,7 @@ added as unmapped. Finnhub is **US only** and never queried for EMF.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| `emf_disclosure` | Filings | none | **Not wired (EMF-1 spike pending)**. |
+| `emf_disclosure` | Filings | none | **Not wired (EMF-1 spike A3, 2026-08-10)**: the ESMA registers public SOLR surface exposes a funds core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD fund reports + marketing notifications; legal frameworks AIF/EuVECA/ELTIF/EuSEF) and a MiFID firms core (`esma_registers_upreg`), but **no UCITS register and no ISIN field** is exposed; KIID/PRIIPs documents live on manager sites with no central key-free feed. No stock OAM (eqs_dgap / investegate / etc.) is re-mapped onto `market=emf`, and no paid fund data product (Morningstar/Lipper) is wired. |
 | `emf_universe` | Universe | none | **Not wired yet (EMF-2 pending)**; no fake hand-written fund seed is shipped. |
 | `google_news_emf` | News | none | **Not wired yet (EMF-3 pending)**. |
 
