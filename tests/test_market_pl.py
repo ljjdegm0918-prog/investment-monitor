@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_pl_ticker
 
 
@@ -187,6 +188,30 @@ class MarketPLFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketPLDisclosureLockTests(unittest.TestCase):
+    def test_no_pl_disclosure_connector_is_registered(self) -> None:
+        """Lock the PL-1 A3 spike decision.
+
+        PL-1 spike (2026-08-10): GPW/ESPI (``espi.gpw.pl``,
+        ``www.gpw.pl``) are unreachable from this network (TLS handshake /
+        connection reset; old ``lista-spolek`` URLs return 404), the EQS
+        News API returns empty records for Polish ISINs (PKO/PZU/CDR/PKN),
+        and KNF has no stable key-free per-issuer announcement feed.
+        Remove this test when a real key-free GPW/ESPI/regulator disclosure
+        source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "espi_pl",
+            "gpw_espi",
+            "eqs_pl",
+            "knf_filings",
+        ):
+            self.assertNotIn(blocked_name, names)
 
 
 if __name__ == "__main__":

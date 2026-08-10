@@ -359,7 +359,8 @@ sizes are never shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=pl` companies use canonical root tickers (`PKO` / `PKO.WA` / `PKO-GPW` all store as `PKO`; exchange suffixes `.WA` / `.WSE` / `.GPW` are stripped at add time, Polish ISINs are kept as-is) and remain unmapped. GPW / ESPI / KNF disclosure, a PL universe cache, and PL news connectors are planned but not wired yet (PL-1 … PL-5). Finnhub is **US only** and never queried for PL. |
+| espi_pl | filings | none | **Not wired (PL-1 spike A3, re-verified in PL-4)**: GPW/ESPI (`espi.gpw.pl`, `www.gpw.pl`) are unreachable from this network (TLS handshake/connection reset; old `lista-spolek` URLs return 404), the EQS News API returns empty records for Polish ISINs (PKO/PZU/CDR/PKN verified 2026-08-10), and KNF has no stable key-free per-issuer announcement feed. No production connector is registered; GPW paid data products are not used. |
+| (universe + news) | — | — | Market skeleton plus disclosure boundary so far: `market=pl` companies use canonical root tickers (`PKO` / `PKO.WA` / `PKO-GPW` all store as `PKO`; exchange suffixes `.WA` / `.WSE` / `.GPW` are stripped at add time, Polish ISINs are kept as-is) and remain unmapped. A PL universe cache and PL news connectors are planned but not wired yet (PL-2 … PL-5). Finnhub is **US only** and never queried for PL. |
 
 ### Belgium sources (BE)
 
