@@ -4,7 +4,11 @@ Source (live verified 2026-08-10): the key-free Deutsche Boerse Cash Market
 ``t7-xetr-allTradableInstruments.csv`` download (blob URL published on the
 Xetra / cash-market Downloads page). Semicolon-delimited; two metadata rows,
 then a header row, then Active/Active instrument rows. We keep Instrument
-Type ``CS`` (common shares) with a non-empty Mnemonic on MIC ``XETR``.
+Type ``CS`` (common shares), ``ETF``, ``ETN`` and ``ETC`` (the same
+exchange-traded family as the IBKR "German ETF's" package) with a
+non-empty Mnemonic on MIC ``XETR``; each entry stores its
+``instrument_type`` so ETF vs shares are distinguishable. The CSV is a
+Cash Market file: it contains no Eurex derivatives.
 
 Board labels come from ``Product Assignment Group Description`` (e.g. DAX,
 MDAX, SDAX, Scale, …) — coverage is whatever Xetra publishes that day, not a
@@ -37,6 +41,7 @@ DIRECTORY_URL = (
 )
 DIRECTORY_URL_ENV = "DE_UNIVERSE_DIRECTORY_URL"
 DEFAULT_USER_AGENT = "InvestmentMonitor/0.1 (internal workspace)"
+INSTRUMENT_TYPES = frozenset({"CS", "ETF", "ETN", "ETC"})
 
 
 class DeUniverseError(RuntimeError):
@@ -99,6 +104,7 @@ def refresh_de_universe(
             "isin": str(row.get("isin") or ""),
             "board": board,
             "exchange": board,
+            "instrument_type": str(row.get("instrument_type") or "").upper(),
             "status": "active",
         }
         counts[board] = counts.get(board, 0) + 1
@@ -115,6 +121,7 @@ def refresh_de_universe(
         ),
         "source": ["xetra_all_tradable_csv"],
         "counts": counts,
+        "counts_by_type": _counts_by_type(entries),
         "items": sorted(
             entries.values(),
             key=lambda item: item["ticker"],
@@ -146,6 +153,7 @@ def de_universe_name_map(
             "exchange": board,
             "board": board,
             "isin": str(item.get("isin") or ""),
+            "instrument_type": str(item.get("instrument_type") or "").upper(),
         }
     return result
 
@@ -197,7 +205,8 @@ def _fetch_directory_rows(
             continue
         if row[8].strip().upper() != "XETR":
             continue
-        if row[18].strip().upper() != "CS":
+        instrument_type = row[18].strip().upper()
+        if instrument_type not in INSTRUMENT_TYPES:
             continue
         mnemonic = str(row[7]).strip()
         if not mnemonic or mnemonic == "-":
@@ -212,13 +221,22 @@ def _fetch_directory_rows(
                 "name": str(row[2]).strip(),
                 "isin": str(row[3]).strip().upper(),
                 "board": board,
+                "instrument_type": instrument_type,
             }
         )
     if not records:
         raise DeUniverseError(
-            "Xetra CSV returned no parseable equity (CS) entries."
+            "Xetra CSV returned no parseable CS/ETF/ETN/ETC entries."
         )
     return records
+
+
+def _counts_by_type(entries: Mapping[str, Mapping[str, Any]]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for entry in entries.values():
+        instrument_type = str(entry.get("instrument_type") or "UNKNOWN").upper()
+        counts[instrument_type] = counts.get(instrument_type, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _get_csv(url: str, opener: Callable[..., Any]) -> str:
