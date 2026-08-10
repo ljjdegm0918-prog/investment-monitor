@@ -186,17 +186,27 @@ class MarketAQDisclosureLockTests(unittest.TestCase):
 
         AQ-1 spike (2026-08-10): the official AQSE announcements page
         (``www.aquis.eu/stock-exchange/announcements``) is a
-        server-rendered HTML list, but the site sits behind a Vercel bot
-        challenge (HTTP 429, ``X-Vercel-Mitigated: challenge``) that
-        blocks stdlib/curl clients; no key-free official JSON/RSS exists
-        and no LSE/Investegate/Companies House source is used as an
-        Aquis substitute. Remove this test when a real key-free AQSE
-        disclosure source lands.
+        server-rendered HTML list (Date / Title / View rows), but the
+        site sits behind a Vercel bot challenge (HTTP 429,
+        ``X-Vercel-Mitigated: challenge``) that blocks stdlib/curl
+        clients; ``embed.aquis.eu/api/*`` returns the same challenge,
+        ``api.aquis.eu`` / ``data.aquis.eu`` abort TLS, and no key-free
+        official JSON/RSS exists. No LSE/Investegate/uk-wire/Companies
+        House source is used as an Aquis substitute and no paid Aquis
+        data product is wired. Remove this test when a real key-free
+        AQSE disclosure source lands.
         """
         registry = create_default_registry()
 
         names = registry.registered_names
-        for blocked_name in ("aqse_announcements", "aquis_announcements"):
+        for blocked_name in (
+            "aqse_announcements",
+            "aquis_announcements",
+            "investegate_aq",
+            "uk_wire_aq",
+            "aquis_datalink",
+            "lse_paid",
+        ):
             self.assertNotIn(blocked_name, names)
 
 
