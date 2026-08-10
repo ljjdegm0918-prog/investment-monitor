@@ -468,6 +468,13 @@ from .universe.cxe_universe import (
     search_cxe_universe,
     cxe_universe_name_map,
 )
+from .universe.emf_universe import (
+    EmfUniverseError,
+    load_emf_universe,
+    refresh_emf_universe,
+    search_emf_universe,
+    emf_universe_name_map,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -620,6 +627,7 @@ __all__ = [
     "SeUniverseError",
     "AqUniverseError",
     "CxeUniverseError",
+    "EmfUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -860,5 +868,9 @@ __all__ = [
     "load_cxe_universe",
     "refresh_cxe_universe",
     "search_cxe_universe",
+    "emf_universe_name_map",
+    "load_emf_universe",
+    "refresh_emf_universe",
+    "search_emf_universe",
     "ReportResult",
 ]

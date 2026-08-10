@@ -458,7 +458,7 @@ added as unmapped. Finnhub is **US only** and never queried for EMF.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | `emf_disclosure` | Filings | none | **Not wired (EMF-1 spike A3, 2026-08-10)**: the ESMA registers public SOLR surface exposes a funds core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD fund reports + marketing notifications; legal frameworks AIF/EuVECA/ELTIF/EuSEF) and a MiFID firms core (`esma_registers_upreg`), but **no UCITS register and no ISIN field** is exposed; KIID/PRIIPs documents live on manager sites with no central key-free feed. No stock OAM (eqs_dgap / investegate / etc.) is re-mapped onto `market=emf`, and no paid fund data product (Morningstar/Lipper) is wired. |
-| `emf_universe` | Universe | none | **Not wired yet (EMF-2 pending)**; no fake hand-written fund seed is shipped. |
+| `emf_universe` | Universe | none | **Boundary stub (EMF-2 spike B2, 2026-08-10)**: no stable key-free ISIN-bearing European mutual fund directory exists. ESMA registers expose a funds SOLR core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD `funds_report` docs; legal frameworks AIF/EuVECA/ELTIF/EuSEF; fund name/country/manager only) and a MiFID firms core, but **no UCITS register and no ISIN field**; national fund registers have no stable key-free ISIN export (BaFin 404, Bundesanzeiger session wall), Morningstar/Lipper are paid. `refresh_emf_universe()` raises `EmfUniverseError`; `load/name_map/search` read a manually placed cache if one ever exists. No hand-written fund seed. |
 | `google_news_emf` | News | none | **Not wired yet (EMF-3 pending)**. |
 
 The web Settings page shows Provider credentials for every implemented source
