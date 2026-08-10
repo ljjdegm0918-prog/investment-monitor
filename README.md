@@ -438,7 +438,7 @@ Finnhub is **US only** and never queried for CXE.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| `cxe_disclosure` | Filings | none | **Not wired (AEE-1 spike pending)**. Cboe Europe is an MTF without an independent issuer OAM; no key-free issuer announcement feed exists for the books. |
+| `cxe_disclosure` | Filings | none | **Not wired (AEE-1 spike A3, 2026-08-10)**: Cboe Europe (BXE/CXE) is an MTF whose official symbol/trade-data surfaces (`cboe.com/europe/equities/market_statistics/symbol_data/...`, `.../trade_data/`) are venue quote/trade data, not issuer announcements. Issuers' official disclosures live at their primary listing venue (LSE/Xetra/…) and are deliberately **not** re-mapped onto `market=cxe`; no key-free Cboe Europe issuer OAM feed exists and no paid Cboe/LSEG data product is wired. |
 | `cxe_universe` | Universe | none | **Not wired yet (AEE-2 pending)**; no fake hand-written seed is shipped. |
 | `google_news_cxe` | News | none | **Not wired yet (AEE-3 pending)**. |
 
