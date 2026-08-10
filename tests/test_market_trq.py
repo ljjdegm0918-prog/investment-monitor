@@ -199,6 +199,10 @@ class MarketTRQDisclosureLockTests(unittest.TestCase):
             "turquoise_disclosure",
             "turquoise_oam",
             "trq_disclosure",
+            "turquoise_filings",
+            "trq_second_disclosure",
+            "lseg_mtf_paid",
+            "turquoise_data_paid",
         ):
             self.assertNotIn(blocked_name, names)
 
