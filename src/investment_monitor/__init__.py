@@ -298,6 +298,18 @@ from .sources.eqs_ch import (
     EqsChError,
     EqsChRequestError,
 )
+from .sources.ch_news import (
+    GoogleChNewsClient,
+    GoogleChNewsConnector,
+    GoogleChNewsDataError,
+    GoogleChNewsError,
+    GoogleChNewsRequestError,
+    YahooChNewsClient,
+    YahooChNewsConnector,
+    YahooChNewsDataError,
+    YahooChNewsError,
+    YahooChNewsRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,

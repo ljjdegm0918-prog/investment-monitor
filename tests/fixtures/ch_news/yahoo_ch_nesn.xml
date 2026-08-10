@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: NESN.SW News</title>
+    <item>
+      <title>Nestle meldet starkes Quartalsergebnis</title>
+      <link>https://ch.finance.yahoo.com/news/nestle-110000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Nestle legt Zahlen vor.</description>
+    </item>
+    <item>
+      <title>Schweizer Aktien schliessen hoeher</title>
+      <link>https://ch.finance.yahoo.com/news/smi-110000602.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Der SMI steigt.</description>
+    </item>
+    <item>
+      <title>Alter Artikel ausserhalb des Fensters</title>
+      <link>https://ch.finance.yahoo.com/news/alt-110000603.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Zu alt.</description>
+    </item>
+  </channel>
+</rss>
