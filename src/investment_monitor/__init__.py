@@ -454,6 +454,13 @@ from .universe.aq_universe import (
     search_aq_universe,
     aq_universe_name_map,
 )
+from .universe.cxe_universe import (
+    CxeUniverseError,
+    load_cxe_universe,
+    refresh_cxe_universe,
+    search_cxe_universe,
+    cxe_universe_name_map,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -604,6 +611,7 @@ __all__ = [
     "PlUniverseError",
     "SeUniverseError",
     "AqUniverseError",
+    "CxeUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -839,5 +847,9 @@ __all__ = [
     "load_aq_universe",
     "refresh_aq_universe",
     "search_aq_universe",
+    "cxe_universe_name_map",
+    "load_cxe_universe",
+    "refresh_cxe_universe",
+    "search_cxe_universe",
     "ReportResult",
 ]
