@@ -478,7 +478,7 @@ and never queried for TRQ.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | `trq_disclosure` | Filings | none | **Not wired (TRQ-1 spike A3, 2026-08-11)**: Turquoise is an LSEG MTF without an independent issuer OAM. Re-test: `turquoise.com` is a parked domain-for-sale (HTTP 200); `turquoise.eu` now hosts an unrelated "Climate Tech Investment & Advisory" firm (was Cloudflare 403 on 2026-08-10); `tradeturquoise.com` and the LSEG Turquoise path redirect to `londonstockexchange.com/securities-trading/turquoise` (JS-only SPA shell, no server-rendered instrument/disclosure data); the old LSEG reference-file URLs (`lseg.com/turquoise/symbol/YYYYMMDD_TRQX_Instrument.csv`) return 404. No key-free Turquoise issuer announcement feed exists; no stock OAM (uk/de/cxe) is re-mapped onto `market=trq`. |
-| `trq_universe` | Universe | none | **Not wired yet (TRQ-2 pending)**; no fake hand-written seed is shipped and no CXE CSV is reused as a Turquoise directory. |
+| `trq_universe` | Universe | none | **Boundary stub (TRQ-2 re-spike B2, 2026-08-11)**: no stable key-free Turquoise directory exists. `turquoise.com` parked; `turquoise.eu` hosts an unrelated company; `tradeturquoise.com` / LSEG Turquoise paths redirect to a JS-only LSE SPA; the old LSEG reference files (`lseg.com/turquoise/symbol/YYYYMMDD_TRQX_Instrument.csv` / `..._TQEX_Instrument.csv`) return 404. `refresh_trq_universe()` raises `TrqUniverseError`; `load/name_map/search` read a manually placed cache if one ever exists. No hand-written seed and **no CXE CSV is reused** as a Turquoise directory. |
 | `google_news_trq` | News | none | **Not wired yet (TRQ-3 pending)**. |
 
 The web Settings page shows Provider credentials for every implemented source
