@@ -367,6 +367,13 @@ from .sources.trq_news import (
     GoogleTrqNewsError,
     GoogleTrqNewsRequestError,
 )
+from .sources.eux_news import (
+    GoogleEuxNewsClient,
+    GoogleEuxNewsConnector,
+    GoogleEuxNewsDataError,
+    GoogleEuxNewsError,
+    GoogleEuxNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
