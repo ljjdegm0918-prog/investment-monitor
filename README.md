@@ -215,6 +215,13 @@ document id (or same-source title fallback); news pairs on ticker + Paris day.
 
 ### Germany sources (DE)
 
+The "German ETF's" deepening keeps the existing `market=de` code — there is
+**no** `market=etf` / `de_etf` / `xetra_etf`. It targets Xetra / Deutsche
+Börse Cash Market ETF (and same-CSV ETN/ETC) instruments alongside the
+existing common-share (CS) universe; it is **not** Eurex derivatives and
+not a paid Deutsche Börse data product. This slice documents the scope
+before the universe change lands in DETF-2.
+
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | eqs_dgap | filings | none | EQS News JSON (ex-DGAP; key-free unofficial WP API; may change); only wired DE disclosure source; matched by ISIN |
