@@ -194,16 +194,23 @@ class MarketAQDisclosureLockTests(unittest.TestCase):
         official JSON/RSS exists. No LSE/Investegate/uk-wire/Companies
         House source is used as an Aquis substitute and no paid Aquis
         data product is wired. Remove this test when a real key-free
-        AQSE disclosure source lands.
+        AQSE disclosure source lands. AQ-4 re-check (2026-08-10): the
+        official market-notices page also returns HTTP 429
+        (``X-Vercel-Mitigated: challenge``) and no stable key-free second
+        disclosure source appeared (Investegate / uk-wire / Proactive are
+        not wired; ticker.app remains a directory-only mirror).
         """
         registry = create_default_registry()
 
         names = registry.registered_names
         for blocked_name in (
             "aqse_announcements",
+            "aqse_second_disclosure",
             "aquis_announcements",
             "investegate_aq",
             "uk_wire_aq",
+            "proactive_aq",
+            "ticker_app_news",
             "aquis_datalink",
             "lse_paid",
         ):
