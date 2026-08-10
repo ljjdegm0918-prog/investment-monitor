@@ -322,6 +322,18 @@ from .sources.pl_news import (
     YahooPlNewsError,
     YahooPlNewsRequestError,
 )
+from .sources.se_news import (
+    GoogleSeNewsClient,
+    GoogleSeNewsConnector,
+    GoogleSeNewsDataError,
+    GoogleSeNewsError,
+    GoogleSeNewsRequestError,
+    YahooSeNewsClient,
+    YahooSeNewsConnector,
+    YahooSeNewsDataError,
+    YahooSeNewsError,
+    YahooSeNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
