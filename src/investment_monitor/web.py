@@ -47,6 +47,7 @@ from .models import (
 from .tw_universe import tw_universe_name_map
 from .universe.fr_universe import fr_universe_name_map
 from .universe.de_universe import de_universe_name_map
+from .universe.be_universe import be_universe_name_map
 from .universe.nl_universe import nl_universe_name_map
 from .universe.it_universe import it_universe_name_map
 from .universe.es_universe import es_universe_name_map
@@ -278,6 +279,8 @@ class WebApplication:
                     name_fallback = tw_universe_name_map()
                 elif market == MARKET_AU:
                     name_fallback = au_universe_name_map()
+                elif market == MARKET_BE:
+                    name_fallback = be_universe_name_map()
                 elif market == MARKET_FR:
                     name_fallback = fr_universe_name_map()
                 elif market == MARKET_DE:

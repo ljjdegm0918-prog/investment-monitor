@@ -7,6 +7,13 @@ from .de_universe import (
     refresh_de_universe,
     search_de_universe,
 )
+from .be_universe import (
+    BeUniverseError,
+    be_universe_name_map,
+    load_be_universe,
+    refresh_be_universe,
+    search_be_universe,
+)
 from .fr_universe import (
     FrUniverseError,
     fr_universe_name_map,
@@ -44,26 +51,31 @@ from .sg_universe import (
 )
 
 __all__ = [
+    "BeUniverseError",
     "DeUniverseError",
     "FrUniverseError",
     "NlUniverseError",
     "ItUniverseError",
     "EsUniverseError",
     "SgUniverseError",
+    "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",
     "nl_universe_name_map",
     "it_universe_name_map",
     "es_universe_name_map",
     "sg_universe_name_map",
+    "load_be_universe",
     "load_de_universe",
     "load_fr_universe",
     "load_nl_universe",
     "load_it_universe",
+    "refresh_be_universe",
     "refresh_de_universe",
     "refresh_fr_universe",
     "refresh_nl_universe",
     "refresh_it_universe",
+    "search_be_universe",
     "search_de_universe",
     "search_fr_universe",
     "search_nl_universe",
