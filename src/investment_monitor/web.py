@@ -43,6 +43,7 @@ from .models import (
     MARKET_SE,
     MARKET_AQ,
     MARKET_CXE,
+    MARKET_EMF,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -610,6 +611,10 @@ class WebApplication:
         if market == MARKET_CXE:
             # CXE stays unmapped via SEC; never let SEC map a Cboe Europe
             # symbol to a same-named US company.
+            return None
+        if market == MARKET_EMF:
+            # EMF stays unmapped via SEC; funds are identified by ISIN,
+            # never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

@@ -445,6 +445,22 @@ Finnhub is **US only** and never queried for CXE.
 
 CXE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no CXE disclosure connector is wired (AEE-1 A3 / AEE-4). News: `google_news_cxe` pairs on ticker + London day (`Europe/London`) + normalized title (only one CXE news source exists, so pairs are same-source).
 
+### European Mutual Funds (EMF)
+
+The "European Mutual Funds" track covers European open-end mutual funds /
+UCITS (ISIN-first identifiers), **not** German ETF/ETN/ETC (market=de),
+not Cboe Europe equities (market=cxe), and not Eurex derivatives. The
+market short code is `emf`; no over-broad `fund`/`mf`/`ucits` code is
+used. Fund ISINs (e.g. `LU0171254561`) are the canonical identifier;
+fund-data suffixes (`.F` / `.MF`) are stripped at add time. Funds are
+added as unmapped. Finnhub is **US only** and never queried for EMF.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `emf_disclosure` | Filings | none | **Not wired (EMF-1 spike pending)**. |
+| `emf_universe` | Universe | none | **Not wired yet (EMF-2 pending)**; no fake hand-written fund seed is shipped. |
+| `google_news_emf` | News | none | **Not wired yet (EMF-3 pending)**. |
+
 The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

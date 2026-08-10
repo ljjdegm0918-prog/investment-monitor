@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -618,6 +618,10 @@ class WebRepository:
         if market == MARKET_CXE:
             tickers = tuple(
                 dict.fromkeys(normalize_cxe_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_EMF:
+            tickers = tuple(
+                dict.fromkeys(normalize_emf_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2427,6 +2431,10 @@ _CXE_TICKER_SUFFIXES = ("CXE", "BXE")
 _CXE_TICKER_SEPARATORS = (".", " ", "-")
 _CXE_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
 
+_EMF_TICKER_SUFFIXES = ("F", "MF")
+_EMF_TICKER_SEPARATORS = (".", " ", "-")
+_EMF_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
+
 
 def normalize_se_ticker(ticker: str) -> str:
     """Normalize a Swedish (Nasdaq Stockholm) symbol.
@@ -2522,6 +2530,37 @@ def normalize_cxe_ticker(ticker: str) -> str:
         changed = False
         for separator in _CXE_TICKER_SEPARATORS:
             for suffix in _CXE_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_emf_ticker(ticker: str) -> str:
+    """Normalize a European mutual fund identifier to its canonical form.
+
+    European mutual funds are **ISIN-first**: any 12-character ISIN (two
+    letters + 10 alphanumeric characters, e.g. ``LU0171254561`` or
+    ``GB00B1XZS820``) is extracted and returned as the canonical
+    identifier, optionally with a fund-data suffix (``LU0171254561.F``,
+    ``LU0171254561 MF``, ``LU0171254561-MF``; stacked suffixes collapse).
+    A plain non-ISIN input is uppercased and preserved as-is (no fixed
+    fund mnemonic scheme exists across European fund data providers), and
+    bare suffix words (``F``, ``MF``) are never erased.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _EMF_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _EMF_TICKER_SEPARATORS:
+            for suffix in _EMF_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
