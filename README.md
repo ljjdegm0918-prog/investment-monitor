@@ -498,7 +498,7 @@ unmapped. Finnhub is **US only** and never queried for EUX.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| `eux_disclosure` | Filings | none | **Not wired (EUX-1 spike pending)**. |
+| `eux_disclosure` | Filings | none | **Not wired (EUX-1 spike A3, 2026-08-11)**: the official Eurex circulars page (`eurex.com/ex-en/find/circulars`) is a JS-driven search surface (HTTP 200, but no server-rendered per-product rows and no stable JSON feed; the page lists exchange-wide operational notices, not per-product issuer OAM). Eurex derivatives are exchange-listed contracts without issuers, so no circular connector is wired and no stock OAM (eqs_dgap / investegate / uk / de / cxe) is re-mapped onto `market=eux`. The Eurex host also shows intermittent TLS EOFs (same host quirk as GPW/EQS). |
 | `eux_universe` | Universe | none | **Not wired yet (EUX-2 pending)**; no fake hand-written FDAX-style seed is shipped and no de/cxe directory is reused. |
 | `google_news_eux` | News | none | **Not wired yet (EUX-3 pending)**. |
 
