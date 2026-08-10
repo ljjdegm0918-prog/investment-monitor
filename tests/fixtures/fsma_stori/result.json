@@ -1,0 +1,176 @@
+{
+  "resultCount": 6,
+  "storiResultItems": [
+    {
+      "requiredReportingTopicId": "4a9a28f4-cacb-4d0b-8ae6-fe227203d1d0",
+      "companyName": "AB INBEV",
+      "companyNumber": "0417497106",
+      "nationality": "BE",
+      "reportingTopicName": "Half-yearly financial report",
+      "datePublication": "2026-08-05T07:00:00",
+      "dateReceived": "2026-08-05T07:39:46.933",
+      "lei": "5493008H3828EMEXB082",
+      "mainDocuments": [
+        {
+          "fileDataId": "doc-ab-inbev-hy",
+          "language": "en",
+          "title": "AB InBev HY26 EUR Financial Statements_vF.pdf",
+          "originalFileName": "AB InBev HY26 EUR Financial Statements_vF.pdf",
+          "size": 1202,
+          "fileType": "pdf"
+        }
+      ],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0974293251",
+          "startDate": "2016-10-11T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    },
+    {
+      "requiredReportingTopicId": "50b2f5c1-1111-4d0b-8ae6-fe2272032222",
+      "companyName": "AB INBEV",
+      "companyNumber": "0417497106",
+      "nationality": "BE",
+      "reportingTopicName": "Announcement of acquisition of own shares",
+      "datePublication": "2026-07-10T22:15:00",
+      "dateReceived": "2026-07-10T23:29:56.857",
+      "lei": "5493008H3828EMEXB082",
+      "mainDocuments": [
+        {
+          "fileDataId": "doc-ab-inbev-buyback",
+          "language": "en",
+          "title": "Share Buy Back - Press release_EN.pdf",
+          "originalFileName": "Share Buy Back - Press release_EN.pdf",
+          "size": 331,
+          "fileType": "pdf"
+        }
+      ],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0974293251",
+          "startDate": "2016-10-11T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    },
+    {
+      "requiredReportingTopicId": "60c3d6e2-2222-4d0b-8ae6-fe2272033333",
+      "companyName": "KBC GROUP",
+      "companyNumber": "0406275471",
+      "nationality": "BE",
+      "reportingTopicName": "Inside information",
+      "datePublication": "2026-08-04T08:00:00",
+      "dateReceived": "2026-08-04T08:12:00",
+      "lei": "5493004KOZRK00ML9P55",
+      "mainDocuments": [
+        {
+          "fileDataId": "doc-kbc-inside",
+          "language": "en",
+          "title": "KBC press release.pdf",
+          "originalFileName": "KBC press release.pdf",
+          "size": 512,
+          "fileType": "pdf"
+        }
+      ],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0003565737",
+          "startDate": "1998-12-23T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    },
+    {
+      "requiredReportingTopicId": "70d4e7f3-3333-4d0b-8ae6-fe2272034444",
+      "companyName": "AB INBEV",
+      "companyNumber": "0417497106",
+      "nationality": "BE",
+      "reportingTopicName": "Announcement of notification of major shareholding",
+      "datePublication": "2026-08-06T23:00:00",
+      "dateReceived": "2026-08-07T01:00:00",
+      "lei": "5493008H3828EMEXB082",
+      "mainDocuments": [
+        {
+          "fileDataId": "doc-ab-inbev-major",
+          "language": "en",
+          "title": "Major shareholding notice_EN.pdf",
+          "originalFileName": "Major shareholding notice_EN.pdf",
+          "size": 402,
+          "fileType": "pdf"
+        }
+      ],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0974293251",
+          "startDate": "2016-10-11T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    },
+    {
+      "requiredReportingTopicId": "80e5f8a4-4444-4d0b-8ae6-fe2272035555",
+      "companyName": "ZETES INDUSTRIES",
+      "companyNumber": "0403222390",
+      "nationality": "BE",
+      "reportingTopicName": "Announcement of acquisition of own shares",
+      "datePublication": "2026-08-03T14:00:00",
+      "dateReceived": "2026-08-03T14:05:00",
+      "lei": "549300ABCDEF01234567",
+      "mainDocuments": [
+        {
+          "fileDataId": "doc-zetes",
+          "language": "en",
+          "title": "ABI unrelated mention - Zetes buyback.pdf",
+          "originalFileName": "ABI unrelated mention - Zetes buyback.pdf",
+          "size": 300,
+          "fileType": "pdf"
+        }
+      ],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0001234567",
+          "startDate": "1999-01-01T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    },
+    {
+      "requiredReportingTopicId": "90f6f9b5-5555-4d0b-8ae6-fe2272036666",
+      "companyName": "AB INBEV",
+      "companyNumber": "0417497106",
+      "nationality": "BE",
+      "reportingTopicName": "Annual financial report",
+      "datePublication": "2026-08-02T10:00:00",
+      "dateReceived": "2026-08-02T10:10:00",
+      "lei": "5493008H3828EMEXB082",
+      "mainDocuments": [],
+      "attachments": [],
+      "isinCodes": [
+        {
+          "code": "BE0974293251",
+          "startDate": "2016-10-11T00:00:00",
+          "isinType": "Shares",
+          "market": "Euronext Brussels"
+        }
+      ],
+      "documentTitle": ""
+    }
+  ]
+}

@@ -108,6 +108,10 @@ sources:
     label: AMF OAM
     source_type: filings
     enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: fsma_stori
+    label: FSMA STORI
+    source_type: filings
+    enabled: true          # key-free official FSMA STORI (Belgian central storage of regulated information); needs a BE ISIN (typed or from the BE universe) to match
   - name: cnmv_hr
     label: CNMV (hechos relevantes)
     source_type: filings

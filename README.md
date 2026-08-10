@@ -335,7 +335,7 @@ shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only (BE-0): `market=be` companies use canonical root tickers (`ABI` / `ABI.BR` / `ABI-BRU` all store as `ABI`; exchange suffixes `.BR` / `.BRU` / `.EBR` are stripped at add time, Belgian ISINs are kept as-is) and remain unmapped. FSMA / Euronext Brussels disclosure, a BE universe cache, and BE news connectors are planned but not wired yet (BE-1 … BE-5). Finnhub is **US only** and never queried for BE. |
+| `fsma_stori` | Filings | None (key-free) | Official FSMA STORI (Belgian central storage of regulated information, `webapi.fsma.be/api/v1/<lang>/stori/result`; powers the public `fsma.be/en/stori` portal). Matches by Belgian ISIN or company name — never by ticker mnemonic (`ABI` does not match `AB INBEV`). A BE ISIN typed as the ticker works now; mnemonic tickers need the BE universe cache (BE-2) to supply an ISIN and are otherwise skipped honestly (`no_universe_identity`). Europe/Brussels day bounds, stable document ids (`requiredReportingTopicId`), dates constrained server- and client-side. Undocumented JSON surface; may change without notice. The BE universe (BE-2) and BE news (BE-3) are not wired yet. `market=be` companies use canonical root tickers (`ABI` / `ABI.BR` / `ABI-BRU` all store as `ABI`; exchange suffixes `.BR` / `.BRU` / `.EBR` are stripped at add time, Belgian ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for BE. |
 
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and

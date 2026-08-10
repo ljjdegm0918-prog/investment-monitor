@@ -187,6 +187,14 @@ from .sources.amf_oam import (
     AmfOamError,
     AmfOamRequestError,
 )
+from .sources.fsma_stori import (
+    StoriClient,
+    StoriCompanyMatcher,
+    StoriConnector,
+    StoriDataError,
+    StoriError,
+    StoriRequestError,
+)
 from .sources.cnmv_hr import (
     CnmvHrClient,
     CnmvHrCompanyMatcher,
@@ -433,6 +441,12 @@ __all__ = [
     "AmfOamDataError",
     "AmfOamError",
     "AmfOamRequestError",
+    "StoriClient",
+    "StoriCompanyMatcher",
+    "StoriConnector",
+    "StoriDataError",
+    "StoriError",
+    "StoriRequestError",
     "EqsDgapClient",
     "EqsDgapConnector",
     "EqsDgapDataError",
