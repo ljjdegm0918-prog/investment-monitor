@@ -193,6 +193,18 @@ class MarketDESourceRegistrationTests(unittest.TestCase):
             self.assertIsNotNone(registry.factory_for(name))
         self.assertNotIn("de_community", registry.registered_names)
 
+    def test_no_etf_specific_disclosure_sources_are_registered(self) -> None:
+        """DETF-4 lock: no stable key-free German ETF-specific feed exists."""
+        registry = create_default_registry()
+        names = registry.registered_names
+        for blocked in (
+            "de_etf_prospectus",
+            "bafin_fund",
+            "eurex_etf",
+            "xetra_etf_pack",
+        ):
+            self.assertNotIn(blocked, names)
+
     def test_de_yahoo_symbol_uses_dot_de_suffix(self) -> None:
         self.assertEqual(de_yahoo_symbol("SAP"), "SAP.DE")
         self.assertEqual(de_yahoo_symbol("sap.xetra"), "SAP.DE")
