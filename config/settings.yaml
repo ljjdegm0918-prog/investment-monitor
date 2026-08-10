@@ -112,6 +112,15 @@ sources:
     label: FSMA STORI
     source_type: filings
     enabled: true          # key-free official FSMA STORI (Belgian central storage of regulated information); needs a BE ISIN (typed or from the BE universe) to match
+  # Belgium second disclosure - deliberately not wired (BE-4 re-verified 2026-08-10):
+  # Euronext Brussels announcements are Drupal HTML pages keyed by per-company
+  # node IDs (no RSS, no JSON export; _format=json -> 406); the key-free EQS News
+  # JSON API returns zero records for sampled Belgian ISINs (incl. BEL 20 names);
+  # paid feeds (Euronext Web Services/Saturn, FinancialReports.eu, LSEG) excluded.
+  - name: be_second_disclosure
+    label: BE second disclosure (not wired)
+    source_type: filings
+    enabled: false
   - name: cnmv_hr
     label: CNMV (hechos relevantes)
     source_type: filings

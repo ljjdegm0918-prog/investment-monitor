@@ -12,6 +12,7 @@ from investment_monitor import (
     SQLiteInformationRepository,
     WebRepository,
 )
+from investment_monitor.registry import create_default_registry
 from investment_monitor.web_repository import normalize_be_ticker
 
 
@@ -188,6 +189,49 @@ class MarketBEFinnhubSkipTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+
+class MarketBEDisclosureFollowupTests(unittest.TestCase):
+    def test_be_first_disclosure_source_still_registered(self) -> None:
+        """Lock the BE-1 FSMA STORI connector in place."""
+        registry = create_default_registry()
+
+        self.assertIsNotNone(registry.factory_for("fsma_stori"))
+
+    def test_no_paid_or_fake_be_disclosure_connector_is_registered(self) -> None:
+        """Lock the BE-4 second-source boundary.
+
+        BE-4 re-verified (2026-08-10): no stable key-free second Belgian
+        disclosure source exists. Euronext Brussels announcements are
+        Drupal HTML pages keyed by per-company node IDs (no RSS, no JSON
+        export; ``_format=json`` returns 406); the key-free EQS News JSON
+        API returns zero records for sampled Belgian ISINs including BEL 20
+        names; paid feeds (Euronext Web Services/Saturn, FinancialReports.eu,
+        LSEG) are excluded. Remove entries from the blocked list only when a
+        real key-free source lands.
+        """
+        registry = create_default_registry()
+
+        names = registry.registered_names
+        for blocked_name in (
+            "be_second_disclosure",
+            "eqs_be",
+            "euronext_be_announcements",
+            "euronext_realtime",
+            "financialreports_be",
+            "lseg_be",
+        ):
+            self.assertNotIn(blocked_name, names)
+
+        # The settings catalog still lists the unwired BE slot so the UI can
+        # show Not implemented instead of implying a second source exists.
+        from investment_monitor.config import load_settings
+
+        catalog_names = {
+            source.name
+            for source in load_settings(Path("config/settings.yaml")).sources
+        }
+        self.assertIn("be_second_disclosure", catalog_names)
 
 
 if __name__ == "__main__":

@@ -60,6 +60,7 @@ SOURCE_LABELS = {
     "google_news_au": "Google News (AU)",
     "amf_oam": "AMF OAM",
     "fsma_stori": "FSMA STORI",
+    "be_second_disclosure": "BE second disclosure (not wired)",
     "yahoo_be": "Yahoo Finance BE",
     "google_news_be": "Google News (BE)",
     "yahoo_fr": "Yahoo Finance FR",

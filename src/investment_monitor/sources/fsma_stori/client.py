@@ -18,6 +18,14 @@ Date window: the client sends ``publicationStart``/``publicationEnd`` to the
 API and, authoritatively, filters fetched records client-side by the
 Europe/Brussels calendar day of ``datePublication`` before returning them,
 so ``start_date``/``end_date`` genuinely constrain the result.
+
+BE-4 boundary (re-verified live 2026-08-10): no stable key-free second
+Belgian disclosure source exists. Euronext Brussels announcements are Drupal
+HTML pages keyed by per-company node IDs (no RSS, no JSON export;
+``_format=json`` returns 406); the key-free EQS News JSON API returns zero
+records for sampled Belgian ISINs including BEL 20 names. Paid feeds
+(Euronext Web Services/Saturn, FinancialReports.eu, LSEG) are not wired.
+FSMA STORI stays the only wired BE disclosure source.
 """
 
 from __future__ import annotations
