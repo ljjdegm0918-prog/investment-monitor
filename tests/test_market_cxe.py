@@ -197,6 +197,10 @@ class MarketCXEDisclosureLockTests(unittest.TestCase):
             "cboe_europe_disclosure",
             "cboe_europe_oam",
             "cxe_disclosure",
+            "cboe_trade_data_filings",
+            "turquoise_filings",
+            "cboe_data_vantage",
+            "lseg_mtf_paid",
         ):
             self.assertNotIn(blocked_name, names)
 
