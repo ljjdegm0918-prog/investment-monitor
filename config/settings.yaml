@@ -227,15 +227,16 @@ sources:
     label: SIX Official Notices (not wired)
     source_type: filings
     enabled: false
-  # Poland disclosure - deliberately not wired (PL-1 spike A3):
-  # GPW/ESPI (espi.gpw.pl, www.gpw.pl) are unreachable from this network
-  # (TLS handshake/connection reset; old lista-spolek URLs 404), the EQS
-  # News API returns empty records for Polish ISINs (PKO/PZU/CDR/PKN
-  # verified 2026-08-10), and KNF has no per-issuer announcement feed.
-  - name: espi_pl
-    label: ESPI/EBI (not wired)
+  # Poland disclosure: official GPW ESPI/EBI reports page
+  # (www.gpw.pl/komunikaty), key-free HTML list with ISIN filtering
+  # (PL-4 re-spike 2026-08-10 found it reachable; the PL-1 A3 boundary was
+  # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
+  # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
+  # still unreachable from this network; GPW paid data products are unused.
+  - name: gpw_espi
+    label: GPW ESPI/EBI
     source_type: filings
-    enabled: false
+    enabled: true
   - name: yahoo_be
     label: Yahoo Finance BE
     source_type: news

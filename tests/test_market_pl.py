@@ -191,25 +191,29 @@ class MarketPLFinnhubSkipTests(unittest.TestCase):
 
 
 class MarketPLDisclosureLockTests(unittest.TestCase):
-    def test_no_pl_disclosure_connector_is_registered(self) -> None:
-        """Lock the PL-1 A3 spike decision.
+    def test_gpw_espi_is_registered(self) -> None:
+        """PL-4 re-spike (2026-08-10) found the official GPW reports page.
 
-        PL-1 spike (2026-08-10): GPW/ESPI (``espi.gpw.pl``,
-        ``www.gpw.pl``) are unreachable from this network (TLS handshake /
-        connection reset; old ``lista-spolek`` URLs return 404), the EQS
-        News API returns empty records for Polish ISINs (PKO/PZU/CDR/PKN),
-        and KNF has no stable key-free per-issuer announcement feed.
-        Remove this test when a real key-free GPW/ESPI/regulator disclosure
-        source lands.
+        ``www.gpw.pl/komunikaty`` is a key-free server-rendered ESPI/EBI
+        list filterable by Polish ISIN, so the PL-1 A3 boundary (which was
+        based on ``espi.gpw.pl`` TLS failure and empty EQS records) no
+        longer applies to this page. ``gpw_espi`` is the wired connector.
         """
+        registry = create_default_registry()
+
+        self.assertIsNotNone(registry.factory_for("gpw_espi"))
+        self.assertEqual(registry.secret_fields_for("gpw_espi"), ())
+
+    def test_unwired_pl_disclosure_names_stay_unregistered(self) -> None:
+        """Lock the paid/unavailable PL disclosure boundaries."""
         registry = create_default_registry()
 
         names = registry.registered_names
         for blocked_name in (
             "espi_pl",
-            "gpw_espi",
             "eqs_pl",
             "knf_filings",
+            "gpw_datalink",
         ):
             self.assertNotIn(blocked_name, names)
 

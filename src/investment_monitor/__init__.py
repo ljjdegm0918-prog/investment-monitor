@@ -322,6 +322,13 @@ from .sources.pl_news import (
     YahooPlNewsError,
     YahooPlNewsRequestError,
 )
+from .sources.gpw_espi import (
+    GpwEspiClient,
+    GpwEspiConnector,
+    GpwEspiDataError,
+    GpwEspiError,
+    GpwEspiRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,
