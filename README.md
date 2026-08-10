@@ -219,8 +219,11 @@ The "German ETF's" deepening keeps the existing `market=de` code — there is
 **no** `market=etf` / `de_etf` / `xetra_etf`. It targets Xetra / Deutsche
 Börse Cash Market ETF (and same-CSV ETN/ETC) instruments alongside the
 existing common-share (CS) universe; it is **not** Eurex derivatives and
-not a paid Deutsche Börse data product. This slice documents the scope
-before the universe change lands in DETF-2.
+not a paid Deutsche Börse data product. Final state: the universe now
+accepts the CSV Instrument Types `CS`, `ETF`, `ETN` and `ETC` (the same
+exchange-traded family as the IBKR "German ETF's" package), each entry
+stores its `instrument_type`, and the CSV itself is a Cash Market file
+with no Eurex derivatives.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -232,7 +235,9 @@ before the universe change lands in DETF-2.
 
 `market=de` uses canonical root tickers (`SAP` / `SAP.DE` → `SAP`; German ISINs
 kept as-is). Add-company can backfill name/board/ISIN from `de_universe_name_map()`
-when warm. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
+when warm; ETF/ETN/ETC instruments share the same market code and ticker
+rules (no separate etf market code), distinguished by `instrument_type` in
+the universe cache. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
 (or same-source title fallback); news pairs on ticker + Berlin day.
 Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON).
 
