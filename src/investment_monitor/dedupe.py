@@ -54,6 +54,11 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For PL, the only wired disclosure source is gpw_espi, which pairs on its
+stable GPW report id (``geru_id``), or on a source-scoped title fallback
+(ticker + Warsaw day + normalized title); PL news (yahoo_pl /
+google_news_pl) pairs across sources on ticker + Warsaw day + normalized
+title.
 """
 
 from __future__ import annotations
@@ -76,6 +81,7 @@ ROME = ZoneInfo("Europe/Rome")
 MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
+WARSAW = ZoneInfo("Europe/Warsaw")
 RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
@@ -98,6 +104,7 @@ FILING_SOURCE_PRIORITY = {
     "bme_relevant_facts": 15,
     "fsma_stori": 16,
     "eqs_ch": 17,
+    "gpw_espi": 18,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -128,6 +135,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_be": 25,
     "yahoo_ch": 26,
     "google_news_ch": 27,
+    "yahoo_pl": 28,
+    "google_news_pl": 29,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -176,6 +185,9 @@ SOURCE_DISPLAY_LABELS = {
     "eqs_ch": "EQS News (CH)",
     "yahoo_ch": "Yahoo Finance CH",
     "google_news_ch": "Google News (CH)",
+    "gpw_espi": "GPW ESPI/EBI",
+    "yahoo_pl": "Yahoo Finance PL",
+    "google_news_pl": "Google News (PL)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -188,7 +200,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch",
+        "sg", "be", "ch", "pl",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -286,6 +298,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "ch":
         return _ch_filing_key(item)
+    if market == "pl":
+        return _pl_filing_key(item)
     if market == "au":
         return _au_filing_key(item)
     if market == "fr":
@@ -378,6 +392,29 @@ def _be_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"be:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _pl_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """PL filings pair on the stable GPW report id, or a title fallback.
+
+    ``gpw_espi`` is the only wired PL disclosure source; its stable report
+    id (``external_id`` = GPW ``geru_id``) is the primary identity. Without
+    one, the fallback is source-scoped (source + ticker + Warsaw day +
+    normalized title), so a hypothetical second PL disclosure source is
+    never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"pl:filing:gpw:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, WARSAW)
+    if title and day:
+        return (
+            f"pl:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -605,6 +642,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "sg"
         else ZURICH
         if market == "ch"
+        else WARSAW
+        if market == "pl"
         else BRUSSELS
         if market == "be"
         else LONDON
