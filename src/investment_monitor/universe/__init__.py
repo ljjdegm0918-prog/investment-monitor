@@ -63,6 +63,13 @@ from .pl_universe import (
     refresh_pl_universe,
     search_pl_universe,
 )
+from .se_universe import (
+    SeUniverseError,
+    load_se_universe,
+    refresh_se_universe,
+    search_se_universe,
+    se_universe_name_map,
+)
 
 __all__ = [
     "BeUniverseError",
@@ -74,6 +81,7 @@ __all__ = [
     "SgUniverseError",
     "ChUniverseError",
     "PlUniverseError",
+    "SeUniverseError",
     "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",
@@ -83,6 +91,7 @@ __all__ = [
     "sg_universe_name_map",
     "ch_universe_name_map",
     "pl_universe_name_map",
+    "se_universe_name_map",
     "load_be_universe",
     "load_de_universe",
     "load_fr_universe",
@@ -110,4 +119,7 @@ __all__ = [
     "refresh_pl_universe",
     "load_pl_universe",
     "search_pl_universe",
+    "refresh_se_universe",
+    "load_se_universe",
+    "search_se_universe",
 ]
