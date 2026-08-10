@@ -331,6 +331,12 @@ filings never get a dedupe key and are never annotated. Every row stays in
 the feed with an "Also seen on —" label; totals and page sizes are never
 shrunk.
 
+### Switzerland sources (CH)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=ch` companies use canonical root tickers (`NESN` / `NESN.SW` / `NESN-SWX` all store as `NESN`; exchange suffixes `.SW` / `.SWX` / `.S` are stripped at add time, Swiss ISINs are kept as-is) and remain unmapped. SIX / FINMA disclosure, a CH universe cache, and CH news connectors are planned but not wired yet (CH-1 … CH-5). Finnhub is **US only** and never queried for CH. |
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |
