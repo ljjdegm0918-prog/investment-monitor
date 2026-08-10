@@ -39,6 +39,7 @@ from .models import (
     MARKET_ES,
     MARKET_SG,
     MARKET_CH,
+    MARKET_PL,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -577,6 +578,10 @@ class WebApplication:
             return None
         if market == MARKET_CH:
             # CH stays unmapped via SEC; disclosure matches by ISIN/name
+            # from the universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_PL:
+            # PL stays unmapped via SEC; disclosure matches by ISIN/name
             # from the universe, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:

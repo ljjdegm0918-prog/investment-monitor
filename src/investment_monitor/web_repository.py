@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -586,6 +586,10 @@ class WebRepository:
         if market == MARKET_CH:
             tickers = tuple(
                 dict.fromkeys(normalize_ch_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_PL:
+            tickers = tuple(
+                dict.fromkeys(normalize_pl_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2336,6 +2340,43 @@ def normalize_ch_ticker(ticker: str) -> str:
         changed = False
         for separator in _CH_TICKER_SEPARATORS:
             for suffix in _CH_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_PL_TICKER_SUFFIXES = ("WA", "WSE", "GPW")
+_PL_TICKER_SEPARATORS = (".", " ", "-")
+_PL_ISIN_PATTERN = re.compile(r"PL[0-9A-Z]{10}")
+
+
+def normalize_pl_ticker(ticker: str) -> str:
+    """Normalize a Polish (GPW / Warsaw Stock Exchange) symbol.
+
+    Accepts plain symbols (``PKO``) and the common Polish exchange suffixes
+    used by data providers (``PKO.WA``, ``PKO.WSE``, ``PKO-GPW``; space or
+    dash separators are tolerated too, and stacked suffixes collapse to the
+    root). The suffix is stripped and the root symbol is uppercased; a plain
+    symbol without a suffix is preserved as-is. Suffix words without a
+    separator (``WA``, ``WSE``, ``GPW``) are never erased. When the input
+    contains a Polish ISIN (``PL`` followed by 10 alphanumeric characters,
+    e.g. ``PLPKO0000016``), the ISIN is extracted and returned instead,
+    since an ISIN is a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _PL_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _PL_TICKER_SEPARATORS:
+            for suffix in _PL_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

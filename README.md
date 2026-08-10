@@ -355,6 +355,12 @@ only one disclosure source wired there is no cross-source filing pairing.
 Every row stays in the feed with an "Also seen on —" label; totals and page
 sizes are never shrunk.
 
+### Poland sources (PL)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| (none yet) | — | — | Market skeleton only: `market=pl` companies use canonical root tickers (`PKO` / `PKO.WA` / `PKO-GPW` all store as `PKO`; exchange suffixes `.WA` / `.WSE` / `.GPW` are stripped at add time, Polish ISINs are kept as-is) and remain unmapped. GPW / ESPI / KNF disclosure, a PL universe cache, and PL news connectors are planned but not wired yet (PL-1 … PL-5). Finnhub is **US only** and never queried for PL. |
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |
