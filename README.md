@@ -335,7 +335,8 @@ shrunk.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=ch` companies use canonical root tickers (`NESN` / `NESN.SW` / `NESN-SWX` all store as `NESN`; exchange suffixes `.SW` / `.SWX` / `.S` are stripped at add time, Swiss ISINs are kept as-is) and remain unmapped. SIX / FINMA disclosure, a CH universe cache, and CH news connectors are planned but not wired yet (CH-1 … CH-5). Finnhub is **US only** and never queried for CH. |
+| eqs_ch | filings | none | EQS News JSON by Swiss ISIN (key-free, unofficial public WP API; may change without notice; **partial Swiss coverage** — live 2026-08-10 Roche/UBS return records, Nestlé/Novartis return empty lists; NOT a SIX Exchange Regulation / FINMA official feed). SIX official channels have no stable free JSON (official-notices page is a React SPA; `api.six-group.com` routes undocumented; SIX equity-issuer news is the paid Exfeed product). Needs ISIN from the CH universe cache or a typed Swiss ISIN. |
+| (universe + news) | — | — | Market skeleton plus disclosure so far: `market=ch` companies use canonical root tickers (`NESN` / `NESN.SW` / `NESN-SWX` all store as `NESN`; exchange suffixes `.SW` / `.SWX` / `.S` are stripped at add time, Swiss ISINs are kept as-is) and remain unmapped. A CH universe cache and CH news connectors are planned but not wired yet (CH-2 … CH-5). Finnhub is **US only** and never queried for CH. |
 
 ### Belgium sources (BE)
 

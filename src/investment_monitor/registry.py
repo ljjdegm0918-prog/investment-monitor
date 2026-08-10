@@ -78,6 +78,7 @@ from .sources.be_news import (
     GoogleBeNewsConnector,
     YahooBeNewsConnector,
 )
+from .sources.eqs_ch import EqsChConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -226,6 +227,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleSgNewsConnector.name, GoogleSgNewsConnector)
     registry.register(YahooBeNewsConnector.name, YahooBeNewsConnector)
     registry.register(GoogleBeNewsConnector.name, GoogleBeNewsConnector)
+    registry.register(EqsChConnector.name, EqsChConnector)
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(

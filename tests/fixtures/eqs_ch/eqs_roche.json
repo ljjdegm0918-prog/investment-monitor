@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "records": [
+    {
+      "id": "c2b53744-7d61-45a4-9c5f-131d035c9a4c_en",
+      "headline": "Roche announces new data at medical congress",
+      "categoryCode": "corporate",
+      "dateUtc": "2026-08-05 07:30:00",
+      "companyName": "Roche Holding AG",
+      "isin": "CH0012032113"
+    },
+    {
+      "id": "8b017c68-5693-49fa-a468-43cb48713d8b_en",
+      "headline": "Roche updates financial outlook",
+      "categoryCode": "corporate",
+      "dateUtc": "2026-08-06 16:00:00",
+      "companyName": "Roche Holding AG",
+      "isin": "CH0012032113"
+    },
+    {
+      "id": "aba1fb30-85a3-46b6-b4bc-579e04b17ec8_en",
+      "headline": "Roche old announcement",
+      "categoryCode": "corporate",
+      "dateUtc": "2026-07-20 10:00:00",
+      "companyName": "Roche Holding AG",
+      "isin": "CH0012032113"
+    }
+  ]
+}

@@ -291,6 +291,13 @@ from .sources.sg_news import (
     YahooSgNewsError,
     YahooSgNewsRequestError,
 )
+from .sources.eqs_ch import (
+    EqsChClient,
+    EqsChConnector,
+    EqsChDataError,
+    EqsChError,
+    EqsChRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,
