@@ -334,6 +334,18 @@ from .sources.se_news import (
     YahooSeNewsError,
     YahooSeNewsRequestError,
 )
+from .sources.aq_news import (
+    GoogleAqNewsClient,
+    GoogleAqNewsConnector,
+    GoogleAqNewsDataError,
+    GoogleAqNewsError,
+    GoogleAqNewsRequestError,
+    YahooAqNewsClient,
+    YahooAqNewsConnector,
+    YahooAqNewsDataError,
+    YahooAqNewsError,
+    YahooAqNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,

@@ -227,6 +227,14 @@ sources:
     label: Google News (SE)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=sv, gl=SE); may be loosely related / break without notice
+  - name: yahoo_aq
+    label: Yahoo Finance AQ
+    source_type: news
+    enabled: true          # key-free public RSS mirror (en-GB + en-US); may be loosely related / break without notice
+  - name: google_news_aq
+    label: Google News (AQ)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-GB, gl=GB); may be loosely related / break without notice
   # Switzerland second disclosure - deliberately not wired (CH-4):
   # SIX official notices are a React SPA without a public JSON list,
   # api.six-group.com routes are undocumented, and SIX equity-issuer news
