@@ -408,6 +408,8 @@ only** and never queried for AQ.
 | `yahoo_aq` | News | None (key-free) | Yahoo Finance AQ public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.AQ&region=GB&lang=en-GB`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ADB.AQ`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ADB`), `.AQ` is request-time only. |
 | `google_news_aq` | News | None (key-free) | Google News AQ RSS (`news.google.com/rss/search?q={ROOT}.AQ&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10; results can be loosely related; public RSS may break without notice. |
 
+AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
