@@ -224,7 +224,7 @@ before the universe change lands in DETF-2.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_dgap | filings | none | EQS News JSON (ex-DGAP; key-free unofficial WP API; may change); only wired DE disclosure source; matched by ISIN |
+| eqs_dgap | filings | none | EQS News JSON (ex-DGAP; key-free unofficial WP API; may change); only wired DE disclosure source; matched by ISIN. **DETF-1 live (2026-08-10): returns 0 records for sampled DE-domiciled Xetra ETF ISINs** (iShares Core DAX `DE0005933931`, iShares DivDAX `DE0002635273`, Deka DAX `DE000ETFL011`, iShares Core DAX EOD `DE000A2QP331`, iShares STOXX Europe 600 `DE0002635307`) — ETF disclosure is **not** deepened; EQS stays equity-side and the connector honestly returns empty. The EQS host also shows intermittent TLS EOFs (same host quirk as other EQS rails). No paid fund-document feed is wired. |
 | de_universe | breadth cache | none | Xetra `t7-xetr-allTradableInstruments.csv` common shares (CS); never enters the feed |
 | yahoo_de | news | none | Yahoo Finance DE public RSS (`region=DE`); `.DE` at request time |
 | google_news_de | news | none | Key-free Google News RSS (`hl=de&gl=DE&ceid=DE:de`) |
