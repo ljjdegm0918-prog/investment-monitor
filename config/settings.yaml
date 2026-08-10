@@ -237,6 +237,19 @@ sources:
     label: GPW ESPI/EBI
     source_type: filings
     enabled: true
+  # Sweden disclosure - deliberately not wired (SE-1 spike A3):
+  # FI's public publication client (marknadssok.fi.se/publiceringsklient)
+  # only covers insider transactions (Insyn), not issuer announcements;
+  # Nasdaq Nordic company news is a Drupal SPA without a public JSON route
+  # (webproxy GetNews returns the SPA shell; api.nasdaq.com returns 404 for
+  # .ST symbols); the legacy newsclient.omxgroup.com search is HTTP 500;
+  # EQS News API returns empty records for every sampled Swedish ISIN
+  # (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B /
+  # Volvo Car-B verified 2026-08-10). Nasdaq paid data products are not used.
+  - name: fi_oam
+    label: FI OAM (not wired)
+    source_type: filings
+    enabled: false
   - name: yahoo_be
     label: Yahoo Finance BE
     source_type: news

@@ -188,7 +188,17 @@ class MarketSEFinnhubSkipTests(unittest.TestCase):
 
 class MarketSEDisclosureLockTests(unittest.TestCase):
     def test_no_se_disclosure_connector_is_registered_yet(self) -> None:
-        """Lock the SE-0 boundary: disclosure is planned for SE-1."""
+        """Lock the SE-1 A3 spike decision.
+
+        SE-1 spike (2026-08-10): FI's public publication client
+        (``marknadssok.fi.se/publiceringsklient``) only searches insider
+        transactions (Insyn), not issuer announcements; Nasdaq Nordic
+        company news is a Drupal SPA without a public JSON route; the
+        legacy ``newsclient.omxgroup.com`` search is HTTP 500; EQS News
+        returns empty records for every sampled Swedish ISIN. Remove this
+        test when a real key-free FI/Nasdaq Stockholm disclosure source
+        lands.
+        """
         registry = create_default_registry()
 
         names = registry.registered_names

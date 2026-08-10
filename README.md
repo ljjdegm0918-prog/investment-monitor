@@ -370,7 +370,8 @@ PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and total
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| (none yet) | — | — | Market skeleton only: `market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. FI / Nasdaq Stockholm disclosure, a SE universe cache, and SE news connectors are planned but not wired yet (SE-1 … SE-5). Finnhub is **US only** and never queried for SE. |
+| `fi_oam` | filings | none | **Not wired (SE-1 spike A3)**: FI's public publication client (`marknadssok.fi.se/publiceringsklient`) only searches insider transactions (Insyn), not issuer announcements; Nasdaq Nordic company news is a Drupal SPA without a public JSON route (`webproxy/DataSubsidiesNews/GetNews.aspx` returns the SPA shell, `api.nasdaq.com` returns 404 for `.ST` symbols); the legacy `newsclient.omxgroup.com` disclosure search returns HTTP 500; EQS News returns empty records for every sampled Swedish ISIN (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B / Volvo Car-B, verified 2026-08-10). No production connector is registered; Nasdaq paid data products are not used. |
+| (universe + news) | — | — | Market skeleton plus disclosure boundary so far: `market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. A SE universe cache and SE news connectors are planned but not wired yet (SE-2 … SE-5). Finnhub is **US only** and never queried for SE. |
 
 ### Belgium sources (BE)
 
