@@ -45,6 +45,10 @@ sources on ticker + Madrid day + normalized title. For SG, no disclosure
 connector is wired (SGX A3 spike), so regulatory filings never get a key
 and are never annotated; SG news (yahoo_sg / google_news_sg) pairs across
 sources on ticker + Singapore day + normalized title.
+For CH, the only wired disclosure source is eqs_ch, which pairs on its
+stable EQS news id, or on a source-scoped title fallback (ticker + Zurich
+day + normalized title); CH news (yahoo_ch / google_news_ch) pairs across
+sources on ticker + Zurich day + normalized title.
 For BE, the only wired disclosure source is fsma_stori, which pairs on its
 stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
@@ -71,6 +75,7 @@ AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 ROME = ZoneInfo("Europe/Rome")
 MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
+ZURICH = ZoneInfo("Europe/Zurich")
 RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
@@ -92,6 +97,7 @@ FILING_SOURCE_PRIORITY = {
     "cnmv_hr": 14,
     "bme_relevant_facts": 15,
     "fsma_stori": 16,
+    "eqs_ch": 17,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -120,6 +126,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_sg": 23,
     "yahoo_be": 24,
     "google_news_be": 25,
+    "yahoo_ch": 26,
+    "google_news_ch": 27,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -165,6 +173,9 @@ SOURCE_DISPLAY_LABELS = {
     "fsma_stori": "FSMA STORI",
     "yahoo_be": "Yahoo Finance BE",
     "google_news_be": "Google News (BE)",
+    "eqs_ch": "EQS News (CH)",
+    "yahoo_ch": "Yahoo Finance CH",
+    "google_news_ch": "Google News (CH)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -177,7 +188,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be",
+        "sg", "be", "ch",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -273,6 +284,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         # No SG disclosure connector is wired (SGX A3 spike); a stray
         # regulatory_filing row must never be cross-annotated.
         return None
+    if market == "ch":
+        return _ch_filing_key(item)
     if market == "au":
         return _au_filing_key(item)
     if market == "fr":
@@ -319,6 +332,29 @@ def _es_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"es:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _ch_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """CH filings pair on the stable EQS news id, or a title fallback.
+
+    ``eqs_ch`` is the only wired CH disclosure source; its news id
+    (``external_id``) is the primary identity. Without one, the fallback is
+    source-scoped (source + ticker + Zurich day + normalized title), so a
+    hypothetical second CH disclosure source is never cross-annotated by
+    title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"ch:filing:eqs:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, ZURICH)
+    if title and day:
+        return (
+            f"ch:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -567,6 +603,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "es"
         else SINGAPORE
         if market == "sg"
+        else ZURICH
+        if market == "ch"
         else BRUSSELS
         if market == "be"
         else LONDON

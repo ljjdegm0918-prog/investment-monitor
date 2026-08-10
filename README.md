@@ -344,7 +344,16 @@ shrunk.
 `NESN-SWX` all store as `NESN`; exchange suffixes `.SW` / `.SWX` / `.S`
 are stripped at add time, Swiss ISINs are kept as-is) and remain unmapped.
 Finnhub is **US only** and never queried for CH. News comes from `yahoo_ch`
-/ `google_news_ch`. CH feed soft-dedupe lands with CH-5.
+/ `google_news_ch`.
+
+CH feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_ch` / `google_news_ch`
+news pairs across sources on ticker + Zurich day (`Europe/Zurich`) +
+normalized title. `eqs_ch` filings pair on the stable EQS news id, or on a
+same-source title fallback (ticker + Zurich day + normalized title); with
+only one disclosure source wired there is no cross-source filing pairing.
+Every row stays in the feed with an "Also seen on —" label; totals and page
+sizes are never shrunk.
 
 ### Belgium sources (BE)
 
