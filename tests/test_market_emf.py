@@ -190,6 +190,10 @@ class MarketEMFDisclosureLockTests(unittest.TestCase):
             "emf_disclosure",
             "esma_fund_disclosure",
             "kiid_fund_filings",
+            "emf_second_disclosure",
+            "morningstar_paid",
+            "lipper_paid",
+            "eurex_funds",
         ):
             self.assertNotIn(blocked_name, names)
 
