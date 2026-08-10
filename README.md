@@ -403,7 +403,7 @@ only** and never queried for AQ.
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | `aq_disclosure` | Filings | none | **Not wired (AQ-1 spike A3, 2026-08-10)**: the official AQSE announcements page (`www.aquis.eu/stock-exchange/announcements`) is a server-rendered HTML list (Date / Title / View rows, key-free), but `www.aquis.eu` and `embed.aquis.eu` sit behind a Vercel bot challenge — stdlib/curl clients get HTTP 429 with `X-Vercel-Mitigated: challenge` and a JS proof-of-work checkpoint; no key-free official JSON/RSS exists (`embed.aquis.eu/api/*` returns the same challenge; `api.aquis.eu` / `data.aquis.eu` abort TLS). LSE/Investegate/Companies House are deliberately **not** used as Aquis substitutes, and no paid Aquis data product is wired. |
-| `aq_universe` | Universe | none | **Not wired yet (AQ-2 pending)**; no fake hand-written AQSE seed is shipped. |
+| `aq_universe` | Universe | none | **Wired (AQ-2, partial unofficial mirror)**: `refresh_aq_universe()` fetches `https://www.ticker.app/aqse` (server-rendered Name / TIDM / ISIN table; key-free). Live 2026-08-10: ~79 unique AQSE instruments, 61 with ISIN; the official Aquis directory (`embed.aquis.eu/companies`) renders ~90 names but is behind a Vercel bot challenge for stdlib/curl clients, so completeness is **not verified** — this is a partial mirror, never a full AQSE universe, and no LSE/UK directory is filtered in. Board/exchange stored as `AQSE`; never enters the feed; backfills name/exchange/ISIN on add-company. |
 | `yahoo_aq` | News | none | **Not wired yet (AQ-3 pending)**. |
 | `google_news_aq` | News | none | **Not wired yet (AQ-3 pending)**. |
 
