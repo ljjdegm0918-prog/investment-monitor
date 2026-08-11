@@ -12,7 +12,7 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -40,6 +40,7 @@ from .models import (
     MARKET_SG,
     MARKET_CH,
     MARKET_PL,
+    MARKET_SE,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -48,16 +49,21 @@ from .models import (
 )
 from .tw_universe import tw_universe_name_map
 from .universe.fr_universe import fr_universe_name_map
-from .universe.de_universe import de_universe_name_map
-from .universe.be_universe import be_universe_name_map
-from .universe.nl_universe import nl_universe_name_map
-from .universe.it_universe import it_universe_name_map
+from .universe.de_universe import de_universe_name_map, refresh_de_universe
+from .universe.be_universe import be_universe_name_map, refresh_be_universe
+from .universe.nl_universe import nl_universe_name_map, refresh_nl_universe
+from .universe.it_universe import it_universe_name_map, refresh_it_universe
 from .universe.es_universe import es_universe_name_map
 from .universe.sg_universe import sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
-from .universe.pl_universe import pl_universe_name_map
+from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
+from .universe.se_universe import se_universe_name_map
 from .pipeline import CollectionEvent
-from .registry import SourceRegistry, create_default_registry
+from .registry import (
+    SourceRegistry,
+    create_default_registry,
+    relevant_sources_for_market,
+)
 from .sources.companies_house import CompaniesHouseCompanyResolver
 from .sources.dart import DARTCompanyResolver
 from .sources.hkexnews import HKEXNewsCompanyResolver
@@ -70,6 +76,26 @@ from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
+
+
+def _warm_universe_on_first_add(
+    market: str,
+    loader: Callable[[], Mapping[str, Mapping[str, str]]],
+    refresher: Callable[[], Mapping[str, Any]],
+) -> Optional[Mapping[str, Mapping[str, str]]]:
+    """Load a universe and make one best-effort refresh when its cache is cold."""
+    universe = loader()
+    if universe:
+        return universe
+    try:
+        refresher()
+    except Exception:
+        LOGGER.warning(
+            "%s_universe refresh failed on add-company; continuing without fallback",
+            market,
+            exc_info=True,
+        )
+    return loader() or None
 
 
 def build_provider_catalog(
@@ -166,6 +192,7 @@ class WebApplication:
         )
         self.repository.set_unavailable_sources(self.unavailable_sources)
         self.repository.import_universe(load_universe(project_root / "config" / "universe.csv"))
+        self._ensure_active_sync_states()
         cache_path = project_root / ".cache" / "investment_monitor" / "company_tickers.json"
         try:
             self.resolver = SECCompanyResolver.from_environment(cache_path)
@@ -284,23 +311,51 @@ class WebApplication:
                 elif market == MARKET_AU:
                     name_fallback = au_universe_name_map()
                 elif market == MARKET_BE:
-                    name_fallback = be_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        be_universe_name_map,
+                        refresh_be_universe,
+                    )
                 elif market == MARKET_FR:
                     name_fallback = fr_universe_name_map()
                 elif market == MARKET_DE:
-                    name_fallback = de_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        de_universe_name_map,
+                        refresh_de_universe,
+                    )
                 elif market == MARKET_NL:
-                    name_fallback = nl_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        nl_universe_name_map,
+                        refresh_nl_universe,
+                    )
                 elif market == MARKET_IT:
-                    name_fallback = it_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        it_universe_name_map,
+                        refresh_it_universe,
+                    )
                 elif market == MARKET_ES:
                     name_fallback = es_universe_name_map()
+                    if not name_fallback:
+                        LOGGER.warning(
+                            "es_universe cache is cold on add-company; "
+                            "synchronous refresh skipped because ticker enrichment "
+                            "can take several minutes"
+                        )
                 elif market == MARKET_SG:
                     name_fallback = sg_universe_name_map()
                 elif market == MARKET_CH:
                     name_fallback = ch_universe_name_map()
                 elif market == MARKET_PL:
-                    name_fallback = pl_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        pl_universe_name_map,
+                        refresh_pl_universe,
+                    )
+                elif market == MARKET_SE:
+                    name_fallback = se_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -327,13 +382,27 @@ class WebApplication:
                     str(record["ticker"]) for record in result["added"]
                 )
                 if added_tickers:
-                    result["collection"] = self.collect_tickers(
-                        added_tickers,
-                        lookback_days=_environment_int(
-                            "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
-                        ),
-                        markets={ticker: market for ticker in added_tickers},
-                    )
+                    relevant_sources = self._relevant_sources(market)
+                    self.repository.ensure_source_ticker_sync_states(tuple(
+                        (source, ticker, market)
+                        for source in relevant_sources
+                        for ticker in added_tickers
+                    ))
+                    result["collection"] = _combine_collection_summaries(tuple(
+                        self.collect_tickers(
+                            added_tickers,
+                            lookback_days=_environment_int(
+                                "INITIAL_BACKFILL_DAYS",
+                                365,
+                                minimum=1,
+                                maximum=3650,
+                            ),
+                            markets={ticker: market for ticker in added_tickers},
+                            sources=(source,),
+                            initial_backfill=True,
+                        )
+                        for source in relevant_sources
+                    ))
                 return self._json(result, 201)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
@@ -405,6 +474,8 @@ class WebApplication:
         lookback_days: int,
         today: Optional[date] = None,
         markets: Optional[Mapping[str, str]] = None,
+        sources: Optional[Iterable[str]] = None,
+        initial_backfill: bool = False,
     ) -> Mapping[str, Any]:
         """Collect an explicit ticker set and return a JSON-safe summary."""
         normalized = tuple(dict.fromkeys(ticker.strip().upper() for ticker in tickers))
@@ -416,6 +487,7 @@ class WebApplication:
         }
         end_date = today or datetime.now(EASTERN).date()
         start_date = end_date - timedelta(days=lookback_days)
+        selected_sources = None if sources is None else tuple(sources)
         with self._collection_lock:
             try:
                 result = self._collection_runner(
@@ -424,11 +496,21 @@ class WebApplication:
                     start_date=start_date,
                     end_date=end_date,
                     markets=market_map,
+                    sources=selected_sources,
+                    initial_backfill=initial_backfill,
                 )
             except Exception as error:
                 message = str(error) or error.__class__.__name__
                 LOGGER.exception("Collection setup failed for %s", ", ".join(normalized))
-                self._record_setup_failures(normalized, message)
+                self._record_setup_failures(
+                    normalized,
+                    message,
+                    sources=selected_sources,
+                    markets=market_map,
+                    start_date=start_date,
+                    end_date=end_date,
+                    initial_backfill=initial_backfill,
+                )
                 return {
                     "status": "failure",
                     "tickers": list(normalized),
@@ -438,22 +520,44 @@ class WebApplication:
                     "inserted": 0,
                     "updated": 0,
                     "failures": [
-                        {"ticker": ticker, "message": message} for ticker in normalized
+                        {
+                            "source": "collection_setup",
+                            "ticker": ticker,
+                            "message": message,
+                        }
+                        for ticker in normalized
                     ],
                 }
         failures = [
-            {"ticker": failure.ticker, "message": failure.message}
+            {
+                "source": failure.source,
+                "ticker": failure.ticker,
+                "message": failure.message,
+                **({"feed": failure.feed} if failure.feed else {}),
+                **({"url": failure.url} if failure.url else {}),
+            }
             for failure in result.failures
         ]
-        status = (
-            "failure"
-            if failures and len(failures) == len(normalized)
-            else "partial"
-            if failures
-            else "success"
-            if result.items
-            else "empty"
-        )
+        event_statuses = tuple(event.status for event in result.events)
+        if event_statuses:
+            status = (
+                "partial"
+                if "partial" in event_statuses
+                or (
+                    "failure" in event_statuses
+                    and any(value != "failure" for value in event_statuses)
+                )
+                else "failure" if set(event_statuses) == {"failure"}
+                else "success" if "success" in event_statuses
+                else "empty"
+            )
+        else:
+            status = (
+                "partial" if result.items and failures
+                else "success" if result.items
+                else "failure" if failures
+                else "empty"
+            )
         return {
             "status": status,
             "tickers": list(normalized),
@@ -475,40 +579,48 @@ class WebApplication:
         active_companies = self.repository.active_companies()
         if not active_companies:
             return _empty_collection_summary(())
-        backfill_companies = set(
-            self.repository.active_companies_without_any_source_items(
-                self.enabled_sources
-            )
-        )
-        backfill_by_market: Dict[str, List[str]] = {}
-        incremental_by_market: Dict[str, List[str]] = {}
+        incremental: Dict[Tuple[str, str], List[str]] = {}
+        source_tickers = []
         for ticker, market in active_companies:
-            destination = (
-                backfill_by_market
-                if (ticker, market) in backfill_companies
-                else incremental_by_market
-            )
-            destination.setdefault(market, []).append(ticker)
+            for source in self._relevant_sources(market):
+                source_tickers.append((source, ticker, market))
+                incremental.setdefault((source, market), []).append(ticker)
+        self.repository.ensure_source_ticker_sync_states(tuple(source_tickers))
         summaries = []
-        for market, tickers in sorted(backfill_by_market.items()):
+        for (source, market), tickers in sorted(incremental.items()):
+            normalized_tickers = tuple(sorted(set(tickers)))
             summaries.append(self.collect_tickers(
-                tuple(sorted(set(tickers))),
-                lookback_days=_environment_int(
-                    "INITIAL_BACKFILL_DAYS", 365, minimum=1, maximum=3650
-                ),
-                today=today,
-                markets={ticker: market for ticker in set(tickers)},
-            ))
-        for market, tickers in sorted(incremental_by_market.items()):
-            summaries.append(self.collect_tickers(
-                tuple(sorted(set(tickers))),
+                normalized_tickers,
                 lookback_days=lookback_days,
                 today=today,
-                markets={ticker: market for ticker in set(tickers)},
+                markets={ticker: market for ticker in normalized_tickers},
+                sources=(source,),
+                initial_backfill=False,
             ))
         return _combine_collection_summaries(summaries)
 
-    def _record_setup_failures(self, tickers: Sequence[str], message: str) -> None:
+    def _relevant_sources(self, market: str) -> Tuple[str, ...]:
+        return relevant_sources_for_market(self.enabled_sources, market)
+
+    def _ensure_active_sync_states(self) -> None:
+        source_tickers = tuple(
+            (source, ticker, market)
+            for ticker, market in self.repository.active_companies()
+            for source in self._relevant_sources(market)
+        )
+        self.repository.ensure_source_ticker_sync_states(source_tickers)
+
+    def _record_setup_failures(
+        self,
+        tickers: Sequence[str],
+        message: str,
+        *,
+        sources: Optional[Sequence[str]] = None,
+        markets: Optional[Mapping[str, str]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        initial_backfill: bool = False,
+    ) -> None:
         occurred_at = datetime.now(timezone.utc)
         events = tuple(
             CollectionEvent(
@@ -523,8 +635,15 @@ class WebApplication:
                 records_updated=0,
                 duplicate_records=0,
                 error_message=message,
+                market=str((markets or {}).get(ticker) or MARKET_US),
+                requested_start_date=start_date,
+                requested_end_date=end_date,
+                effective_start_date=start_date,
+                effective_end_date=end_date,
+                coverage_kind="unknown",
+                initial_backfill=initial_backfill,
             )
-            for source in self.enabled_sources
+            for source in (sources if sources is not None else self.enabled_sources)
             for ticker in tickers
         )
         if events:
@@ -585,6 +704,10 @@ class WebApplication:
             return None
         if market == MARKET_PL:
             # PL stays unmapped via SEC; disclosure matches by ISIN/name
+            # from the universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_SE:
+            # SE stays unmapped via SEC; disclosure matches by ISIN/name
             # from the universe, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:

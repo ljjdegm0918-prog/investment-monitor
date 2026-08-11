@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -67,6 +67,8 @@ SOURCE_LABELS = {
     "google_news_fr": "Google News (FR)",
     "yahoo_pl": "Yahoo Finance PL",
     "google_news_pl": "Google News (PL)",
+    "yahoo_se": "Yahoo Finance SE",
+    "google_news_se": "Google News (SE)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -109,6 +111,8 @@ PROVIDER_LABELS = {
     "google_news_fr": "Google News (FR)",
     "yahoo_pl": "Yahoo Finance PL",
     "google_news_pl": "Google News (PL)",
+    "yahoo_se": "Yahoo Finance SE",
+    "google_news_se": "Google News (SE)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -154,6 +158,70 @@ CONTENT_TYPE_LABELS = (
     ("Community", "community"),
     ("Research", "research"),
 )
+
+CONNECTOR_REGIONS = {
+    "sec": ("United States",),
+    "news": ("United States",),
+    "dart": ("Korea",),
+    "kind": ("Korea",),
+    "naver_news": ("Korea",),
+    "hankyung": ("Korea",),
+    "thebell": ("Korea",),
+    "companies_house": ("United Kingdom",),
+    "investegate": ("United Kingdom",),
+    "yahoo_uk": ("United Kingdom",),
+    "hkexnews": ("Hong Kong",),
+    "hkex_di": ("Hong Kong",),
+    "yahoo_hk": ("Hong Kong",),
+    "yahoo_ca": ("Canada",),
+    "google_news_ca": ("Canada",),
+    "sedar_plus": ("Canada",),
+    "cse_filings": ("Canada",),
+    "neo_filings": ("Canada",),
+    "twse_material": ("Taiwan",),
+    "tpex_material": ("Taiwan",),
+    "yahoo_tw": ("Taiwan",),
+    "google_news_tw": ("Taiwan",),
+    "asx_announcements": ("Australia",),
+    "yahoo_au": ("Australia",),
+    "google_news_au": ("Australia",),
+    "amf_oam": ("France",),
+    "yahoo_fr": ("France",),
+    "google_news_fr": ("France",),
+    "eqs_dgap": ("Germany",),
+    "de_community": ("Germany",),
+    "yahoo_de": ("Germany",),
+    "google_news_de": ("Germany",),
+    "eqs_nl": ("Netherlands",),
+    "yahoo_nl": ("Netherlands",),
+    "google_news_nl": ("Netherlands",),
+    "eqs_it": ("Italy",),
+    "yahoo_it": ("Italy",),
+    "google_news_it": ("Italy",),
+    "cnmv_hr": ("Spain",),
+    "bme_relevant_facts": ("Spain",),
+    "yahoo_es": ("Spain",),
+    "google_news_es": ("Spain",),
+    "sgx_announcements": ("Singapore",),
+    "yahoo_sg": ("Singapore",),
+    "google_news_sg": ("Singapore",),
+    "fsma_stori": ("Belgium",),
+    "be_second_disclosure": ("Belgium",),
+    "yahoo_be": ("Belgium",),
+    "google_news_be": ("Belgium",),
+    "eqs_ch": ("Switzerland",),
+    "six_official_notices": ("Switzerland",),
+    "yahoo_ch": ("Switzerland",),
+    "google_news_ch": ("Switzerland",),
+    "gpw_espi": ("Poland",),
+    "yahoo_pl": ("Poland",),
+    "google_news_pl": ("Poland",),
+    "fi_oam": ("Sweden",),
+    "yahoo_se": ("Sweden",),
+    "google_news_se": ("Sweden",),
+    "tdnet_public_web": ("Japan",),
+    "edinet": ("Japan",),
+}
 
 
 @dataclass(frozen=True)
@@ -236,6 +304,11 @@ class WebRepository:
         self._database_path = database_path
         self._allowed_sources = tuple(allowed_sources)
         self._source_catalog = self._complete_source_catalog(known_sources)
+        self._connector_catalog = (
+            tuple(known_sources)
+            if known_sources is not None
+            else self._source_catalog
+        )
         self._implemented_sources = tuple(
             implemented_sources if implemented_sources is not None else self._allowed_sources
         )
@@ -486,6 +559,53 @@ class WebRepository:
             for row in rows
         )
 
+    def ensure_source_ticker_sync_states(
+        self,
+        source_tickers: Sequence[Tuple[str, str, str]],
+    ) -> None:
+        """Create pending state rows without scheduling historical work."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT OR IGNORE INTO source_ticker_sync_state (
+                    source, ticker, market, initial_status,
+                    coverage_kind, updated_at
+                ) VALUES (?, ?, ?, 'pending', 'unknown', ?)
+                """,
+                (
+                    (str(source), str(ticker), str(market), now)
+                    for source, ticker, market in source_tickers
+                ),
+            )
+
+    def source_ticker_sync_states(
+        self,
+        source: Optional[str] = None,
+        ticker: Optional[str] = None,
+        market: Optional[str] = None,
+    ) -> Tuple[Mapping[str, Any], ...]:
+        """Return durable initial/incremental state for source-ticker pairs."""
+        conditions: List[str] = []
+        parameters: List[str] = []
+        for column, value in (
+            ("source", source), ("ticker", ticker), ("market", market)
+        ):
+            if value is not None:
+                conditions.append(f"{column} = ?")
+                parameters.append(str(value))
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM source_ticker_sync_state "
+                f"{where} ORDER BY source, ticker, market",
+                parameters,
+            ).fetchall()
+        return tuple({
+            **dict(row),
+            "needs_backfill": str(row["initial_status"]) != "complete",
+        } for row in rows)
+
     def active_tickers_without_source_items(self, source: str) -> Tuple[str, ...]:
         """Return active tickers that have never stored an item from a source."""
         return tuple(
@@ -596,6 +716,10 @@ class WebRepository:
         if market == MARKET_PL:
             tickers = tuple(
                 dict.fromkeys(normalize_pl_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_SE:
+            tickers = tuple(
+                dict.fromkeys(normalize_se_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -940,14 +1064,8 @@ class WebRepository:
         current_time = now or datetime.now(timezone.utc)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=timezone.utc)
-        coverage = {
-            "sec": ("United States",),
-            "news": ("United States",),
-            "tdnet_public_web": ("Japan",),
-            "edinet": ("Japan",),
-        }
         records: List[Mapping[str, Any]] = []
-        for source in self._source_catalog:
+        for source in self._connector_catalog:
             if source.name.startswith("mock"):
                 continue
             run_row, failure_row = self._source_run_status(source.name)
@@ -959,7 +1077,7 @@ class WebRepository:
             latest_item = item_row["latest"] if item_row else None
             latest_success = (
                 (run_row["finished_at"] or run_row["started_at"])
-                if run_row and run_row["status"] in {"success", "partial"}
+                if run_row and run_row["status"] in {"success", "partial", "empty"}
                 else latest_item
             )
             is_stale = bool(
@@ -987,7 +1105,7 @@ class WebRepository:
                 "name": source.name,
                 "provider": PROVIDER_LABELS.get(source.name, source.label),
                 "type": _display_source_type(source.source_type),
-                "regions": list(coverage.get(source.name, ())),
+                "regions": list(CONNECTOR_REGIONS.get(source.name, ())),
                 "enabled": enabled,
                 "implemented": implemented,
                 "status": status,
@@ -1047,7 +1165,7 @@ class WebRepository:
                 SELECT MAX(finished_at) AS latest
                 FROM ingestion_runs
                 WHERE source IN ({placeholders})
-                  AND status IN ('success', 'partial')
+                  AND status IN ('success', 'partial', 'empty')
                 """,
                 parameters,
             ).fetchone()
@@ -1329,8 +1447,20 @@ class WebRepository:
             ]
         return {"runs": runs, "logs": logs}
 
-    def record_collection_events(self, events: Sequence[Any]) -> None:
-        """Persist completed pipeline events without coupling the pipeline to SQLite."""
+    def record_collection_events(
+        self,
+        events: Sequence[Any],
+        state_targets: Optional[
+            Mapping[str, Sequence[Tuple[str, str]]]
+        ] = None,
+    ) -> None:
+        """Persist events and update per-ticker state in the same transaction.
+
+        ``state_targets`` is only needed by source-wide connectors whose
+        truthful ingestion event keeps the aggregate ``ticker='*'`` shape.
+        It expands that aggregate outcome into state rows without inventing
+        additional ingestion events or duplicating collection metrics.
+        """
         grouped: Dict[str, List[Any]] = {}
         for event in events:
             grouped.setdefault(str(event.source), []).append(event)
@@ -1339,19 +1469,24 @@ class WebRepository:
                 failures = [
                     event for event in source_events if event.status == "failure"
                 ]
+                partial = [
+                    event for event in source_events if event.status == "partial"
+                ]
                 successful = [
-                    event for event in source_events if event.status != "failure"
+                    event
+                    for event in source_events
+                    if event.status in {"success", "empty"}
                 ]
                 status = (
-                    "failure"
-                    if not successful
-                    else "partial"
-                    if failures
+                    "partial" if partial or (failures and successful)
+                    else "failure" if failures
                     else "success"
+                    if any(event.status == "success" for event in source_events)
+                    else "empty"
                 )
                 error_summary = "; ".join(
                     f"{event.ticker}: {event.error_message}"
-                    for event in failures
+                    for event in failures + partial
                 ) or None
                 cursor = connection.execute(
                     """
@@ -1373,7 +1508,7 @@ class WebRepository:
                         status,
                         len(source_events),
                         len(successful),
-                        len(failures),
+                        len(failures) + len(partial),
                         sum(event.records_read for event in source_events),
                         sum(
                             getattr(
@@ -1420,6 +1555,98 @@ class WebRepository:
                         for event in source_events
                     ),
                 )
+                for event in source_events:
+                    self._upsert_source_ticker_sync_state(connection, event)
+                    if str(getattr(event, "ticker", "")) == "*":
+                        for ticker, market in tuple(
+                            (state_targets or {}).get(source, ())
+                        ):
+                            self._upsert_source_ticker_sync_state(
+                                connection,
+                                event,
+                                ticker_override=ticker,
+                                market_override=market,
+                            )
+
+    @staticmethod
+    def _upsert_source_ticker_sync_state(
+        connection: sqlite3.Connection,
+        event: Any,
+        *,
+        ticker_override: Optional[str] = None,
+        market_override: Optional[str] = None,
+    ) -> None:
+        ticker = str(
+            ticker_override
+            if ticker_override is not None
+            else getattr(event, "ticker", "") or ""
+        )
+        market = str(
+            market_override
+            if market_override is not None
+            else getattr(event, "market", "unknown") or "unknown"
+        )
+        if not ticker or ticker == "*" or market == "unknown":
+            return
+        status = str(getattr(event, "status", "failure") or "failure")
+        initial_backfill = bool(getattr(event, "initial_backfill", False))
+        initial_status = (
+            "complete" if status in {"success", "empty"}
+            else "partial" if status == "partial"
+            else "failure"
+        ) if initial_backfill else "pending"
+        finished_at = event.finished_at.isoformat()
+        last_success_at = (
+            finished_at if status in {"success", "empty", "partial"} else None
+        )
+        last_error = (
+            str(event.error_message or "") or None
+            if status in {"partial", "failure"}
+            else None
+        )
+        date_value = lambda value: value.isoformat() if value is not None else None
+        connection.execute(
+            """
+            INSERT INTO source_ticker_sync_state (
+                source, ticker, market, initial_status, last_status,
+                coverage_kind, requested_start_date, requested_end_date,
+                effective_start_date, effective_end_date, last_attempt_at,
+                last_success_at, last_error, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source, ticker, market) DO UPDATE SET
+                initial_status = CASE
+                    WHEN ? THEN excluded.initial_status
+                    ELSE source_ticker_sync_state.initial_status
+                END,
+                last_status = excluded.last_status,
+                coverage_kind = CASE
+                    WHEN excluded.coverage_kind = 'unknown'
+                    THEN source_ticker_sync_state.coverage_kind
+                    ELSE excluded.coverage_kind
+                END,
+                requested_start_date = excluded.requested_start_date,
+                requested_end_date = excluded.requested_end_date,
+                effective_start_date = excluded.effective_start_date,
+                effective_end_date = excluded.effective_end_date,
+                last_attempt_at = excluded.last_attempt_at,
+                last_success_at = COALESCE(
+                    excluded.last_success_at,
+                    source_ticker_sync_state.last_success_at
+                ),
+                last_error = excluded.last_error,
+                updated_at = excluded.updated_at
+            """,
+            (
+                str(event.source), ticker, market, initial_status, status,
+                str(getattr(event, "coverage_kind", "unknown") or "unknown"),
+                date_value(getattr(event, "requested_start_date", None)),
+                date_value(getattr(event, "requested_end_date", None)),
+                date_value(getattr(event, "effective_start_date", None)),
+                date_value(getattr(event, "effective_end_date", None)),
+                finished_at, last_success_at, last_error, finished_at,
+                initial_backfill,
+            ),
+        )
 
     def setting(self, key: str, default: str) -> str:
         with self._connect() as connection:
@@ -1934,6 +2161,13 @@ def _market_region(market: str) -> str:
         "be": "Belgium",
         "fr": "France",
         "de": "Germany",
+        "nl": "Netherlands",
+        "it": "Italy",
+        "es": "Spain",
+        "sg": "Singapore",
+        "ch": "Switzerland",
+        "pl": "Poland",
+        "se": "Sweden",
     }.get(market, "Unavailable")
 
 
@@ -2383,6 +2617,46 @@ def normalize_pl_ticker(ticker: str) -> str:
         changed = False
         for separator in _PL_TICKER_SEPARATORS:
             for suffix in _PL_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_SE_TICKER_SUFFIXES = ("ST", "STO", "OMX")
+_SE_TICKER_SEPARATORS = (".", " ", "-")
+_SE_ISIN_PATTERN = re.compile(r"SE[0-9A-Z]{10}")
+
+
+def normalize_se_ticker(ticker: str) -> str:
+    """Normalize a Swedish (Nasdaq Stockholm) symbol.
+
+    Accepts plain symbols and the common Stockholm exchange suffixes used
+    by data providers (``ERIC-B.ST``, ``VOLV-B.STO``, ``ATB-OMX``; space
+    or dash separators are tolerated too, and stacked suffixes collapse to
+    the root). The exchange suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is.
+    Share-class suffixes are part of the mnemonic and are never treated as
+    exchange suffixes: ``ERIC-B`` / ``VOLV-B`` / ``SEB-A`` stay intact.
+    Suffix words without a separator (``ST``, ``STO``, ``OMX``) are never
+    erased. When the input contains a Swedish ISIN (``SE`` followed by 10
+    alphanumeric characters, e.g. ``SE0000108656`` for Ericsson B), the
+    ISIN is extracted and returned instead, since an ISIN is a stable
+    identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _SE_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _SE_TICKER_SEPARATORS:
+            for suffix in _SE_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

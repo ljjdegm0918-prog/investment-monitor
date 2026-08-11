@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from investment_monitor.application import ConfiguredCollectionResult
+from investment_monitor.pipeline import CollectionFailure
 from investment_monitor.web import DailyCollectionScheduler, WebApplication
 from investment_monitor.models import InformationItem
 from investment_monitor.repository import SaveResult
@@ -712,6 +713,151 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(added["exchange"], "LSE")
         self.assertEqual(added["mapping_status"], "unmapped")
 
+    def test_cold_supported_universe_refreshes_and_backfills_first_add(self) -> None:
+        cases = (
+            ("de", "SAP", "SAP SE", "Xetra", "de"),
+            ("nl", "ASML", "ASML Holding NV", "Euronext Amsterdam", "nl"),
+            ("it", "ENI", "Eni SpA", "Euronext Milan", "it"),
+            ("be", "ABI", "Anheuser-Busch InBev SA/NV", "Euronext Brussels", "be"),
+            ("pl", "PKO", "PKO Bank Polski SA", "GPW Main Market", "pl"),
+        )
+        for market, ticker, name, exchange, module_name in cases:
+            with self.subTest(market=market):
+                fallback = {
+                    ticker: {
+                        "name": name,
+                        "exchange": exchange,
+                        "board": exchange,
+                        "isin": f"TEST-{market.upper()}-{ticker}",
+                    }
+                }
+                with patch(
+                    f"investment_monitor.web.{module_name}_universe_name_map",
+                    side_effect=({}, fallback),
+                ) as load_mock, patch(
+                    f"investment_monitor.web.refresh_{module_name}_universe"
+                ) as refresh_mock:
+                    response = self.application.handle(
+                        "POST",
+                        "/api/companies/batch",
+                        json.dumps(
+                            {
+                                "tickers": ticker,
+                                "lists": ["holdings"],
+                                "market": market,
+                            }
+                        ).encode(),
+                    )
+                    payload = self.payload(response)
+
+                self.assertEqual(response.status, 201)
+                self.assertEqual(payload["added"][0]["name"], name)
+                self.assertEqual(payload["added"][0]["exchange"], exchange)
+                refresh_mock.assert_called_once_with()
+                self.assertEqual(load_mock.call_count, 2)
+
+    def test_failed_supported_universe_refresh_degrades_to_unmapped_add(self) -> None:
+        cases = (
+            ("de", "SAP"),
+            ("nl", "ASML"),
+            ("it", "ENI"),
+            ("be", "ABI"),
+            ("pl", "PKO"),
+        )
+        for market, ticker in cases:
+            with self.subTest(market=market):
+                with patch(
+                    f"investment_monitor.web.{market}_universe_name_map",
+                    return_value={},
+                ) as load_mock, patch(
+                    f"investment_monitor.web.refresh_{market}_universe",
+                    side_effect=RuntimeError("synthetic universe outage"),
+                ) as refresh_mock:
+                    with self.assertLogs(
+                        "investment_monitor.web", level="WARNING"
+                    ) as captured_logs:
+                        response = self.application.handle(
+                            "POST",
+                            "/api/companies/batch",
+                            json.dumps(
+                                {
+                                    "tickers": ticker,
+                                    "lists": ["planned"],
+                                    "market": market,
+                                }
+                            ).encode(),
+                        )
+                    payload = self.payload(response)
+
+                self.assertEqual(response.status, 201)
+                self.assertEqual(payload["added"][0]["ticker"], ticker)
+                self.assertEqual(payload["added"][0]["mapping_status"], "unmapped")
+                refresh_mock.assert_called_once_with()
+                self.assertEqual(load_mock.call_count, 2)
+                self.assertIn(
+                    f"{market}_universe refresh failed on add-company",
+                    "\n".join(captured_logs.output),
+                )
+
+    def test_es_add_skips_slow_synchronous_universe_refresh(self) -> None:
+        with patch(
+            "investment_monitor.web.es_universe_name_map",
+            return_value={},
+        ), patch(
+            "investment_monitor.universe.es_universe.refresh_es_universe"
+        ) as refresh_mock:
+            with self.assertLogs(
+                "investment_monitor.web", level="WARNING"
+            ) as captured_logs:
+                response = self.application.handle(
+                    "POST",
+                    "/api/companies/batch",
+                    json.dumps(
+                        {
+                            "tickers": "SAN",
+                            "lists": ["holdings"],
+                            "market": "es",
+                        }
+                    ).encode(),
+                )
+
+        self.assertEqual(response.status, 201)
+        refresh_mock.assert_not_called()
+        self.assertIn(
+            "synchronous refresh skipped",
+            "\n".join(captured_logs.output),
+        )
+
+    def test_boundary_stub_markets_never_attempt_universe_refresh_on_add(self) -> None:
+        cases = (
+            ("sg", "D05"),
+            ("ch", "NESN"),
+            ("se", "ERIC-B"),
+        )
+        for market, ticker in cases:
+            with self.subTest(market=market):
+                with patch(
+                    f"investment_monitor.web.{market}_universe_name_map",
+                    return_value={},
+                ), patch(
+                    f"investment_monitor.universe.{market}_universe."
+                    f"refresh_{market}_universe"
+                ) as refresh_mock:
+                    response = self.application.handle(
+                        "POST",
+                        "/api/companies/batch",
+                        json.dumps(
+                            {
+                                "tickers": ticker,
+                                "lists": ["holdings"],
+                                "market": market,
+                            }
+                        ).encode(),
+                    )
+
+                self.assertEqual(response.status, 201)
+                refresh_mock.assert_not_called()
+
     def test_bootstrap_list_unread_counts_only_today(self) -> None:
         self.items.save([
             InformationItem(
@@ -883,6 +1029,83 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(feed["pagination"]["total"], 1)
         self.assertEqual(feed["items"][0]["external_id"], "0001045810-26-000060")
 
+    def test_collection_with_items_and_failures_is_partial_and_keeps_source(self) -> None:
+        item = InformationItem(
+            source="yahoo_de",
+            source_type="news",
+            external_id="sap-news-1",
+            tickers=("SAP",),
+            issuer="SAP SE",
+            published_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
+            title="SAP publishes an update",
+            document_type="news",
+            url="https://example.test/sap-news-1",
+            collected_at=datetime(2026, 8, 10, tzinfo=timezone.utc),
+            raw_metadata={},
+            market="de",
+        )
+
+        def partial_runner(**kwargs):
+            return ConfiguredCollectionResult(
+                items=(item,),
+                failures=(CollectionFailure(
+                    source="eqs_dgap",
+                    ticker="SAP",
+                    message="no_universe_isin",
+                ),),
+                save_result=SaveResult(inserted=1),
+                database_path=self.project_root / "data" / "web.sqlite3",
+                stored_count=1,
+            )
+
+        application = WebApplication(
+            self.project_root,
+            collection_runner=partial_runner,
+        )
+
+        result = application.collect_tickers(
+            ("SAP",),
+            lookback_days=30,
+            markets={"SAP": "de"},
+        )
+
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["records_fetched"], 1)
+        self.assertEqual(result["failures"], [{
+            "source": "eqs_dgap",
+            "ticker": "SAP",
+            "message": "no_universe_isin",
+        }])
+
+    def test_collection_without_items_and_any_failure_is_failure(self) -> None:
+        def failed_runner(**kwargs):
+            return ConfiguredCollectionResult(
+                items=(),
+                failures=(CollectionFailure(
+                    source="eqs_dgap",
+                    ticker="SAP",
+                    message="no_universe_isin",
+                ),),
+                save_result=SaveResult(),
+                database_path=self.project_root / "data" / "web.sqlite3",
+                stored_count=0,
+            )
+
+        application = WebApplication(
+            self.project_root,
+            collection_runner=failed_runner,
+        )
+
+        result = application.collect_tickers(
+            ("SAP", "ASML"),
+            lookback_days=30,
+            markets={"SAP": "de", "ASML": "nl"},
+        )
+
+        self.assertEqual(result["status"], "failure")
+        self.assertEqual(result["records_fetched"], 0)
+        self.assertEqual(result["failures"][0]["source"], "eqs_dgap")
+
     def test_daily_scheduler_collects_all_active_database_tickers_once_per_day(self) -> None:
         self.application.repository.add_companies_batch(
             "NVDA", ("watchlist",), self.application.resolver
@@ -912,20 +1135,19 @@ class WebApplicationTests(unittest.TestCase):
 
         self.assertTrue(first_run)
         self.assertFalse(second_run)
-        self.assertEqual(len(self.collection_calls), 2)
-        calls_by_ticker = {
-            call["tickers"]: call for call in self.collection_calls
-        }
-        self.assertEqual(
-            calls_by_ticker[("NVDA",)]["start_date"], date(2025, 8, 3)
-        )
-        self.assertEqual(
-            calls_by_ticker[("AAPL",)]["start_date"], date(2026, 7, 27)
-        )
-        self.assertTrue(all(
-            call["end_date"] == date(2026, 8, 3)
+        # Ordinary scheduling is always incremental, including pending legacy
+        # state; it must not silently turn missing state into a 365-day call.
+        collected_tickers = [
+            ticker
             for call in self.collection_calls
-        ))
+            for ticker in call["tickers"]
+        ]
+        self.assertEqual(sorted(collected_tickers), ["AAPL", "NVDA"])
+        for call in self.collection_calls:
+            self.assertEqual(call["sources"], ("sec",))
+            self.assertFalse(call["initial_backfill"])
+            self.assertEqual(call["start_date"], date(2026, 7, 27))
+            self.assertEqual(call["end_date"], date(2026, 8, 3))
 
 
 if __name__ == "__main__":

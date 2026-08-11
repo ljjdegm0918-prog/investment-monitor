@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: ERIC-B.ST News</title>
+    <item>
+      <title>Ericsson redovisar rekordkvartal</title>
+      <link>https://se.finance.yahoo.com/news/ericb-110000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Ericsson publicerar sina kvartalssiffror.</description>
+    </item>
+    <item>
+      <title>Stockholmsbörsen stiger på teknikrally</title>
+      <link>https://se.finance.yahoo.com/news/ericb-110000602.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Teknikaktier lyfter index.</description>
+    </item>
+    <item>
+      <title>Gammal artikel utanför fönstret</title>
+      <link>https://se.finance.yahoo.com/news/ericb-110000603.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>För gammal artikel.</description>
+    </item>
+  </channel>
+</rss>

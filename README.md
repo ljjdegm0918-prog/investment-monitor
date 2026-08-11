@@ -366,6 +366,19 @@ sizes are never shrunk.
 
 PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings: `gpw_espi` pairs on its stable GPW report id (`geru_id`); the title fallback is source-scoped (source + ticker + Warsaw day + normalized title), so a hypothetical second PL disclosure source would never be cross-annotated by title. News: `yahoo_pl` ↔ `google_news_pl` pair across sources on ticker + Warsaw day + normalized title.
 
+### Sweden sources (SE)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `fi_oam` | filings | none | **Not wired (SE-1 spike A3, re-verified in SE-4)**: FI's public publication client (`marknadssok.fi.se/publiceringsklient`) only searches insider transactions (Insyn), not issuer announcements; Nasdaq Nordic company news is a Drupal SPA without a public JSON route (`webproxy/DataSubsidiesNews/GetNews.aspx` returns the SPA shell, `api.nasdaq.com` returns 404 for `.ST` symbols); the legacy `newsclient.omxgroup.com` disclosure search returns HTTP 500; EQS News returns empty records for every sampled Swedish ISIN (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B / Volvo Car-B, verified 2026-08-10). SE-4 re-check (2026-08-10) found no second free disclosure source: EQS still empty, the legacy Hugin host (`cws.huginonline.com`) exposes no stable public announcement API, and Nasdaq paid data products are not used. |
+| `se_universe` | Universe | None | **Boundary stub (SE-2 spike B2)**: Nasdaq Stockholm / First North Sweden directories are Drupal SPAs whose screener data route is not publicly reachable (`api.nasdaq.com/api/screener/shares` 404; `api.nasdaq.com/api/screener/stocks` returns zero rows for Stockholm exchange codes; `nasdaqomxnordic.com/screener/shares` returns the SPA shell). FI publishes no securities directory. `refresh_se_universe()` raises `SeUniverseError`; `load_se_universe()` / `se_universe_name_map()` / `search_se_universe()` read a manually placed cache if one ever exists. No OMXS30 hand-written seed and no Nasdaq paid data product. |
+| `yahoo_se` | News | None (key-free) | Yahoo Finance SE public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.ST&region=SE&lang=sv-SE`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ERIC-B.ST`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ERIC-B`), `.ST` is request-time only; share-class mnemonics like `ERIC-B` / `VOLV-B` are kept intact. |
+| `google_news_se` | News | None (key-free) | Google News SE RSS (`news.google.com/rss/search?q={ROOT}.ST&hl=sv&gl=SE&ceid=SE:sv`). Live verified 2026-08-10; results can be loosely related (an `ERIC-B.ST` query can include football items about a player named Eric Smith); public RSS may break without notice. |
+
+`market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for SE.
+
+SE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no SE disclosure connector is wired (SE-1 A3 / SE-4 D2). News: `yahoo_se` ↔ `google_news_se` pair across sources on ticker + Stockholm day + normalized title.
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |

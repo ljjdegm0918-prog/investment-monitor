@@ -219,6 +219,14 @@ sources:
     label: Google News (PL)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=pl, gl=PL); may be loosely related / break without notice
+  - name: yahoo_se
+    label: Yahoo Finance SE
+    source_type: news
+    enabled: true          # key-free public RSS mirror (sv-SE + en-US); may be loosely related / break without notice
+  - name: google_news_se
+    label: Google News (SE)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=sv, gl=SE); may be loosely related / break without notice
   # Switzerland second disclosure - deliberately not wired (CH-4):
   # SIX official notices are a React SPA without a public JSON list,
   # api.six-group.com routes are undocumented, and SIX equity-issuer news
@@ -237,6 +245,21 @@ sources:
     label: GPW ESPI/EBI
     source_type: filings
     enabled: true
+  # Sweden disclosure - deliberately not wired (SE-1 spike A3):
+  # FI's public publication client (marknadssok.fi.se/publiceringsklient)
+  # only covers insider transactions (Insyn), not issuer announcements;
+  # Nasdaq Nordic company news is a Drupal SPA without a public JSON route
+  # (webproxy GetNews returns the SPA shell; api.nasdaq.com returns 404 for
+  # .ST symbols); the legacy newsclient.omxgroup.com search is HTTP 500;
+  # EQS News API returns empty records for every sampled Swedish ISIN
+  # (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B /
+  # Volvo Car-B verified 2026-08-10). Nasdaq paid data products are not used.
+  # SE-4 re-verified 2026-08-10: still no second disclosure source (EQS
+  # empty; legacy Hugin host exposes no stable public announcement API).
+  - name: fi_oam
+    label: FI OAM (not wired)
+    source_type: filings
+    enabled: false
   - name: yahoo_be
     label: Yahoo Finance BE
     source_type: news

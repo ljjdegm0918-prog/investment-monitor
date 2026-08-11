@@ -6,6 +6,7 @@ import unittest
 
 from investment_monitor.config import SourceConfig
 from investment_monitor.models import InformationItem
+from investment_monitor.pipeline import CollectionEvent
 from investment_monitor.sqlite_repository import SQLiteInformationRepository
 from investment_monitor.web_repository import FeedFilters, WebRepository
 
@@ -60,6 +61,43 @@ def make_item(
     )
 
 
+def make_sync_event(
+    source: str,
+    ticker: str,
+    market: str,
+    status: str,
+    *,
+    initial_backfill: bool,
+    requested_start: date = date(2025, 8, 1),
+    requested_end: date = date(2026, 8, 1),
+    effective_start: date = date(2025, 8, 1),
+    effective_end: date = date(2026, 8, 1),
+    error: str = "",
+    coverage_kind: str = "complete_window",
+) -> CollectionEvent:
+    now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+    return CollectionEvent(
+        source=source,
+        ticker=ticker,
+        started_at=now,
+        finished_at=now,
+        status=status,
+        records_read=0,
+        records_written=0,
+        records_inserted=0,
+        records_updated=0,
+        duplicate_records=0,
+        error_message=error or None,
+        market=market,
+        requested_start_date=requested_start,
+        requested_end_date=requested_end,
+        effective_start_date=effective_start,
+        effective_end_date=effective_end,
+        coverage_kind=coverage_kind,
+        initial_backfill=initial_backfill,
+    )
+
+
 class WebRepositoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
@@ -111,6 +149,240 @@ class WebRepositoryTests(unittest.TestCase):
         self.assertNotIn("watchlist", {
             record["slug"] for record in self.repository.fixed_lists()
         })
+
+    def test_connector_statuses_report_new_market_regions(self) -> None:
+        expected = {
+            "eqs_dgap": "Germany",
+            "yahoo_de": "Germany",
+            "google_news_de": "Germany",
+            "eqs_nl": "Netherlands",
+            "yahoo_nl": "Netherlands",
+            "google_news_nl": "Netherlands",
+            "eqs_it": "Italy",
+            "yahoo_it": "Italy",
+            "google_news_it": "Italy",
+            "cnmv_hr": "Spain",
+            "bme_relevant_facts": "Spain",
+            "yahoo_es": "Spain",
+            "google_news_es": "Spain",
+            "sgx_announcements": "Singapore",
+            "yahoo_sg": "Singapore",
+            "google_news_sg": "Singapore",
+            "fsma_stori": "Belgium",
+            "be_second_disclosure": "Belgium",
+            "yahoo_be": "Belgium",
+            "google_news_be": "Belgium",
+            "eqs_ch": "Switzerland",
+            "six_official_notices": "Switzerland",
+            "yahoo_ch": "Switzerland",
+            "google_news_ch": "Switzerland",
+            "gpw_espi": "Poland",
+            "yahoo_pl": "Poland",
+            "google_news_pl": "Poland",
+            "fi_oam": "Sweden",
+            "yahoo_se": "Sweden",
+            "google_news_se": "Sweden",
+        }
+        sources = tuple(
+            SourceConfig(
+                name=name,
+                label=name,
+                source_type="filings" if name in {
+                    "eqs_dgap", "eqs_nl", "eqs_it", "cnmv_hr",
+                    "bme_relevant_facts", "sgx_announcements", "fsma_stori",
+                    "be_second_disclosure", "eqs_ch", "six_official_notices",
+                    "gpw_espi", "fi_oam",
+                } else "news",
+                enabled=True,
+            )
+            for name in expected
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=tuple(expected),
+            known_sources=sources,
+            implemented_sources=tuple(expected),
+        )
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses()
+        }
+
+        self.assertTrue(set(expected).issubset(statuses))
+        for name, region in expected.items():
+            with self.subTest(source=name):
+                self.assertEqual(statuses[name]["regions"], [region])
+
+    def test_sync_state_is_independent_per_source_ticker_and_market(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "news", "cnmv_hr", "bme_relevant_facts"),
+        )
+        repository.add_companies_batch(
+            "AAPL", ("holdings",), self.resolver, market="us"
+        )
+        repository.add_companies_batch(
+            "SAN", ("holdings",), None, market="es"
+        )
+        repository.ensure_source_ticker_sync_states((
+            ("sec", "AAPL", "us"),
+            ("news", "AAPL", "us"),
+            ("cnmv_hr", "SAN", "es"),
+            ("bme_relevant_facts", "SAN", "es"),
+        ))
+        self.items.save((
+            make_item(
+                "aapl-news-existing",
+                source="news",
+                source_type="news",
+            ),
+            InformationItem(
+                source="cnmv_hr",
+                source_type="regulatory_filing",
+                external_id="42390",
+                tickers=("SAN",),
+                issuer="BANCO SANTANDER, S.A.",
+                published_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                title="Santander disclosure",
+                document_type="hecho_relevante",
+                url="https://example.test/cnmv/42390",
+                collected_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                raw_metadata={},
+                market="es",
+            ),
+        ))
+        repository.record_collection_events((
+            make_sync_event("news", "AAPL", "us", "success", initial_backfill=True),
+            make_sync_event(
+                "cnmv_hr",
+                "SAN",
+                "es",
+                "success",
+                initial_backfill=True,
+                coverage_kind="feed_snapshot",
+            ),
+        ))
+
+        aapl = {
+            row["source"]: row
+            for row in repository.source_ticker_sync_states(
+                ticker="AAPL", market="us"
+            )
+        }
+        san = {
+            row["source"]: row
+            for row in repository.source_ticker_sync_states(
+                ticker="SAN", market="es"
+            )
+        }
+
+        self.assertEqual(set(aapl), {"sec", "news"})
+        self.assertEqual(aapl["news"]["initial_status"], "complete")
+        self.assertFalse(aapl["news"]["needs_backfill"])
+        self.assertEqual(aapl["sec"]["initial_status"], "pending")
+        self.assertTrue(aapl["sec"]["needs_backfill"])
+        self.assertEqual(set(san), {"cnmv_hr", "bme_relevant_facts"})
+        self.assertEqual(san["cnmv_hr"]["initial_status"], "complete")
+        self.assertFalse(san["cnmv_hr"]["needs_backfill"])
+        self.assertEqual(san["bme_relevant_facts"]["initial_status"], "pending")
+        self.assertTrue(san["bme_relevant_facts"]["needs_backfill"])
+
+    def test_initial_backfill_state_transitions_and_window_audit(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "news", "cnmv_hr", "bme_relevant_facts"),
+        )
+        repository.record_collection_events((
+            make_sync_event("sec", "AAPL", "us", "success", initial_backfill=True),
+            make_sync_event("news", "MSFT", "us", "empty", initial_backfill=True),
+            make_sync_event(
+                "cnmv_hr",
+                "SAN",
+                "es",
+                "partial",
+                initial_backfill=True,
+                effective_start=date(2026, 7, 2),
+                error="feed=oir fixture blocked",
+                coverage_kind="feed_snapshot",
+            ),
+            make_sync_event(
+                "bme_relevant_facts",
+                "SAN",
+                "es",
+                "failure",
+                initial_backfill=True,
+                effective_start=date(2026, 7, 2),
+                error="fixture blocked",
+                coverage_kind="bounded_window",
+            ),
+        ))
+        rows = {
+            (row["source"], row["ticker"], row["market"]): row
+            for row in repository.source_ticker_sync_states()
+        }
+
+        self.assertEqual(rows[("sec", "AAPL", "us")]["initial_status"], "complete")
+        self.assertEqual(rows[("news", "MSFT", "us")]["initial_status"], "complete")
+        self.assertFalse(rows[("sec", "AAPL", "us")]["needs_backfill"])
+        self.assertFalse(rows[("news", "MSFT", "us")]["needs_backfill"])
+        self.assertEqual(rows[("cnmv_hr", "SAN", "es")]["initial_status"], "partial")
+        self.assertEqual(
+            rows[("bme_relevant_facts", "SAN", "es")]["initial_status"],
+            "failure",
+        )
+        self.assertTrue(rows[("cnmv_hr", "SAN", "es")]["needs_backfill"])
+        self.assertTrue(rows[("bme_relevant_facts", "SAN", "es")]["needs_backfill"])
+        audited = rows[("cnmv_hr", "SAN", "es")]
+        self.assertEqual(audited["last_status"], "partial")
+        self.assertEqual(audited["coverage_kind"], "feed_snapshot")
+        self.assertEqual(audited["requested_start_date"], "2025-08-01")
+        self.assertEqual(audited["requested_end_date"], "2026-08-01")
+        self.assertEqual(audited["effective_start_date"], "2026-07-02")
+        self.assertEqual(audited["effective_end_date"], "2026-08-01")
+        self.assertIsNotNone(audited["last_attempt_at"])
+        # Partial means at least one sub-source succeeded, so this is a
+        # successful (but incomplete) attempt timestamp.
+        self.assertIsNotNone(audited["last_success_at"])
+        self.assertIn("oir", audited["last_error"])
+        self.assertIsNotNone(audited["updated_at"])
+
+    def test_incremental_success_never_completes_pending_initial_backfill(self) -> None:
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec",),
+        )
+        repository.record_collection_events((
+            make_sync_event(
+                "sec",
+                "AAPL",
+                "us",
+                "success",
+                initial_backfill=False,
+                requested_start=date(2026, 7, 25),
+                effective_start=date(2026, 7, 25),
+                coverage_kind="complete_window",
+            ),
+        ))
+
+        pending = repository.source_ticker_sync_states(
+            source="sec", ticker="AAPL", market="us"
+        )[0]
+
+        self.assertEqual(pending["initial_status"], "pending")
+        self.assertTrue(pending["needs_backfill"])
+        self.assertEqual(pending["last_status"], "success")
+        self.assertEqual(pending["coverage_kind"], "complete_window")
+        self.assertIsNotNone(pending["last_success_at"])
+
+        repository.record_collection_events((
+            make_sync_event("sec", "AAPL", "us", "empty", initial_backfill=True),
+        ))
+        complete = repository.source_ticker_sync_states(
+            source="sec", ticker="AAPL", market="us"
+        )[0]
+        self.assertEqual(complete["initial_status"], "complete")
+        self.assertFalse(complete["needs_backfill"])
 
     def test_company_search_matches_recorded_exchange(self) -> None:
         self.add_company("AAPL", "holdings")

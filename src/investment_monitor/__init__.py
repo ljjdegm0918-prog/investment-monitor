@@ -201,6 +201,8 @@ from .sources.cnmv_hr import (
     CnmvHrConnector,
     CnmvHrDataError,
     CnmvHrError,
+    CnmvHrFeedOutcome,
+    CnmvHrFetchResult,
     CnmvHrRequestError,
 )
 from .sources.bme_relevant_facts import (
@@ -322,6 +324,18 @@ from .sources.pl_news import (
     YahooPlNewsError,
     YahooPlNewsRequestError,
 )
+from .sources.se_news import (
+    GoogleSeNewsClient,
+    GoogleSeNewsConnector,
+    GoogleSeNewsDataError,
+    GoogleSeNewsError,
+    GoogleSeNewsRequestError,
+    YahooSeNewsClient,
+    YahooSeNewsConnector,
+    YahooSeNewsDataError,
+    YahooSeNewsError,
+    YahooSeNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
@@ -416,6 +430,13 @@ from .universe.pl_universe import (
     refresh_pl_universe,
     search_pl_universe,
 )
+from .universe.se_universe import (
+    SeUniverseError,
+    load_se_universe,
+    refresh_se_universe,
+    search_se_universe,
+    se_universe_name_map,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -481,6 +502,7 @@ from .models import (
     MARKET_SG,
     MARKET_CH,
     MARKET_PL,
+    MARKET_SE,
     MARKET_IT,
     MARKET_NL,
     MARKET_UNKNOWN,
@@ -503,6 +525,14 @@ __all__ = [
     "ConfigurationError",
     "ConfiguredCollectionResult",
     "ConnectorUnavailableError",
+    "CnmvHrClient",
+    "CnmvHrCompanyMatcher",
+    "CnmvHrConnector",
+    "CnmvHrDataError",
+    "CnmvHrError",
+    "CnmvHrFeedOutcome",
+    "CnmvHrFetchResult",
+    "CnmvHrRequestError",
     "AsxAnnouncementsClient",
     "AsxAnnouncementsConnector",
     "AsxAnnouncementsDataError",
@@ -561,6 +591,7 @@ __all__ = [
     "SgUniverseError",
     "ChUniverseError",
     "PlUniverseError",
+    "SeUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -646,6 +677,7 @@ __all__ = [
     "MARKET_SG",
     "MARKET_CH",
     "MARKET_PL",
+    "MARKET_SE",
     "MARKET_IT",
     "MARKET_NL",
     "MARKET_UNKNOWN",
