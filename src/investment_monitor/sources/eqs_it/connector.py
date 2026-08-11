@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_IT
+from ...provenance import build_raw_provenance
 from ...universe.it_universe import it_universe_name_map
 from ...web_repository import normalize_it_ticker
 from .client import (
@@ -118,6 +119,30 @@ class EqsItConnector:
                         url=str(record["url"]),
                         collected_at=collected_at,
                         raw_metadata={
+                            **build_raw_provenance(
+                                official_source_id=str(
+                                    record.get("locale_id") or ""
+                                ),
+                                official_source_url=str(record["url"]),
+                                retrieval_url=str(
+                                    record.get("retrieval_url") or ""
+                                ),
+                                raw_payload=record.get("raw_payload") or record,
+                                raw_payload_format="json",
+                                classification_code=str(
+                                    record.get("category_code") or ""
+                                ),
+                                classification_label=str(
+                                    record.get("category") or ""
+                                ),
+                                published_at_raw=str(
+                                    record.get("published_at_raw") or ""
+                                ),
+                                published_timezone=str(
+                                    record.get("published_timezone")
+                                    or "unknown"
+                                ),
+                            ),
                             "provider": "eqs_news",
                             "stock_code": code,
                             "isin": isin,

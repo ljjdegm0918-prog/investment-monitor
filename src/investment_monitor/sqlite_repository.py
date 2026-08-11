@@ -150,7 +150,11 @@ class SQLiteInformationRepository:
         updated = 0
         with self._connect() as connection:
             for item in items:
-                if item.source == "tdnet_public_web":
+                has_v1_provenance = (
+                    item.source_type == "regulatory_filing"
+                    and item.raw_metadata.get("provenance_schema_version") == 1
+                )
+                if item.source == "tdnet_public_web" or has_v1_provenance:
                     _save_immutable_version(connection, item)
                 existing_row = connection.execute(
                     """
@@ -426,7 +430,7 @@ def _save_immutable_version(
     connection: sqlite3.Connection,
     item: InformationItem,
 ) -> None:
-    """Keep every distinct TDnet observation without rewriting prior payloads."""
+    """Keep every distinct official raw observation without rewriting history."""
     payload = {
         "source": item.source,
         "source_type": item.source_type,
@@ -448,6 +452,8 @@ def _save_immutable_version(
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     raw_hash = str(item.raw_metadata.get("raw_content_hash") or "")
     snapshot_hash = raw_hash or sha256(serialized.encode("utf-8")).hexdigest()
+    is_v1 = item.raw_metadata.get("provenance_schema_version") == 1
+    official_source_url = item.raw_metadata.get("official_source_url")
     connection.execute(
         """
         INSERT OR IGNORE INTO information_item_versions (
@@ -461,9 +467,8 @@ def _save_immutable_version(
             snapshot_hash,
             item.collected_at.isoformat(),
             serialized,
-            str(
-                item.raw_metadata.get("official_source_url")
-                or item.url
+            str(official_source_url or "") if is_v1 else str(
+                official_source_url or item.url
             ),
             str(
                 item.raw_metadata.get("revision_semantics")

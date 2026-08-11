@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -9,6 +10,7 @@ from investment_monitor import (
     InformationRepository,
     SQLiteInformationRepository,
 )
+from provenance_assertions import canonical_payload_hash
 
 
 def make_item(
@@ -18,6 +20,7 @@ def make_item(
     ticker: str,
     published_at: datetime,
     source_type: str = "regulatory_filing",
+    raw_metadata=None,
 ) -> InformationItem:
     return InformationItem(
         source=source,
@@ -30,7 +33,7 @@ def make_item(
         document_type="10-Q",
         url=f"https://example.test/{external_id}",
         collected_at=datetime(2026, 7, 27, tzinfo=timezone.utc),
-        raw_metadata={"fixture": True},
+        raw_metadata=raw_metadata or {"fixture": True},
     )
 
 
@@ -159,6 +162,86 @@ class SQLiteInformationRepositoryTests(unittest.TestCase):
             ).fetchone()[0]
         self.assertEqual(self.repository.count(), 1)
         self.assertEqual(count, 2)
+
+    def test_v1_regulatory_filing_versions_raw_changes_idempotently(self) -> None:
+        first_payload = {"id": "official-1", "status": "published"}
+        first_url = "https://official.example/filings/official-1"
+        first = make_item(
+            source="official_fixture",
+            external_id="official-1",
+            ticker="FIX",
+            published_at=datetime(2026, 8, 7, tzinfo=timezone.utc),
+            raw_metadata={
+                "provenance_schema_version": 1,
+                "official_source_url": first_url,
+                "raw_payload": first_payload,
+                "raw_content_hash": canonical_payload_hash(first_payload),
+                "revision_semantics": "unknown",
+            },
+        )
+        changed_payload = {"id": "official-1", "status": "corrected"}
+        refetched = InformationItem(
+            **{
+                **first.__dict__,
+                "title": "Same raw filing observed again",
+                "collected_at": datetime(2026, 8, 8, tzinfo=timezone.utc),
+            }
+        )
+        changed = InformationItem(
+            **{
+                **first.__dict__,
+                "title": "Corrected filing",
+                "raw_metadata": {
+                    **first.raw_metadata,
+                    "raw_payload": changed_payload,
+                    "raw_content_hash": canonical_payload_hash(changed_payload),
+                },
+            }
+        )
+
+        self.repository.save([first])
+        self.repository.save([refetched])
+        self.repository.save([changed])
+
+        with sqlite3.connect(str(self.repository._database_path)) as connection:
+            rows = connection.execute(
+                "SELECT snapshot_hash, payload, provenance_url, revision_status "
+                "FROM information_item_versions ORDER BY id"
+            ).fetchall()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            [row[0] for row in rows],
+            [
+                canonical_payload_hash(first_payload),
+                canonical_payload_hash(changed_payload),
+            ],
+        )
+        self.assertEqual(
+            [json.loads(row[1])["raw_metadata"]["raw_payload"] for row in rows],
+            [first_payload, changed_payload],
+        )
+        self.assertEqual([row[2] for row in rows], [first_url, first_url])
+        self.assertEqual([row[3] for row in rows], ["unknown", "unknown"])
+        self.assertEqual(self.repository.count(), 1)
+
+    def test_legacy_regulatory_filing_without_schema_remains_compatible(self) -> None:
+        legacy = make_item(
+            source="legacy_official_fixture",
+            external_id="legacy-1",
+            ticker="FIX",
+            published_at=datetime(2026, 8, 7, tzinfo=timezone.utc),
+            raw_metadata={"fixture": True, "official_source_url": None},
+        )
+
+        result = self.repository.save([legacy])
+
+        self.assertEqual(result.inserted, 1)
+        self.assertEqual(self.repository.query(source=legacy.source), [legacy])
+        with sqlite3.connect(str(self.repository._database_path)) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM information_item_versions"
+            ).fetchone()[0]
+        self.assertEqual(count, 0)
 
     def test_exact_utc_range_is_half_open_at_24_hour_boundaries(self) -> None:
         start = datetime(2026, 8, 6, 12, tzinfo=timezone.utc)
