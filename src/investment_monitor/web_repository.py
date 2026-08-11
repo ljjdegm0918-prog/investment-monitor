@@ -260,6 +260,7 @@ class FeedFilters:
             raise ValueError("amendment must be all, yes, or no")
         if self.information_type not in {
             "all",
+            "daily",
             "filings",
             "news",
             "community",
@@ -936,6 +937,26 @@ class WebRepository:
             result.page,
             result.page_size,
         )
+
+    def query_feed_display_all(self, filters: FeedFilters) -> Tuple[Mapping[str, Any], ...]:
+        """Return a complete filtered display set with dedupe done globally.
+
+        Daily reports need every matching row.  Applying display annotation to
+        each 100-row database page loses relationships that straddle pages.
+        """
+        scoped = FeedFilters(**{**filters.__dict__, "page": 1, "page_size": 100})
+        items: List[Mapping[str, Any]] = []
+        page = 1
+        while True:
+            result = self.query_feed(FeedFilters(**{**scoped.__dict__, "page": page}))
+            items.extend(result.items)
+            if page >= result.pages:
+                break
+            page += 1
+        return tuple(annotate_feed_items(
+            items,
+            enabled=self._kr_soft_dedupe_enabled(),
+        ))
 
     @staticmethod
     def _kr_soft_dedupe_enabled() -> bool:
@@ -1788,7 +1809,12 @@ class WebRepository:
         if filters.ticker:
             conditions.append("c.ticker = ?")
             parameters.append(filters.ticker.upper())
-        if filters.information_type == "filings":
+        if filters.information_type == "daily":
+            conditions.append(
+                "i.source_type IN ('regulatory_filing', "
+                "'regulatory_disclosure', 'news', 'community')"
+            )
+        elif filters.information_type == "filings":
             conditions.append(
                 "i.source_type IN ('regulatory_filing', "
                 "'regulatory_disclosure')"
@@ -1802,14 +1828,44 @@ class WebRepository:
         if filters.form_type:
             conditions.append("i.document_type = ?")
             parameters.append(filters.form_type)
-        if filters.start_date:
-            start_utc, _ = _eastern_day_bounds(filters.start_date)
-            conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
-            parameters.append(start_utc.isoformat())
-        if filters.end_date:
-            _, end_utc = _eastern_day_bounds(filters.end_date)
-            conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
-            parameters.append(end_utc.isoformat())
+        if filters.start_date or filters.end_date:
+            # Some disclosure connectors report a calendar day without a
+            # reliable instant.  Those rows intentionally carry
+            # raw_metadata.calendar_date and must be filtered by that date,
+            # rather than by their UTC/noon anchor converted to Eastern time.
+            # Use the timestamp path only when there is no usable date value.
+            calendar_date = "date(json_extract(i.raw_metadata, '$.calendar_date'))"
+            calendar_conditions: List[str] = []
+            timestamp_conditions: List[str] = []
+            calendar_parameters: List[Any] = []
+            timestamp_parameters: List[Any] = []
+            if filters.start_date:
+                start_utc, _ = _eastern_day_bounds(filters.start_date)
+                calendar_conditions.append(f"{calendar_date} >= date(?)")
+                calendar_parameters.append(filters.start_date.isoformat())
+                timestamp_conditions.append(
+                    f"{self._effective_timestamp_sql()} >= datetime(?)"
+                )
+                timestamp_parameters.append(start_utc.isoformat())
+            if filters.end_date:
+                _, end_utc = _eastern_day_bounds(filters.end_date)
+                calendar_conditions.append(f"{calendar_date} <= date(?)")
+                calendar_parameters.append(filters.end_date.isoformat())
+                timestamp_conditions.append(
+                    f"{self._effective_timestamp_sql()} < datetime(?)"
+                )
+                timestamp_parameters.append(end_utc.isoformat())
+            conditions.append(
+                "(("
+                + f"{calendar_date} IS NOT NULL AND "
+                + " AND ".join(calendar_conditions)
+                + ") OR ("
+                + f"{calendar_date} IS NULL AND "
+                + " AND ".join(timestamp_conditions)
+                + "))"
+            )
+            parameters.extend(calendar_parameters)
+            parameters.extend(timestamp_parameters)
         if filters.start_at:
             conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
             parameters.append(filters.start_at.astimezone(timezone.utc).isoformat())

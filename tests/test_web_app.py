@@ -138,6 +138,157 @@ class WebApplicationTests(unittest.TestCase):
         )
         self.assertEqual(deleted.status, 200)
 
+    def test_daily_range_returns_every_day_and_only_report_categories(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n"
+            "  - sec\n"
+            "  - news\n"
+            "  - community\n"
+            "  - research\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        base = {
+            "tickers": ("AAPL",),
+            "issuer": "Apple Inc.",
+            "collected_at": datetime(2026, 8, 4, tzinfo=timezone.utc),
+            "raw_metadata": {},
+        }
+        self.items.save((
+            InformationItem(
+                source="sec",
+                source_type="regulatory_filing",
+                external_id="range-filing",
+                published_at=datetime(2026, 8, 2, 15, tzinfo=timezone.utc),
+                title="Apple filing",
+                document_type="8-K",
+                url="https://example.test/filing",
+                **base,
+            ),
+            InformationItem(
+                source="news",
+                source_type="news",
+                external_id="range-news",
+                published_at=datetime(2026, 8, 4, 2, tzinfo=timezone.utc),
+                title="Apple news",
+                document_type="news",
+                url="https://example.test/news",
+                **base,
+            ),
+            InformationItem(
+                source="community",
+                source_type="community",
+                external_id="range-community",
+                published_at=datetime(2026, 8, 3, 20, tzinfo=timezone.utc),
+                title="Apple community update",
+                document_type="post",
+                url="https://example.test/community",
+                **base,
+            ),
+            InformationItem(
+                source="sec",
+                source_type="regulatory_disclosure",
+                external_id="range-calendar-date",
+                # This instant is still August 2 in ET, but a date-only
+                # connector explicitly reports the disclosure as August 3.
+                published_at=datetime(2026, 8, 3, 1, tzinfo=timezone.utc),
+                title="Date-only disclosure",
+                document_type="material",
+                url="https://example.test/date-only",
+                raw_metadata={"calendar_date": "2026-08-03"},
+                tickers=("AAPL",),
+                issuer="Apple Inc.",
+                collected_at=datetime(2026, 8, 4, tzinfo=timezone.utc),
+            ),
+            InformationItem(
+                source="research",
+                source_type="research",
+                external_id="range-research",
+                published_at=datetime(2026, 8, 3, 18, tzinfo=timezone.utc),
+                title="Excluded research",
+                document_type="report",
+                url="https://example.test/research",
+                **base,
+            ),
+        ))
+
+        response = application.handle(
+            "GET",
+            "/api/daily-range?start_date=2026-08-02&end_date=2026-08-04",
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual([day["date"] for day in payload["days"]], [
+            "2026-08-02", "2026-08-03", "2026-08-04",
+        ])
+        self.assertEqual(payload["item_count"], 4)
+        self.assertEqual(payload["days"][0]["counts"]["filings"], 1)
+        self.assertEqual(payload["days"][1]["counts"]["filings"], 1)
+        self.assertEqual(payload["days"][1]["counts"]["community"], 1)
+        # 02:00 UTC is still the previous Eastern calendar day.
+        self.assertEqual(payload["days"][1]["counts"]["news"], 1)
+        self.assertEqual(payload["days"][2]["item_count"], 0)
+
+    def test_daily_range_validates_order_and_size(self) -> None:
+        reversed_response = self.application.handle(
+            "GET",
+            "/api/daily-range?start_date=2026-08-04&end_date=2026-08-02",
+        )
+        oversized_response = self.application.handle(
+            "GET",
+            "/api/daily-range?start_date=2025-08-01&end_date=2026-08-02",
+        )
+        end_only_response = self.application.handle(
+            "GET", "/api/daily-range?end_date=2026-08-02"
+        )
+        maximum_response = self.application.handle(
+            "GET", "/api/daily-range?start_date=2025-08-02&end_date=2026-08-02"
+        )
+
+        self.assertEqual(reversed_response.status, 400)
+        self.assertIn("start_date", self.payload(reversed_response)["error"])
+        self.assertEqual(oversized_response.status, 400)
+        self.assertIn("366 days", self.payload(oversized_response)["error"])
+        self.assertEqual(end_only_response.status, 200)
+        self.assertEqual(self.payload(end_only_response)["start_date"], "2026-08-02")
+        self.assertEqual(maximum_response.status, 200)
+
+    def test_daily_range_keeps_both_sides_of_eastern_dst_fallback_together(self) -> None:
+        self.items.save((
+            InformationItem(
+                source="sec", source_type="regulatory_filing",
+                external_id="dst-before-fallback", tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 11, 1, 4, 30, tzinfo=timezone.utc),
+                title="Before fallback", document_type="8-K",
+                url="https://example.test/dst-before",
+                collected_at=datetime(2026, 11, 1, 5, tzinfo=timezone.utc),
+                raw_metadata={},
+            ),
+            InformationItem(
+                source="sec", source_type="regulatory_filing",
+                external_id="dst-after-fallback", tickers=("AAPL",),
+                issuer="Apple Inc.",
+                published_at=datetime(2026, 11, 1, 6, 30, tzinfo=timezone.utc),
+                title="After fallback", document_type="8-K",
+                url="https://example.test/dst-after",
+                collected_at=datetime(2026, 11, 1, 7, tzinfo=timezone.utc),
+                raw_metadata={},
+            ),
+        ))
+
+        response = self.application.handle(
+            "GET", "/api/daily-range?start_date=2026-11-01&end_date=2026-11-01"
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(self.payload(response)["days"][0]["item_count"], 2)
+
     def test_bootstrap_uses_fixed_lists_and_truthful_source_status(self) -> None:
         with patch.dict(
             os.environ,

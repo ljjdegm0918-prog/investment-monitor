@@ -29,6 +29,7 @@ from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_unive
 from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
 from .models import (
+    ALLOWED_MARKETS,
     MARKET_AU,
     MARKET_CA,
     MARKET_FR,
@@ -257,6 +258,8 @@ class WebApplication:
                 return self._json(self._feed(query))
             if method == "GET" and parsed.path == "/api/daily":
                 return self._json(self._daily(query))
+            if method == "GET" and parsed.path == "/api/daily-range":
+                return self._json(self._daily_range(query))
             if method == "GET" and parsed.path == "/api/companies":
                 return self._json({"companies": self.repository.companies(_first(query, "list"))})
             if method == "GET" and parsed.path == "/api/companies/search":
@@ -821,6 +824,13 @@ class WebApplication:
             "display_date": f"{selected_date.strftime('%b')} {selected_date.day}, {selected_date.year}",
             "timezone": "America/New_York",
             "timezone_label": "ET",
+            "markets": [
+                {"code": market, "label": market.upper()}
+                for market in sorted(
+                    ALLOWED_MARKETS - {"unknown"},
+                    key=lambda market: (market != MARKET_US, market),
+                )
+            ],
             "lists": lists,
             "companies": companies,
             "counts": counts,
@@ -854,24 +864,70 @@ class WebApplication:
     def _daily(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
         selected_date = _query_date(query, "date") or datetime.now(EASTERN).date()
         list_slug = _first(query, "list")
-        items: List[Mapping[str, Any]] = []
-        page = 1
-        while True:
-            result = self.repository.query_feed_display(FeedFilters(
-                list_slug=list_slug,
-                start_date=selected_date,
-                end_date=selected_date,
-                page=page,
-                page_size=100,
-            ))
-            items.extend(result.items)
-            if page >= result.pages:
-                break
-            page += 1
-        groups: Dict[str, Dict[str, Any]] = {}
+        return self._daily_range_payload(selected_date, selected_date, list_slug)["days"][0]
+
+    def _daily_range(
+        self,
+        query: Mapping[str, Sequence[str]],
+    ) -> Mapping[str, Any]:
+        today = datetime.now(EASTERN).date()
+        requested_start = _query_date(query, "start_date")
+        requested_end = _query_date(query, "end_date")
+        # An end date on its own is a request for that one report.  Defaulting
+        # the omitted start to today would turn a perfectly valid historic
+        # request into an inverted range.
+        end_date = requested_end or requested_start or today
+        start_date = requested_start or end_date
+        if start_date > end_date:
+            raise ValueError("start_date must not be after end_date")
+        if (end_date - start_date).days > 365:
+            raise ValueError("Date range must be 366 days or fewer")
+        return self._daily_range_payload(
+            start_date,
+            end_date,
+            _first(query, "list"),
+        )
+
+    def _daily_range_payload(
+        self,
+        start_date: date,
+        end_date: date,
+        list_slug: Optional[str],
+    ) -> Mapping[str, Any]:
+        # Filter the report categories in SQL, then annotate the complete
+        # range once so soft-dedupe can see pairs split across DB pages.
+        items = self.repository.query_feed_display_all(FeedFilters(
+            list_slug=list_slug,
+            information_type="daily",
+            start_date=start_date,
+            end_date=end_date,
+            page_size=100,
+        ))
+        day_payloads: Dict[date, Dict[str, Any]] = {}
+        cursor = start_date
+        while cursor <= end_date:
+            day_payloads[cursor] = {
+                "date": cursor.isoformat(),
+                "timezone": "America/New_York",
+                "list": list_slug,
+                "companies": [],
+                "item_count": 0,
+                "counts": {"filings": 0, "news": 0, "community": 0},
+            }
+            cursor += timedelta(days=1)
+
+        groups: Dict[date, Dict[str, Dict[str, Any]]] = {
+            day: {} for day in day_payloads
+        }
         for item in items:
+            category = _daily_item_category(str(item["source_type"]))
+            if category is None:
+                continue
+            item_date = _daily_item_date(item)
+            if item_date not in groups:
+                continue
             key = f"{item['ticker']}:{item['market']}"
-            group = groups.setdefault(key, {
+            group = groups[item_date].setdefault(key, {
                 "ticker": item["ticker"],
                 "name": item["company_name"],
                 "exchange": item["exchange"],
@@ -887,14 +943,26 @@ class WebApplication:
                 "url": item["url"],
                 "also_seen_on": list(also_seen),
             })
+            day_payloads[item_date]["item_count"] += 1
+            day_payloads[item_date]["counts"][category] += 1
+
+        for day, company_groups in groups.items():
+            day_payloads[day]["companies"] = sorted(
+                company_groups.values(),
+                key=lambda group: (
+                    str(group["name"]).casefold(), str(group["ticker"])
+                ),
+            )
+
         return {
-            "date": selected_date.isoformat(),
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
             "timezone": "America/New_York",
             "list": list_slug,
-            "companies": sorted(groups.values(), key=lambda group: (
-                str(group["name"]).casefold(), str(group["ticker"])
-            )),
-            "item_count": len(items),
+            "days": [day_payloads[day] for day in sorted(day_payloads)],
+            "item_count": sum(
+                int(payload["item_count"]) for payload in day_payloads.values()
+            ),
         }
 
     def _html(self, path: str) -> WebResponse:
@@ -1136,6 +1204,43 @@ def _daily_item_type(source_type: str) -> str:
     if source_type == "community":
         return "Community"
     return source_type.replace("_", " ").title()
+
+
+def _daily_item_category(source_type: str) -> Optional[str]:
+    if source_type in {"regulatory_filing", "regulatory_disclosure"}:
+        return "filings"
+    if source_type == "news":
+        return "news"
+    if source_type == "community":
+        return "community"
+    return None
+
+
+def _daily_effective_at(value: Any) -> datetime:
+    """Parse a feed timestamp using the same UTC assumption as stored items.
+
+    Historical rows predating ``effective_at`` can contain a naive ISO value.
+    Treating it as the server's local timezone makes ET day grouping depend on
+    where the service happens to run, especially around DST transitions.
+    """
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _daily_item_date(item: Mapping[str, Any]) -> date:
+    """Return the report day, preserving connector-supplied date-only data."""
+    metadata = item.get("raw_metadata")
+    if isinstance(metadata, Mapping):
+        calendar_date = metadata.get("calendar_date")
+        if isinstance(calendar_date, str):
+            try:
+                return date.fromisoformat(calendar_date)
+            except ValueError:
+                # Bad external metadata should not make the whole report fail.
+                pass
+    return _daily_effective_at(item["effective_at"]).astimezone(EASTERN).date()
 
 
 def _daily_source_label(item: Mapping[str, Any]) -> str:
