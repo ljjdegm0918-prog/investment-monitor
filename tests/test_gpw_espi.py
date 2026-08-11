@@ -22,6 +22,7 @@ from investment_monitor import (
     GpwEspiRequestError,
 )
 from investment_monitor.registry import create_default_registry
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "gpw_espi"
@@ -55,6 +56,18 @@ class FakeOpener:
         raise AssertionError(f"unexpected url: {url}")
 
 
+class ScriptedOpener:
+    def __init__(self, bodies) -> None:
+        self.bodies = list(bodies)
+        self.requested: list = []
+
+    def __call__(self, request, timeout=None):
+        self.requested.append(request.full_url)
+        if not self.bodies:
+            raise AssertionError(f"unexpected extra request: {request.full_url}")
+        return FakeResponse(self.bodies.pop(0))
+
+
 def client_opener(**kwargs):
     return FakeOpener(
         {
@@ -78,6 +91,44 @@ def empty_opener(**kwargs):
 
 
 class GpwEspiClientTests(unittest.TestCase):
+    def test_full_limit_page_with_confirmed_next_page_raises_truncation(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        full_page = (FIXTURES / "komunikaty_pko.html").read_bytes()
+        opener = ScriptedOpener((full_page, full_page))
+        client = GpwEspiClient(opener=opener, requests_per_second=1000)
+
+        with self.assertRaises(GpwEspiDataError):
+            client.fetch_reports(
+                "PLPKO0000016",
+                date(2026, 7, 1),
+                date(2026, 8, 10),
+                page_size=4,
+                max_pages=1,
+            )
+
+        self.assertEqual(len(opener.requested), 2)
+        self.assertIn("offset=4", opener.requested[1])
+
+    def test_full_final_page_with_empty_probe_is_not_truncation(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        full_page = (FIXTURES / "komunikaty_pko.html").read_bytes()
+        empty_page = (FIXTURES / "komunikaty_empty.html").read_bytes()
+        opener = ScriptedOpener((full_page, empty_page))
+        client = GpwEspiClient(opener=opener, requests_per_second=1000)
+
+        records = client.fetch_reports(
+            "PLPKO0000016",
+            date(2026, 7, 1),
+            date(2026, 8, 10),
+            page_size=4,
+            max_pages=1,
+        )
+
+        self.assertEqual(len(records), 4)
+        self.assertEqual(len(opener.requested), 2)
+
     def test_parses_reports_and_filters_warsaw_window(self) -> None:
         from investment_monitor.sources.gpw_espi.client import (
             GpwEspiClient,
@@ -222,6 +273,28 @@ class GpwEspiConnectorTests(unittest.TestCase):
         self.assertIn("geru_id=495125", first.url)
         self.assertEqual(first.raw_metadata["isin"], "PLPKO0000016")
         self.assertIn("searchText=PLPKO0000016", opener.requested[0])
+        from investment_monitor.sources.gpw_espi.client import _parse_page
+        payload = next(
+            record["raw_payload"]
+            for record in _parse_page(
+                (FIXTURES / "komunikaty_pko.html").read_bytes(),
+                "https://www.gpw.pl/",
+            )
+            if record["external_id"] == first.external_id
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=first.external_id,
+            official_source_url=first.url,
+            retrieval_url=opener.requested[0],
+            raw_payload_format="html_list_item",
+            classification_code=None,
+            classification_label="espi",
+            published_at_raw=payload["date"],
+            published_timezone="Europe/Warsaw",
+        )
 
     def test_missing_universe_identity_is_skipped_honestly(self) -> None:
         opener = client_opener()
