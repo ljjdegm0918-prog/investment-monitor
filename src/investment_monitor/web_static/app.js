@@ -15,31 +15,48 @@ async function init() {
 
 async function renderDaily() {
   const params = new URLSearchParams(location.search);
-  const selectedDate = params.get("date") || state.bootstrap.selected_date;
+  const legacyDate = params.get("date");
+  const endDate = params.get("end_date") || legacyDate || state.bootstrap.selected_date;
+  const startDate = params.get("start_date") || legacyDate || endDate;
   const selectedList = params.get("list") || "";
   document.getElementById("page").innerHTML = `
     <section class="daily-head">
-      <div><p class="eyebrow">DAILY INFORMATION</p><h1>${formatDay(selectedDate)}</h1><p>Company updates for one Eastern Time calendar day.</p></div>
+      <div><p class="eyebrow">DAILY REPORTS</p><h1>${formatRange(startDate, endDate)}</h1><p>One report per Eastern Time calendar day, limited to filings, news, and community updates.</p></div>
       <div class="daily-actions"><button class="button" id="print-page" type="button">Print / Save PDF</button></div>
     </section>
-    <form class="toolbar" id="daily-filter">
-      <label>Date<input type="date" id="daily-date" value="${escAttr(selectedDate)}"></label>
+    <form class="toolbar range-toolbar" id="daily-filter">
+      <label>From<input type="date" id="daily-start-date" value="${escAttr(startDate)}" required></label>
+      <label>To<input type="date" id="daily-end-date" value="${escAttr(endDate)}" required></label>
       <label>List<select id="daily-list"><option value="">All lists</option>${listOptions(selectedList)}</select></label>
-      <button class="button primary" type="submit">View</button>
+      <button class="button primary" type="submit">Generate reports</button>
+      <div class="range-presets" aria-label="Date range shortcuts">
+        <button class="text-button range-preset" data-days="1" type="button">Today</button>
+        <button class="text-button range-preset" data-days="7" type="button">Last 7 days</button>
+        <button class="text-button range-preset" data-days="30" type="button">Last 30 days</button>
+      </div>
     </form>
     <div id="daily-content"><p class="loading">Loading information…</p></div>`;
   document.getElementById("print-page").addEventListener("click", () => window.print());
+  document.querySelectorAll(".range-preset").forEach(button => button.addEventListener("click", () => {
+    const days = Number(button.dataset.days);
+    const end = state.bootstrap.selected_date;
+    document.getElementById("daily-end-date").value = end;
+    document.getElementById("daily-start-date").value = addDays(end, 1 - days);
+  }));
   document.getElementById("daily-filter").addEventListener("submit", event => {
     event.preventDefault();
-    const next = new URLSearchParams({date: document.getElementById("daily-date").value});
+    const start = document.getElementById("daily-start-date").value;
+    const end = document.getElementById("daily-end-date").value;
+    if (start > end) { toast("The start date must be on or before the end date.", true); return; }
+    const next = new URLSearchParams({start_date:start, end_date:end});
     const list = document.getElementById("daily-list").value;
     if (list) next.set("list", list);
     location.href = `/today?${next}`;
   });
   try {
-    const query = new URLSearchParams({date:selectedDate});
+    const query = new URLSearchParams({start_date:startDate, end_date:endDate});
     if (selectedList) query.set("list", selectedList);
-    const data = await api(`/api/daily?${query}`);
+    const data = await api(`/api/daily-range?${query}`);
     document.getElementById("daily-content").innerHTML = dailyContent(data);
   } catch (error) {
     document.getElementById("daily-content").innerHTML = errorState("Request failed", error.message);
@@ -47,19 +64,40 @@ async function renderDaily() {
 }
 
 function dailyContent(data) {
-  if (!data.companies.length) return `<div class="empty"><h2>No information for this date</h2><p>Companies without updates are hidden by default.</p></div>`;
-  return `<div class="daily-document">${data.companies.map(company => `
+  const days = data.days || [data];
+  const total = data.item_count ?? days.reduce((sum, day) => sum + day.item_count, 0);
+  if (!total && days.length === 1) return `<div class="empty"><h2>No information for this date</h2><p>No filing, news, or community updates were published in the selected day.</p></div>`;
+  return `<section class="range-summary" aria-label="Range summary"><div><strong>${total}</strong><span>updates</span></div><p>${days.length} daily report${days.length === 1 ? "" : "s"} · America/New_York</p></section>
+    <div class="daily-range">${days.map(day => dailyDay(day)).join("")}</div>`;
+}
+
+function dailyDay(day) {
+  const counts = day.counts || {filings:0, news:0, community:0};
+  return `<section class="daily-document day-report" id="day-${escAttr(day.date)}">
+    <header class="day-report-head">
+      <div><p class="eyebrow">DAILY REPORT</p><h2>${formatDay(day.date)}</h2></div>
+      <div class="category-counts" aria-label="Update counts">
+        <span><strong>${counts.filings || 0}</strong> Filings</span>
+        <span><strong>${counts.news || 0}</strong> News</span>
+        <span><strong>${counts.community || 0}</strong> Community</span>
+      </div>
+    </header>
+    ${day.companies.length ? day.companies.map(company => `
     <section class="company-section">
       <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(company.exchange || "Unavailable")}</p></div><span>${company.items.length} update${company.items.length === 1 ? "" : "s"}</span></header>
-      <div class="information-list">${company.items.map(item => `
+      <div class="information-list">${company.items.map(item => {
+        const url = safeUrl(item.url);
+        return `
         <article class="information-row">
           <time datetime="${escAttr(item.time)}">${formatTime(item.time)}</time>
           <span class="type type-${item.type.toLowerCase()}">${esc(item.type)}</span>
           <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · Also seen on ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
-          <a class="title" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
-          <a class="raw-url" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.url)}</a>
-        </article>`).join("")}</div>
-    </section>`).join("")}</div>`;
+          <a class="title" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
+          <a class="raw-url" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>
+        </article>`;
+      }).join("")}</div>
+    </section>`).join("") : `<div class="day-empty"><p>No filing, news, or community updates.</p></div>`}
+  </section>`;
 }
 
 async function renderManage() {
@@ -76,25 +114,7 @@ async function renderManage() {
         <label for="company-query">Search by company name or ticker</label>
         <div>
           <select id="market-select" aria-label="Market">
-            <option value="us" selected>US</option>
-            <option value="jp">JP</option>
-            <option value="hk">HK</option>
-            <option value="cn">CN</option>
-            <option value="kr">KR</option>
-            <option value="uk">UK</option>
-            <option value="tw">TW</option>
-            <option value="ca">CA</option>
-            <option value="au">AU</option>
-            <option value="be">Belgium (Euronext)</option>
-            <option value="fr">France (Euronext)</option>
-            <option value="de">Germany (XETRA/Frankfurt)</option>
-            <option value="nl">Netherlands (Euronext)</option>
-            <option value="it">Italy (Euronext)</option>
-            <option value="es">Spain (BME/Madrid)</option>
-            <option value="sg">Singapore (SGX)</option>
-            <option value="ch">Switzerland (SIX)</option>
-            <option value="pl">Poland (GPW)</option>
-            <option value="se">Sweden (Nasdaq Stockholm)</option>
+            ${marketOptions()}
           </select>
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
           <button class="button primary" type="submit">Search</button>
@@ -150,7 +170,7 @@ const MARKET_HINTS = {
 
 function updateMarketHint() {
   const market = document.getElementById("market-select").value;
-  document.getElementById("market-hint").textContent = MARKET_HINTS[market] || MARKET_HINTS.us;
+  document.getElementById("market-hint").textContent = MARKET_HINTS[market] || `${marketLabel(market)} uses the connector and identity rules registered by the backend.`;
 }
 
 async function refreshManagement() {
@@ -245,9 +265,15 @@ function renderSources(sources) {
 
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
+const MARKET_NAMES = {us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore",ch:"Switzerland",pl:"Poland",se:"Sweden"};
+function marketLabel(market) { return MARKET_NAMES[market] || String(market || "").toUpperCase(); }
+function marketOptions() { return (state.bootstrap.markets || [{code:"us",label:"US"}]).map(market => `<option value="${escAttr(market.code)}" ${market.code === "us" ? "selected" : ""}>${esc(marketLabel(market.code))} (${esc(market.label)})</option>`).join(""); }
 function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
-function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore",ch:"Switzerland",pl:"Poland",se:"Sweden"})[market] || "Unavailable"; }
+function regionForMarket(market) { return marketLabel(market) || "Unavailable"; }
 function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
+function formatRange(start, end) { return start === end ? formatDay(start) : `${formatShortDay(start)} – ${formatShortDay(end)}`; }
+function formatShortDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
+function addDays(value, amount) { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return date.toISOString().slice(0, 10); }
 function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
@@ -255,4 +281,5 @@ async function api(url, options={}) { const response = await fetch(url, {headers
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
+function safeUrl(value) { try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : "#"; } catch (_) { return "#"; } }
 function renderFatal(error) { document.getElementById("page").innerHTML = errorState("Workspace request failed", error.message); }
