@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -59,6 +59,10 @@ SOURCE_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "amf_oam": "AMF OAM",
+    "fsma_stori": "FSMA STORI",
+    "be_second_disclosure": "BE second disclosure (not wired)",
+    "yahoo_be": "Yahoo Finance BE",
+    "google_news_be": "Google News (BE)",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
     "eqs_dgap": "EQS News (DGAP)",
@@ -95,6 +99,9 @@ PROVIDER_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "amf_oam": "AMF OAM",
+    "fsma_stori": "FSMA STORI",
+    "yahoo_be": "Yahoo Finance BE",
+    "google_news_be": "Google News (BE)",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
     "eqs_dgap": "EQS News (DGAP)",
@@ -547,6 +554,10 @@ class WebRepository:
         if market == MARKET_AU:
             tickers = tuple(
                 dict.fromkeys(normalize_au_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_BE:
+            tickers = tuple(
+                dict.fromkeys(normalize_be_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_FR:
             tickers = tuple(
@@ -1906,6 +1917,7 @@ def _market_region(market: str) -> str:
         "tw": "Taiwan",
         "ca": "Canada",
         "au": "Australia",
+        "be": "Belgium",
         "fr": "France",
         "de": "Germany",
     }.get(market, "Unavailable")
@@ -1939,6 +1951,44 @@ def normalize_au_ticker(ticker: str) -> str:
 
 _AU_TICKER_SUFFIXES = ("ASX", "AX")
 _AU_TICKER_SEPARATORS = (".", " ", "-")
+
+
+_BE_TICKER_SUFFIXES = ("BR", "BRU", "EBR")
+_BE_TICKER_SEPARATORS = (".", " ", "-")
+_BE_ISIN_PATTERN = re.compile(r"BE[0-9A-Z]{10}")
+
+
+def normalize_be_ticker(ticker: str) -> str:
+    """Normalize a Belgian (Euronext Brussels) symbol to its canonical form.
+
+    Accepts plain symbols (``ABI``) and the common Euronext Brussels
+    suffixes used by data providers (``ABI.BR``, ``ABI.BRU``, ``ABI-EBR``;
+    space or dash separators are tolerated too, and stacked suffixes
+    collapse to the root). The suffix is stripped and the root symbol is
+    uppercased; a plain symbol without a suffix is preserved as-is. Suffix
+    words without a separator (``BR``, ``BRU``, ``EBR``) are never erased.
+    When the input contains a Belgian ISIN (``BE`` followed by 10
+    alphanumeric characters, e.g. ``BE0003793107``), the ISIN is extracted
+    and returned instead, since an ISIN is a stable identifier in its own
+    right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _BE_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _BE_TICKER_SEPARATORS:
+            for suffix in _BE_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
 
 
 def normalize_hk_ticker(ticker: str) -> str:

@@ -108,6 +108,19 @@ sources:
     label: AMF OAM
     source_type: filings
     enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: fsma_stori
+    label: FSMA STORI
+    source_type: filings
+    enabled: true          # key-free official FSMA STORI (Belgian central storage of regulated information); needs a BE ISIN (typed or from the BE universe) to match
+  # Belgium second disclosure - deliberately not wired (BE-4 re-verified 2026-08-10):
+  # Euronext Brussels announcements are Drupal HTML pages keyed by per-company
+  # node IDs (no RSS, no JSON export; _format=json -> 406); the key-free EQS News
+  # JSON API returns zero records for sampled Belgian ISINs (incl. BEL 20 names);
+  # paid feeds (Euronext Web Services/Saturn, FinancialReports.eu, LSEG) excluded.
+  - name: be_second_disclosure
+    label: BE second disclosure (not wired)
+    source_type: filings
+    enabled: false
   - name: cnmv_hr
     label: CNMV (hechos relevantes)
     source_type: filings
@@ -186,6 +199,14 @@ sources:
     label: Google News (SG)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=en-SG); may be loosely related / break without notice
+  - name: yahoo_be
+    label: Yahoo Finance BE
+    source_type: news
+    enabled: true          # key-free public RSS mirror (region=BE, fr-BE + en-US merged; identical titles stay single-language); may be loosely related / break without notice
+  - name: google_news_be
+    label: Google News (BE)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-BE); may be loosely related / break without notice
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.
