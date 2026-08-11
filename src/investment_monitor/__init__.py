@@ -187,6 +187,21 @@ from .sources.amf_oam import (
     AmfOamError,
     AmfOamRequestError,
 )
+from .sources.cnmv_hr import (
+    CnmvHrClient,
+    CnmvHrCompanyMatcher,
+    CnmvHrConnector,
+    CnmvHrDataError,
+    CnmvHrError,
+    CnmvHrRequestError,
+)
+from .sources.bme_relevant_facts import (
+    BmeRelevantFactsClient,
+    BmeRelevantFactsConnector,
+    BmeRelevantFactsDataError,
+    BmeRelevantFactsError,
+    BmeRelevantFactsRequestError,
+)
 from .sources.eqs_dgap import (
     EqsDgapClient,
     EqsDgapConnector,
@@ -231,6 +246,18 @@ from .sources.it_news import (
     YahooItNewsDataError,
     YahooItNewsError,
     YahooItNewsRequestError,
+)
+from .sources.es_news import (
+    GoogleEsNewsClient,
+    GoogleEsNewsConnector,
+    GoogleEsNewsDataError,
+    GoogleEsNewsError,
+    GoogleEsNewsRequestError,
+    YahooEsNewsClient,
+    YahooEsNewsConnector,
+    YahooEsNewsDataError,
+    YahooEsNewsError,
+    YahooEsNewsRequestError,
 )
 from .sources.fr_news import (
     GoogleFrNewsClient,
@@ -283,6 +310,13 @@ from .universe.it_universe import (
     load_it_universe,
     refresh_it_universe,
     search_it_universe,
+)
+from .universe.es_universe import (
+    EsUniverseError,
+    es_universe_name_map,
+    load_es_universe,
+    refresh_es_universe,
+    search_es_universe,
 )
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
@@ -344,6 +378,7 @@ from .models import (
     MARKET_AU,
     MARKET_FR,
     MARKET_DE,
+    MARKET_ES,
     MARKET_IT,
     MARKET_NL,
     MARKET_UNKNOWN,
@@ -408,6 +443,7 @@ __all__ = [
     "FrUniverseError",
     "NlUniverseError",
     "ItUniverseError",
+    "EsUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -488,6 +524,7 @@ __all__ = [
     "MARKET_AU",
     "MARKET_FR",
     "MARKET_DE",
+    "MARKET_ES",
     "MARKET_IT",
     "MARKET_NL",
     "MARKET_UNKNOWN",

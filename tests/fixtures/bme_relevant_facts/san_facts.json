@@ -1,0 +1,55 @@
+{
+  "totalResults": 3,
+  "params": {
+    "tradingSystem": null,
+    "titleSearch": "",
+    "top": 0,
+    "companyKey": "13900",
+    "from": "20260710",
+    "to": "20260809",
+    "page": 0,
+    "pageSize": 50
+  },
+  "hasMoreResults": false,
+  "data": [
+    {
+      "issuerName": "BANCO SANTANDER, S.A.",
+      "issuerKey": "13900",
+      "cnmvRegNumber": "OI0000042373",
+      "validCNMVRegNumber": true,
+      "relevantFactDate": "20260806",
+      "relevantFactCode": "423",
+      "cnmvDate": "20260806",
+      "relevantFactTitle": "Programas de recompra de acciones, estabilizacion y autocartera",
+      "relevantFactText": "La sociedad comunica la ejecucion de su programa de recompra.",
+      "pdfurl": "/RelevantFactsFiles/042/OI042373.PDF",
+      "pdfSize": "390 KB"
+    },
+    {
+      "issuerName": "BANCO SANTANDER, S.A.",
+      "issuerKey": "13900",
+      "cnmvRegNumber": "IP0000003290",
+      "validCNMVRegNumber": true,
+      "relevantFactDate": "20260804",
+      "relevantFactCode": "115",
+      "cnmvDate": "20260804",
+      "relevantFactTitle": "Sobre resultados",
+      "relevantFactText": "Resultados del primer semestre.",
+      "pdfurl": "/RelevantFactsFiles/032/IP03290.PDF",
+      "pdfSize": "210 KB"
+    },
+    {
+      "issuerName": "BANCO SANTANDER, S.A.",
+      "issuerKey": "13900",
+      "cnmvRegNumber": "OI0000042370",
+      "validCNMVRegNumber": true,
+      "relevantFactDate": "20260720",
+      "relevantFactCode": "400",
+      "cnmvDate": "20260720",
+      "relevantFactTitle": "Fuera de la ventana",
+      "relevantFactText": "Anuncio antiguo.",
+      "pdfurl": "/RelevantFactsFiles/042/OI042370.PDF",
+      "pdfSize": "100 KB"
+    }
+  ]
+}

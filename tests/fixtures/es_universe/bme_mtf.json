@@ -1,0 +1,46 @@
+{
+  "yearOfPriceData": 2026,
+  "totalResults": 3,
+  "params": {
+    "tradingSystem": "MTF",
+    "mtfSegment": null,
+    "page": 0,
+    "pageSize": 0
+  },
+  "hasMoreResults": false,
+  "data": [
+    {
+      "name": "1NKEMIA IUCT GROUP",
+      "companyKey": "52768",
+      "isin": "ES0156303002",
+      "shareName": "1NKEMIA",
+      "sector": "02",
+      "subsector": "06",
+      "tradingSystem": "MTF",
+      "mtfSegment": "BMEGrowth",
+      "indices": ""
+    },
+    {
+      "name": "AHORRO FAMILIAR, S.A.",
+      "companyKey": "05157",
+      "isin": "ES0107511018",
+      "shareName": "AHORRO FAMILIAR",
+      "sector": "05",
+      "subsector": "04",
+      "tradingSystem": "MTF",
+      "mtfSegment": "BMEScaleUp",
+      "indices": ""
+    },
+    {
+      "name": "1948 INVERSIONS, SICAV, S.A.",
+      "companyKey": "09642",
+      "isin": "ES0109642035",
+      "shareName": "1948 INVERSIONS",
+      "sector": "05",
+      "subsector": "04",
+      "tradingSystem": "MTF",
+      "mtfSegment": "SICAV",
+      "indices": ""
+    }
+  ]
+}

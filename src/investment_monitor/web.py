@@ -35,6 +35,7 @@ from .models import (
     MARKET_DE,
     MARKET_HK,
     MARKET_KR,
+    MARKET_ES,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -46,6 +47,7 @@ from .universe.fr_universe import fr_universe_name_map
 from .universe.de_universe import de_universe_name_map
 from .universe.nl_universe import nl_universe_name_map
 from .universe.it_universe import it_universe_name_map
+from .universe.es_universe import es_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
 from .sources.companies_house import CompaniesHouseCompanyResolver
@@ -281,6 +283,8 @@ class WebApplication:
                     name_fallback = nl_universe_name_map()
                 elif market == MARKET_IT:
                     name_fallback = it_universe_name_map()
+                elif market == MARKET_ES:
+                    name_fallback = es_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -544,6 +548,10 @@ class WebApplication:
             return None
         if market == MARKET_IT:
             # IT stays unmapped via SEC; disclosure matches by ISIN/name from
+            # the universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_ES:
+            # ES stays unmapped via SEC; disclosure matches by ISIN/name from
             # the universe, never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:

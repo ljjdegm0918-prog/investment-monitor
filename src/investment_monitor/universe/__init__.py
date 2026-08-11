@@ -28,16 +28,25 @@ from .it_universe import (
     refresh_it_universe,
     search_it_universe,
 )
+from .es_universe import (
+    EsUniverseError,
+    es_universe_name_map,
+    load_es_universe,
+    refresh_es_universe,
+    search_es_universe,
+)
 
 __all__ = [
     "DeUniverseError",
     "FrUniverseError",
     "NlUniverseError",
     "ItUniverseError",
+    "EsUniverseError",
     "de_universe_name_map",
     "fr_universe_name_map",
     "nl_universe_name_map",
     "it_universe_name_map",
+    "es_universe_name_map",
     "load_de_universe",
     "load_fr_universe",
     "load_nl_universe",
@@ -50,4 +59,7 @@ __all__ = [
     "search_fr_universe",
     "search_nl_universe",
     "search_it_universe",
+    "search_es_universe",
+    "load_es_universe",
+    "refresh_es_universe",
 ]

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: SAN.MC News</title>
+    <item>
+      <title>Santander amplia su programa de recompra</title>
+      <link>https://es.finance.yahoo.com/noticias/santander-recompra-110000401.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Same Spanish title in en-US feed.</description>
+    </item>
+    <item>
+      <title>Santander completes Webster Financial purchase</title>
+      <link>https://es.finance.yahoo.com/noticias/santander-webster-110000404.html</link>
+      <pubDate>Thu, 06 Aug 2026 09:00:00 +0000</pubDate>
+      <description>Different English title.</description>
+    </item>
+    <item>
+      <title>Spanish stock market closes higher</title>
+      <link>https://es.finance.yahoo.com/noticias/bolsa-cierre-110000402.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>English title for the same story.</description>
+    </item>
+  </channel>
+</rss>

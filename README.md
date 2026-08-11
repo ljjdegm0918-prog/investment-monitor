@@ -279,6 +279,36 @@ disclosure source wired there is no cross-source filing pairing. Every row
 stays in the feed with an "Also seen on …" label; totals and page sizes are
 never shrunk.
 
+### Spain sources (ES)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| cnmv_hr | filings | none | CNMV official relevant-information RSS — inside information (IP) + other relevant information (OIR) feeds (key-free, official; live 2026-08-10). Records are keyed by issuer legal name (`Title`) with a stable `nreg` registration number; matched to requested tickers via the ES universe name/ISIN. The IP feed is sometimes empty for a day (honest `[]`). Not a paid MOPS-style push. |
+| bme_relevant_facts | filings | none | Official BME relevant-facts JSON API (key-free; live 2026-08-10; same API family as the ES universe). Matched per company via the universe `companyKey`; records carry the same stable CNMV registration numbers (`IP`/`OI` prefixes) and CNMV detail deep links; date-only records use the Europe/Madrid noon anchor. The API clamps the requested range to at most ~31 calendar days, so older history is not available. Paid BME real-time/historical data services are deliberately not wired (ES-4 re-verified 2026-08-10). |
+| es_universe | breadth cache | none | Official BME equity API (key-free; live 2026-08-10): `SIBE` (~123) + `Floor` (~5) + `Latibex` (~14) kept in full; `MTF` filtered to `BMEGrowth` (~111) + `BMEScaleUp` (~52); funds (SICAV/HedgeFunds/VCC) and other non-equity rows excluded. Tickers are enriched per ISIN from `ShareDetailsInfo` (rate-limited; reuses cached tickers; failed entries stay until next refresh). BME is a SIX company — the Euronext CSV family is NOT reused and no Madrid segment exists there. Not an IBKR-complete universe; never enters the feed. |
+| yahoo_es | news | none | Yahoo Finance ES public RSS (`region=ES`, `lang=es-ES` + `en-US` merged; identical titles stay single-language); `.MC` at request time; may be loosely related and break without notice |
+| google_news_es | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=es&gl=ES&ceid=ES:es`); may be loosely related (the `.MC` suffix also matches unrelated "MC" text) and break without notice |
+
+`market=es` companies use canonical root tickers (`SAN` / `SAN.MC` /
+`SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME`
+are stripped at add time, Spanish ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped. Finnhub is **US only** and
+never queried for ES. `es_universe_name_map()` backfills names, board and
+ISIN for add-company; disclosure matching uses the universe identity
+(name/ISIN for CNMV, company key for BME). News comes from `yahoo_es` /
+`google_news_es`.
+
+ES feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_es` / `google_news_es` news
+pairs across sources on ticker + Madrid day (`Europe/Madrid`) + normalized
+title. `cnmv_hr` filings pair on the stable CNMV registration number
+(`es:filing:cnmv:...`) and `bme_relevant_facts` on the same registration
+number read from the BME JSON (`es:filing:bme:...`); the two sources are
+never cross-annotated (independent APIs), and the title fallback is
+source-scoped (ticker + Madrid day + normalized title). Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

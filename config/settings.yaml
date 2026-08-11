@@ -108,6 +108,14 @@ sources:
     label: AMF OAM
     source_type: filings
     enabled: true          # key-free AMF OAM information feed (undocumented; may change without notice)
+  - name: cnmv_hr
+    label: CNMV (hechos relevantes)
+    source_type: filings
+    enabled: true          # key-free official CNMV RSS (IP + OIR); needs universe name/ISIN to match
+  - name: bme_relevant_facts
+    label: BME Relevant Facts
+    source_type: filings
+    enabled: true          # key-free official BME relevant-facts JSON; needs universe company key; ~31 day range cap
   - name: yahoo_fr
     label: Yahoo Finance FR
     source_type: news
@@ -152,6 +160,14 @@ sources:
     label: Google News (IT)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=it); may be loosely related / break without notice
+  - name: yahoo_es
+    label: Yahoo Finance ES
+    source_type: news
+    enabled: true          # key-free public RSS mirror (es-ES + en-US); may be loosely related / break without notice
+  - name: google_news_es
+    label: Google News (ES)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=es); may be loosely related / break without notice
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.
