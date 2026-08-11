@@ -559,6 +559,53 @@ class WebRepository:
             for row in rows
         )
 
+    def ensure_source_ticker_sync_states(
+        self,
+        source_tickers: Sequence[Tuple[str, str, str]],
+    ) -> None:
+        """Create pending state rows without scheduling historical work."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT OR IGNORE INTO source_ticker_sync_state (
+                    source, ticker, market, initial_status,
+                    coverage_kind, updated_at
+                ) VALUES (?, ?, ?, 'pending', 'unknown', ?)
+                """,
+                (
+                    (str(source), str(ticker), str(market), now)
+                    for source, ticker, market in source_tickers
+                ),
+            )
+
+    def source_ticker_sync_states(
+        self,
+        source: Optional[str] = None,
+        ticker: Optional[str] = None,
+        market: Optional[str] = None,
+    ) -> Tuple[Mapping[str, Any], ...]:
+        """Return durable initial/incremental state for source-ticker pairs."""
+        conditions: List[str] = []
+        parameters: List[str] = []
+        for column, value in (
+            ("source", source), ("ticker", ticker), ("market", market)
+        ):
+            if value is not None:
+                conditions.append(f"{column} = ?")
+                parameters.append(str(value))
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM source_ticker_sync_state "
+                f"{where} ORDER BY source, ticker, market",
+                parameters,
+            ).fetchall()
+        return tuple({
+            **dict(row),
+            "needs_backfill": str(row["initial_status"]) != "complete",
+        } for row in rows)
+
     def active_tickers_without_source_items(self, source: str) -> Tuple[str, ...]:
         """Return active tickers that have never stored an item from a source."""
         return tuple(
@@ -1400,8 +1447,20 @@ class WebRepository:
             ]
         return {"runs": runs, "logs": logs}
 
-    def record_collection_events(self, events: Sequence[Any]) -> None:
-        """Persist completed pipeline events without coupling the pipeline to SQLite."""
+    def record_collection_events(
+        self,
+        events: Sequence[Any],
+        state_targets: Optional[
+            Mapping[str, Sequence[Tuple[str, str]]]
+        ] = None,
+    ) -> None:
+        """Persist events and update per-ticker state in the same transaction.
+
+        ``state_targets`` is only needed by source-wide connectors whose
+        truthful ingestion event keeps the aggregate ``ticker='*'`` shape.
+        It expands that aggregate outcome into state rows without inventing
+        additional ingestion events or duplicating collection metrics.
+        """
         grouped: Dict[str, List[Any]] = {}
         for event in events:
             grouped.setdefault(str(event.source), []).append(event)
@@ -1496,6 +1555,98 @@ class WebRepository:
                         for event in source_events
                     ),
                 )
+                for event in source_events:
+                    self._upsert_source_ticker_sync_state(connection, event)
+                    if str(getattr(event, "ticker", "")) == "*":
+                        for ticker, market in tuple(
+                            (state_targets or {}).get(source, ())
+                        ):
+                            self._upsert_source_ticker_sync_state(
+                                connection,
+                                event,
+                                ticker_override=ticker,
+                                market_override=market,
+                            )
+
+    @staticmethod
+    def _upsert_source_ticker_sync_state(
+        connection: sqlite3.Connection,
+        event: Any,
+        *,
+        ticker_override: Optional[str] = None,
+        market_override: Optional[str] = None,
+    ) -> None:
+        ticker = str(
+            ticker_override
+            if ticker_override is not None
+            else getattr(event, "ticker", "") or ""
+        )
+        market = str(
+            market_override
+            if market_override is not None
+            else getattr(event, "market", "unknown") or "unknown"
+        )
+        if not ticker or ticker == "*" or market == "unknown":
+            return
+        status = str(getattr(event, "status", "failure") or "failure")
+        initial_backfill = bool(getattr(event, "initial_backfill", False))
+        initial_status = (
+            "complete" if status in {"success", "empty"}
+            else "partial" if status == "partial"
+            else "failure"
+        ) if initial_backfill else "pending"
+        finished_at = event.finished_at.isoformat()
+        last_success_at = (
+            finished_at if status in {"success", "empty", "partial"} else None
+        )
+        last_error = (
+            str(event.error_message or "") or None
+            if status in {"partial", "failure"}
+            else None
+        )
+        date_value = lambda value: value.isoformat() if value is not None else None
+        connection.execute(
+            """
+            INSERT INTO source_ticker_sync_state (
+                source, ticker, market, initial_status, last_status,
+                coverage_kind, requested_start_date, requested_end_date,
+                effective_start_date, effective_end_date, last_attempt_at,
+                last_success_at, last_error, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source, ticker, market) DO UPDATE SET
+                initial_status = CASE
+                    WHEN ? THEN excluded.initial_status
+                    ELSE source_ticker_sync_state.initial_status
+                END,
+                last_status = excluded.last_status,
+                coverage_kind = CASE
+                    WHEN excluded.coverage_kind = 'unknown'
+                    THEN source_ticker_sync_state.coverage_kind
+                    ELSE excluded.coverage_kind
+                END,
+                requested_start_date = excluded.requested_start_date,
+                requested_end_date = excluded.requested_end_date,
+                effective_start_date = excluded.effective_start_date,
+                effective_end_date = excluded.effective_end_date,
+                last_attempt_at = excluded.last_attempt_at,
+                last_success_at = COALESCE(
+                    excluded.last_success_at,
+                    source_ticker_sync_state.last_success_at
+                ),
+                last_error = excluded.last_error,
+                updated_at = excluded.updated_at
+            """,
+            (
+                str(event.source), ticker, market, initial_status, status,
+                str(getattr(event, "coverage_kind", "unknown") or "unknown"),
+                date_value(getattr(event, "requested_start_date", None)),
+                date_value(getattr(event, "requested_end_date", None)),
+                date_value(getattr(event, "effective_start_date", None)),
+                date_value(getattr(event, "effective_end_date", None)),
+                finished_at, last_success_at, last_error, finished_at,
+                initial_backfill,
+            ),
+        )
 
     def setting(self, key: str, default: str) -> str:
         with self._connect() as connection:

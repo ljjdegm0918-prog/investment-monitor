@@ -95,6 +95,51 @@ from .sources.gpw_espi import GpwEspiConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
+SOURCE_MARKETS = {
+    "sec": "us", "news": "us",
+    "dart": "kr", "kind": "kr", "naver_news": "kr",
+    "hankyung": "kr", "thebell": "kr",
+    "companies_house": "uk", "investegate": "uk", "yahoo_uk": "uk",
+    "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
+    "yahoo_ca": "ca", "google_news_ca": "ca", "sedar_plus": "ca",
+    "cse_filings": "ca", "neo_filings": "ca",
+    "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
+    "google_news_tw": "tw",
+    "asx_announcements": "au", "yahoo_au": "au", "google_news_au": "au",
+    "amf_oam": "fr", "yahoo_fr": "fr", "google_news_fr": "fr",
+    "eqs_dgap": "de", "de_community": "de", "yahoo_de": "de",
+    "google_news_de": "de",
+    "eqs_nl": "nl", "yahoo_nl": "nl", "google_news_nl": "nl",
+    "eqs_it": "it", "yahoo_it": "it", "google_news_it": "it",
+    "cnmv_hr": "es", "bme_relevant_facts": "es", "yahoo_es": "es",
+    "google_news_es": "es",
+    "sgx_announcements": "sg", "yahoo_sg": "sg", "google_news_sg": "sg",
+    "fsma_stori": "be", "be_second_disclosure": "be", "yahoo_be": "be",
+    "google_news_be": "be",
+    "eqs_ch": "ch", "six_official_notices": "ch", "yahoo_ch": "ch",
+    "google_news_ch": "ch",
+    "gpw_espi": "pl", "yahoo_pl": "pl", "google_news_pl": "pl",
+    "fi_oam": "se", "yahoo_se": "se", "google_news_se": "se",
+    "tdnet_public_web": "jp", "edinet": "jp",
+}
+
+
+def relevant_sources_for_market(
+    names: Iterable[str],
+    market: str,
+) -> Tuple[str, ...]:
+    """Return sources scoped to this market, preserving custom connectors.
+
+    Connectors in the built-in registry have an explicit market.  Unknown
+    names keep the legacy all-market behavior so an injected/custom registry
+    connector is not silently dropped from collection.
+    """
+    return tuple(
+        name
+        for name in names
+        if SOURCE_MARKETS.get(str(name)) in (None, market)
+    )
+
 
 class SourceRegistry:
     """Map configuration names to connector factories."""

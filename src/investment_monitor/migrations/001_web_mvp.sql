@@ -64,6 +64,28 @@ CREATE TABLE IF NOT EXISTS ingestion_logs (
     FOREIGN KEY (run_id) REFERENCES ingestion_runs(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS source_ticker_sync_state (
+    source TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    market TEXT NOT NULL,
+    initial_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (initial_status IN ('pending', 'complete', 'partial', 'failure')),
+    last_status TEXT,
+    coverage_kind TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (coverage_kind IN (
+            'complete_window', 'bounded_window', 'feed_snapshot', 'unknown'
+        )),
+    requested_start_date TEXT,
+    requested_end_date TEXT,
+    effective_start_date TEXT,
+    effective_end_date TEXT,
+    last_attempt_at TEXT,
+    last_success_at TEXT,
+    last_error TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (source, ticker, market)
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -83,3 +105,6 @@ ON ingestion_runs(source, started_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_ingestion_logs_filters
 ON ingestion_logs(source, status, occurred_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_source_ticker_sync_state_status
+ON source_ticker_sync_state(initial_status, source, market);
