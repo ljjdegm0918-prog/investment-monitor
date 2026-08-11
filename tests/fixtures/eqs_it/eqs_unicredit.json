@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "records": [
+    {
+      "id": "211252eb-8c10-4827-ac18-e9a7c4b8dd43_en",
+      "dtcreated": "2026-08-05 09:30:15",
+      "date": "2026-08-05 09:30:15",
+      "dateUtc": "2026-08-05 07:30:00",
+      "apiType": "news",
+      "locale": ["de"],
+      "category": "Takeover bids",
+      "categoryCode": "wpug",
+      "category_id": "wpug",
+      "companyName": "UniCredit S.p.A.",
+      "companyUUID": "5b738ad0-ea7c-11e8-902f-2c44fd856d8c",
+      "isin": "IT0005239360",
+      "timezone": "Europe/Berlin",
+      "headline": "UniCredit launches public tender offer",
+      "language": "en",
+      "totalItem": 10
+    },
+    {
+      "id": "a1b2c3d4-8c10-4827-ac18-e9a7c4b8dd44_en",
+      "date": "2026-07-20 10:00:00",
+      "dateUtc": "2026-07-20 08:00:00",
+      "apiType": "news",
+      "locale": ["de"],
+      "category": "Annual report",
+      "categoryCode": "annualreport",
+      "companyName": "UniCredit S.p.A.",
+      "isin": "IT0005239360",
+      "headline": "UniCredit publishes 2025 Annual Report",
+      "language": "en"
+    }
+  ]
+}

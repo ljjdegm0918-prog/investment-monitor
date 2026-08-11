@@ -21,21 +21,33 @@ from .nl_universe import (
     refresh_nl_universe,
     search_nl_universe,
 )
+from .it_universe import (
+    ItUniverseError,
+    it_universe_name_map,
+    load_it_universe,
+    refresh_it_universe,
+    search_it_universe,
+)
 
 __all__ = [
     "DeUniverseError",
     "FrUniverseError",
     "NlUniverseError",
+    "ItUniverseError",
     "de_universe_name_map",
     "fr_universe_name_map",
     "nl_universe_name_map",
+    "it_universe_name_map",
     "load_de_universe",
     "load_fr_universe",
     "load_nl_universe",
+    "load_it_universe",
     "refresh_de_universe",
     "refresh_fr_universe",
     "refresh_nl_universe",
+    "refresh_it_universe",
     "search_de_universe",
     "search_fr_universe",
     "search_nl_universe",
+    "search_it_universe",
 ]

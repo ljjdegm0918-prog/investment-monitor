@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Any, Mapping, Optional, Tuple
 
 
-ALLOWED_MARKETS = frozenset({"us", "cn", "hk", "jp", "kr", "uk", "tw", "ca", "au", "fr", "de", "nl", "unknown"})
+ALLOWED_MARKETS = frozenset({"us", "cn", "hk", "jp", "kr", "uk", "tw", "ca", "au", "fr", "de", "nl", "it", "unknown"})
 MARKET_UNKNOWN = "unknown"
 MARKET_US = "us"
 MARKET_CN = "cn"
@@ -21,6 +21,7 @@ MARKET_AU = "au"
 MARKET_FR = "fr"
 MARKET_DE = "de"
 MARKET_NL = "nl"
+MARKET_IT = "it"
 
 
 @dataclass(frozen=True)

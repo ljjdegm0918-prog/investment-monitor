@@ -1,0 +1,11 @@
+Name;ISIN;Symbol;Market;Currency;"Open Price";"High Price";"low Price";"last Price";"last Trade MIC Time";"Time Zone";Volume;Turnover;"Closing Price";"Closing Price DateTime"
+"European Equities"
+"10 Aug 2026"
+"All datapoints provided as of end of last active trading day."
+ENI;IT0003132476;ENI;"Euronext Milan";EUR;14.20;14.35;14.10;14.25;" 17:35";CET;1000000;14250000.00;14.25;
+UNICREDIT;IT0005239360;UCG;"Euronext Milan";EUR;42.50;42.90;42.10;42.70;" 17:35";CET;800000;34160000.00;42.70;
+INTESA SANPAOLO;IT0000072618;ISP;"Euronext Milan";EUR;3.90;3.95;3.85;3.92;" 17:35";CET;1200000;4704000.00;3.92;
+4AIM SICAF;IT0005204729;AIM;"Euronext Growth Milan";EUR;10.00;10.10;9.90;10.05;" 17:35";CET;1000;10050.00;10.05;
+LVMH;FR0000121014;1MC;"Euronext Global Equity Market";EUR;480.30;482.95;478.50;480.00;" 17:24";CET;1354;650320.00;479.85;
+SANOFI;FR0000120578;4SAN;EuroTLX;EUR;75.18;75.18;75.18;75.18;" 15:58";CET;500;37590.00;75.32;
+ASML HOLDING;NL0010273215;ASML;"Euronext Amsterdam";EUR;925.00;930.00;915.00;925.00;" 17:35";CET;100000;92000000.00;925.00;

@@ -140,6 +140,18 @@ sources:
     label: EQS News (NL)
     source_type: filings
     enabled: true          # key-free EQS News JSON by NL ISIN (unofficial; partial Dutch coverage; not AFM official); needs ISIN from universe or typed ISIN
+  - name: eqs_it
+    label: EQS News (IT)
+    source_type: filings
+    enabled: true          # key-free EQS News JSON by IT ISIN (unofficial; partial Italian coverage; not Consob official); needs ISIN from universe or typed ISIN
+  - name: yahoo_it
+    label: Yahoo Finance IT
+    source_type: news
+    enabled: true          # key-free public RSS mirror (it-IT + en-US); may be loosely related / break without notice
+  - name: google_news_it
+    label: Google News (IT)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=it); may be loosely related / break without notice
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.
