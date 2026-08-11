@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import List, Mapping, Optional, Sequence, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_ES
+from ...provenance import build_raw_provenance
 from ...universe.es_universe import es_universe_name_map
 from ...web_repository import normalize_es_ticker
 from .client import (
@@ -188,6 +189,23 @@ def _map_records(
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
+                    **build_raw_provenance(
+                        official_source_id=(
+                            str(record.get("nreg") or "") or None
+                        ),
+                        official_source_url=str(record["url"]),
+                        retrieval_url=str(
+                            record.get("retrieval_url") or ""
+                        ),
+                        raw_payload=record.get("raw_payload") or record,
+                        raw_payload_format="rss_xml_item",
+                        classification_code=None,
+                        classification_label=category or None,
+                        published_at_raw=str(
+                            record.get("published_at_raw") or ""
+                        ),
+                        published_timezone="GMT",
+                    ),
                     "provider": "cnmv_rss",
                     "stock_code": ticker,
                     "document_id": document_id,

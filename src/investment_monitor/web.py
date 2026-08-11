@@ -12,7 +12,7 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 

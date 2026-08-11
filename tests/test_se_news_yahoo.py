@@ -164,6 +164,10 @@ class YahooSeConnectorTests(unittest.TestCase):
             "Swedish stocks rally on tech gains",
         )
         self.assertIn("s=ERIC-B.ST", opener.requested[0])
+        for item in items:
+            self.assertNotIn("provenance_schema_version", item.raw_metadata)
+            self.assertNotIn("official_source_id", item.raw_metadata)
+            self.assertNotIn("official_source_url", item.raw_metadata)
 
     def test_symbol_for_injection_is_used(self) -> None:
         connector, opener = self.make_connector(

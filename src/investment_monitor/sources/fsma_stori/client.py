@@ -207,7 +207,10 @@ class StoriClient:
             for raw in rows:
                 parsed = _parse_record(raw)
                 if parsed is not None:
-                    collected.append(parsed)
+                    collected.append({
+                        **parsed,
+                        "retrieval_url": self.result_url,
+                    })
             if not rows or len(rows) < page_size:
                 break
             if expected_total is not None and rows_seen >= expected_total:
@@ -360,6 +363,7 @@ def _parse_record(raw: Any) -> Optional[Mapping[str, Any]]:
         "main_documents": documents,
         "attachments": attachments,
         "raw": dict(raw),
+        "published_at_raw": str(raw.get("datePublication") or ""),
     }
 
 

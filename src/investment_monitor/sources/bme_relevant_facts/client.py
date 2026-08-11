@@ -133,7 +133,7 @@ class BmeRelevantFactsClient:
                 start_date=start_date,
                 end_date=end_date,
             )
-            records.extend(page_records)
+            records.extend({**record, "retrieval_url": url} for record in page_records)
             if not _has_more(payload):
                 break
             if page == max_pages:
@@ -246,6 +246,10 @@ def _parse_payload(
                 "issuer_name": str(item.get("issuerName") or "").strip(),
                 "pdf_url": str(item.get("pdfurl") or "").strip(),
                 "url": _detail_url(prefix, digits),
+                "published_at_raw": str(
+                    item.get("relevantFactDate") or ""
+                ),
+                "raw_payload": dict(item),
             }
         )
     return records

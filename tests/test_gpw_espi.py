@@ -22,6 +22,7 @@ from investment_monitor import (
     GpwEspiRequestError,
 )
 from investment_monitor.registry import create_default_registry
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "gpw_espi"
@@ -272,6 +273,28 @@ class GpwEspiConnectorTests(unittest.TestCase):
         self.assertIn("geru_id=495125", first.url)
         self.assertEqual(first.raw_metadata["isin"], "PLPKO0000016")
         self.assertIn("searchText=PLPKO0000016", opener.requested[0])
+        from investment_monitor.sources.gpw_espi.client import _parse_page
+        payload = next(
+            record["raw_payload"]
+            for record in _parse_page(
+                (FIXTURES / "komunikaty_pko.html").read_bytes(),
+                "https://www.gpw.pl/",
+            )
+            if record["external_id"] == first.external_id
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=first.external_id,
+            official_source_url=first.url,
+            retrieval_url=opener.requested[0],
+            raw_payload_format="html_list_item",
+            classification_code=None,
+            classification_label="espi",
+            published_at_raw=payload["date"],
+            published_timezone="Europe/Warsaw",
+        )
 
     def test_missing_universe_identity_is_skipped_honestly(self) -> None:
         opener = client_opener()
