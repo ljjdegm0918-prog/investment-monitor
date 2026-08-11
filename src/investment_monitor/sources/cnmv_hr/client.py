@@ -21,6 +21,7 @@ so TLS verification stays ON by default with an explicit per-connector
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import hashlib
 import html
 import logging
@@ -67,6 +68,40 @@ class CnmvHrDataError(CnmvHrError):
     """Raised when CNMV returns an unexpected feed."""
 
 
+@dataclass(frozen=True)
+class CnmvHrFeedOutcome:
+    """One truthful CNMV feed attempt and its usable records."""
+
+    feed_id: str
+    status: str
+    records_read: int
+    retrieval_url: str
+    finished_at: datetime
+    error_kind: Optional[str] = None
+    error_message: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CnmvHrFetchResult:
+    """Structured outcome for the independent IP and OIR feed attempts."""
+
+    records: Tuple[Mapping[str, Any], ...]
+    feed_outcomes: Tuple[CnmvHrFeedOutcome, ...]
+
+    @property
+    def status(self) -> str:
+        failed = sum(
+            feed.status == "failure" for feed in self.feed_outcomes
+        )
+        if failed == len(self.feed_outcomes):
+            return "failure"
+        if failed:
+            return "partial"
+        if any(feed.status == "success" for feed in self.feed_outcomes):
+            return "success"
+        return "empty"
+
+
 class CnmvHrClient:
     """Small stdlib RSS client for the two CNMV disclosure feeds."""
 
@@ -103,6 +138,7 @@ class CnmvHrClient:
         self._sleeper = sleeper
         self._last_request_at: Optional[float] = None
         self._rate_limit_lock = threading.Lock()
+        self._last_result: Optional[CnmvHrFetchResult] = None
 
     @classmethod
     def from_environment(cls) -> "CnmvHrClient":
@@ -121,54 +157,83 @@ class CnmvHrClient:
         self,
         start_date: date,
         end_date: date,
-    ) -> List[Mapping[str, Any]]:
-        """Fetch both CNMV feeds and merge records inside the Madrid window.
+    ) -> CnmvHrFetchResult:
+        """Fetch both CNMV feeds and return their independent outcomes.
 
         One feed failing (network, HTTP error or malformed XML) is logged and
-        does not discard records from the other feed. Only when every feed
-        fails is an error raised (request error when all failures are
-        request-side, data error otherwise). Both feeds empty is a valid
-        honest result and returns ``[]``.
+        does not discard records from the other feed. Both feeds failing and
+        both feeds being empty are represented explicitly without raising.
         """
-        records: List[Mapping[str, Any]] = []
-        request_failures: List[str] = []
-        data_failures: List[str] = []
-        for url in (self._ip_url, self._oir_url):
+        return self.fetch_disclosures_result(start_date, end_date)
+
+    @property
+    def last_result(self) -> Optional[CnmvHrFetchResult]:
+        return self._last_result
+
+    def fetch_disclosures_result(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> CnmvHrFetchResult:
+        """Fetch IP and OIR independently without discarding partial success."""
+        feed_outcomes: List[CnmvHrFeedOutcome] = []
+        collected: List[Mapping[str, Any]] = []
+        for feed, url in (("ip", self._ip_url), ("oir", self._oir_url)):
             try:
                 body = self._get_xml(url)
-                records.extend(
-                    _parse_rss(
-                        body,
-                        start_date=start_date,
-                        end_date=end_date,
-                    )
-                )
+                records = tuple(_parse_rss(
+                    body,
+                    start_date=start_date,
+                    end_date=end_date,
+                    feed_id=feed,
+                    retrieval_url=url,
+                ))
+                collected.extend(records)
+                feed_outcomes.append(CnmvHrFeedOutcome(
+                    feed_id=feed,
+                    status="success" if records else "empty",
+                    records_read=len(records),
+                    retrieval_url=url,
+                    finished_at=datetime.now(timezone.utc),
+                ))
             except CnmvHrRequestError as error:
-                request_failures.append(str(error))
+                feed_outcomes.append(CnmvHrFeedOutcome(
+                    feed_id=feed,
+                    status="failure",
+                    records_read=0,
+                    retrieval_url=url,
+                    finished_at=datetime.now(timezone.utc),
+                    error_kind="request",
+                    error_message=str(error),
+                ))
                 LOGGER.warning(
-                    "cnmv_hr feed=%s status=failure error=%s",
+                    "cnmv_hr feed=%s url=%s status=failure error=%s",
+                    feed,
                     url,
                     error,
                 )
             except CnmvHrDataError as error:
-                data_failures.append(str(error))
+                feed_outcomes.append(CnmvHrFeedOutcome(
+                    feed_id=feed,
+                    status="failure",
+                    records_read=0,
+                    retrieval_url=url,
+                    finished_at=datetime.now(timezone.utc),
+                    error_kind="data",
+                    error_message=str(error),
+                ))
                 LOGGER.warning(
-                    "cnmv_hr feed=%s status=data_error error=%s",
+                    "cnmv_hr feed=%s url=%s status=data_error error=%s",
+                    feed,
                     url,
                     error,
                 )
-        if records:
-            return records
-        if data_failures:
-            raise CnmvHrDataError(
-                "CNMV HR feeds returned invalid XML: "
-                + "; ".join(data_failures)
-            )
-        if request_failures:
-            raise CnmvHrRequestError(
-                "CNMV HR feeds failed: " + "; ".join(request_failures)
-            )
-        return records
+        result = CnmvHrFetchResult(
+            records=tuple(collected),
+            feed_outcomes=tuple(feed_outcomes),
+        )
+        self._last_result = result
+        return result
 
     def _get_xml(self, url: str) -> bytes:
         for attempt in range(self._max_retries + 1):
@@ -234,6 +299,8 @@ def _parse_rss(
     *,
     start_date: date,
     end_date: date,
+    feed_id: str = "unknown",
+    retrieval_url: Optional[str] = None,
 ) -> List[Mapping[str, Any]]:
     try:
         root = ElementTree.fromstring(body)
@@ -252,14 +319,16 @@ def _parse_rss(
         guid = _child_text(item, "guid") or link
         if not company or not link:
             continue
-        published = _parse_rfc822(_child_text(item, "pubDate"))
+        published_at_raw = _child_text(item, "pubDate")
+        description_raw = _child_text(item, "description")
+        published = _parse_rfc822(published_at_raw)
         if published is None:
             continue
         day = madrid_day(published)
         if day < start_date or day > end_date:
             continue
         category, text, local_time = _parse_description(
-            _child_text(item, "description")
+            description_raw
         )
         nreg = _nreg(guid or link)
         external_id = (
@@ -279,6 +348,16 @@ def _parse_rss(
                 "effective": local_time or published,
                 "category": category,
                 "text": text,
+                "feed_id": feed_id,
+                "retrieval_url": retrieval_url,
+                "published_at_raw": published_at_raw,
+                "raw_payload": {
+                    "title": company,
+                    "link": link,
+                    "guid": guid,
+                    "pubDate": published_at_raw,
+                    "description": description_raw,
+                },
             }
         )
     return records
