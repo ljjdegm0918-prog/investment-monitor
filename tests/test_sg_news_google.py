@@ -139,6 +139,10 @@ class GoogleSgConnectorTests(unittest.TestCase):
         self.assertEqual(first.raw_metadata["provider"], "google_news_rss")
         self.assertEqual(first.raw_metadata["langs"], "en-SG")
         self.assertIn("q=D05.SI", opener.requested[0])
+        for item in items:
+            self.assertNotIn("provenance_schema_version", item.raw_metadata)
+            self.assertNotIn("official_source_id", item.raw_metadata)
+            self.assertNotIn("official_source_url", item.raw_metadata)
 
     def test_symbol_for_injection_is_used(self) -> None:
         connector, opener = self.make_connector(
