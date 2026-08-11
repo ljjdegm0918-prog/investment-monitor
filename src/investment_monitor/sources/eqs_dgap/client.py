@@ -120,6 +120,8 @@ class EqsDgapClient:
                 parsed = self._parse_record(raw)
                 if parsed is None:
                     continue
+                parsed = dict(parsed)
+                parsed["retrieval_url"] = url
                 day = berlin_day(parsed["published_at"])
                 if day < start_date or day > end_date:
                     continue
@@ -178,6 +180,13 @@ class EqsDgapClient:
             "company_name": str(raw.get("companyName") or ""),
             "isin": str(raw.get("isin") or "").upper(),
             "locale_id": external_id,
+            "published_at_raw": str(
+                raw.get("dateUtc") or raw.get("date") or ""
+            ),
+            "published_timezone": (
+                "UTC" if raw.get("dateUtc") else "unknown"
+            ),
+            "raw_payload": dict(raw),
         }
 
     def _get_json(self, url: str) -> Mapping[str, Any]:

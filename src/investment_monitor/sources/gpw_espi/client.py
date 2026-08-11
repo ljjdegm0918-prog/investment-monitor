@@ -127,7 +127,7 @@ class GpwEspiClient:
             )
             body = self._get_html(url)
             page_records = _parse_page(body, self._public_base)
-            records.extend(page_records)
+            records.extend({**record, "retrieval_url": url} for record in page_records)
             if len(page_records) < page_size:
                 break
             offset += page_size
@@ -346,6 +346,8 @@ def _parse_page(
                 "isin": isin,
                 "report_type": report_type,
                 "report_number": report_number,
+                "published_at_raw": date_line,
+                "raw_payload": dict(row),
             }
         )
     return records

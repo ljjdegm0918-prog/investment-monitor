@@ -21,6 +21,7 @@ from investment_monitor import (
     StoriRequestError,
 )
 from investment_monitor.registry import create_default_registry
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fsma_stori"
@@ -257,6 +258,26 @@ class StoriConnectorTests(unittest.TestCase):
         ))
         self.assertEqual(first.raw_metadata["provider"], "fsma_stori")
         self.assertEqual(first.raw_metadata["isin"], AB_INBEV_ISIN)
+        payload = next(
+            record
+            for record in json.loads(fixture_body().decode("utf-8"))[
+                "storiResultItems"
+            ]
+            if record["requiredReportingTopicId"] == first.external_id
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=first.external_id,
+            official_source_url=first.url,
+            retrieval_url=opener.requests[0][0],
+            raw_payload_format="json",
+            classification_code=None,
+            classification_label=payload["reportingTopicName"],
+            published_at_raw=payload["datePublication"],
+            published_timezone="Europe/Brussels",
+        )
 
     def test_be_universe_isin_matches_mnemonic_ticker(self) -> None:
         connector, _ = make_connector(
@@ -327,6 +348,7 @@ class StoriConnectorTests(unittest.TestCase):
             if item.external_id == "90f6f9b5-5555-4d0b-8ae6-fe2272036666"
         )
         self.assertEqual(portal.url, "https://www.fsma.be/en/stori")
+        self.assertIsNone(portal.raw_metadata["official_source_url"])
 
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         def failing_opener(request, timeout=None):

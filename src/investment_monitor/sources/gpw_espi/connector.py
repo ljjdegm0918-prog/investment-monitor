@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_PL
+from ...provenance import build_raw_provenance
 from ...web_repository import normalize_pl_ticker
 from .client import (
     GpwEspiClient,
@@ -146,6 +147,21 @@ def _map_filings(
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
+                    **build_raw_provenance(
+                        official_source_id=str(record["external_id"]),
+                        official_source_url=str(record["url"]),
+                        retrieval_url=str(
+                            record.get("retrieval_url") or ""
+                        ),
+                        raw_payload=record.get("raw_payload") or record,
+                        raw_payload_format="html_list_item",
+                        classification_code=None,
+                        classification_label=(report_type or None),
+                        published_at_raw=str(
+                            record.get("published_at_raw") or ""
+                        ),
+                        published_timezone="Europe/Warsaw",
+                    ),
                     "provider": "gpw_komunikaty_page",
                     "isin": str(record.get("isin") or ""),
                     "report_type": str(record.get("report_type") or ""),

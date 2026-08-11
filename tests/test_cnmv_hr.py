@@ -14,11 +14,13 @@ from investment_monitor.sources.cnmv_hr import (
     CnmvHrFeedOutcome,
     CnmvHrFetchResult,
 )
+from investment_monitor.sources.cnmv_hr.connector import _map_records
 from investment_monitor.sources.cnmv_hr.matcher import (
     CnmvHrCompanyMatcher,
     company_names_match,
 )
 from zoneinfo import ZoneInfo
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "cnmv_hr"
@@ -203,6 +205,20 @@ class CnmvHrClientTests(unittest.TestCase):
         self.assertEqual(
             santander["text"],
             "Resultados del primer semestre de 2026.",
+        )
+        self.assertEqual(
+            santander["raw_payload"],
+            {
+                "title": "BANCO SANTANDER, S.A.",
+                "link": santander["url"],
+                "guid": santander["url"],
+                "pubDate": "Fri, 07 Aug 2026 15:41:40 GMT",
+                "description": (
+                    "<p><b>17:41  07/08/2026  </b> Sobre negocio y "
+                    "situacion financiera<BR/><BR/>Resultados del primer "
+                    "semestre de 2026.</p>"
+                ),
+            },
         )
 
     def test_empty_feeds_return_empty_list(self) -> None:
@@ -401,6 +417,66 @@ class CnmvHrConnectorTests(unittest.TestCase):
         )
         self.assertEqual(first.raw_metadata["document_id"], "42390")
         self.assertIn("BANCO SANTANDER", first.title)
+        source_record = next(
+            record
+            for record in make_client(oir_opener()).fetch_disclosures(
+                date(2026, 8, 1), date(2026, 8, 8)
+            ).records
+            if record["nreg"] == "42390"
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=source_record["raw_payload"],
+            official_source_id="42390",
+            official_source_url=source_record["url"],
+            retrieval_url=source_record["retrieval_url"],
+            raw_payload_format="rss_xml_item",
+            classification_code=None,
+            classification_label=source_record["category"],
+            published_at_raw=source_record["published_at_raw"],
+            published_timezone="GMT",
+        )
+
+    def test_missing_nreg_is_not_guessed_for_official_source_id(self) -> None:
+        raw_payload = {
+            "title": "BANCO SANTANDER, S.A.",
+            "link": "https://www.cnmv.es/notice-without-registration-number",
+            "guid": "official-guid-without-registration-number",
+            "pubDate": "Fri, 07 Aug 2026 15:41:40 GMT",
+            "description": "<p>Fixture notice.</p>",
+        }
+        record = {
+            "external_id": "official-guid-without-registration-number",
+            "nreg": "",
+            "company_name": "BANCO SANTANDER, S.A.",
+            "published": datetime(2026, 8, 7, 15, 41, 40, tzinfo=timezone.utc),
+            "effective": datetime(2026, 8, 7, 17, 41, tzinfo=ZoneInfo("Europe/Madrid")),
+            "category": "Otra informacion relevante",
+            "text": "Fixture notice.",
+            "url": raw_payload["link"],
+            "retrieval_url": "https://www.cnmv.es/fixture-feed",
+            "published_at_raw": raw_payload["pubDate"],
+            "raw_payload": raw_payload,
+        }
+
+        item = _map_records(
+            [record], ticker="SAN", collected_at=datetime.now(timezone.utc)
+        )[0]
+
+        assert_official_provenance(
+            self,
+            item,
+            expected_payload=raw_payload,
+            official_source_id=None,
+            official_source_url=raw_payload["link"],
+            retrieval_url=record["retrieval_url"],
+            raw_payload_format="rss_xml_item",
+            classification_code=None,
+            classification_label=record["category"],
+            published_at_raw=raw_payload["pubDate"],
+            published_timezone="GMT",
+        )
 
     def test_single_ticker_both_feed_failures_are_recorded(self) -> None:
         def failing_opener(request, timeout=None):

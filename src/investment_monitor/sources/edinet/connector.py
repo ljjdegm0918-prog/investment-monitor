@@ -412,6 +412,26 @@ class EDINETConnector:
                  now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self.client, self.store = client, store
         self.cache_ttl, self.download_root, self._now = cache_ttl, download_root, now
+        self._last_collection_status = "empty"
+        self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self._last_failure_details: Tuple[Mapping[str, Optional[str]], ...] = ()
+        self._last_records_read = 0
+
+    @property
+    def last_collection_status(self) -> str:
+        return self._last_collection_status
+
+    @property
+    def last_errors(self) -> Tuple[Tuple[str, str], ...]:
+        return self._last_errors
+
+    @property
+    def last_failure_details(self) -> Tuple[Mapping[str, Optional[str]], ...]:
+        return self._last_failure_details
+
+    @property
+    def last_records_read(self) -> int:
+        return self._last_records_read
 
     @classmethod
     def from_environment(cls) -> "EDINETConnector":
@@ -622,12 +642,47 @@ class EDINETConnector:
     downloadDocument = download_document
 
     def collect(self, request: CollectionRequest) -> List[InformationItem]:
+        companies = tuple(
+            EDINETCompanyInput(sec_code=ticker)
+            for ticker in request.tickers
+            if request.market_for(ticker) == MARKET_JP
+        )
+        if not companies:
+            self._last_collection_status = "empty"
+            self._last_errors = ()
+            self._last_failure_details = ()
+            self._last_records_read = 0
+            return []
         result = self.get_watchlist_disclosures_since(
-            companies=tuple(EDINETCompanyInput(sec_code=ticker) for ticker in request.tickers
-                            if request.market_for(ticker) == MARKET_JP),
+            companies=companies,
             since=datetime.combine(request.start_date, datetime.min.time(), JAPAN_TIME),
             now=datetime.combine(request.end_date + timedelta(days=1), datetime.min.time(), JAPAN_TIME) - timedelta(microseconds=1),
         )
+        details = tuple({
+            "feed": error.file_date.isoformat(),
+            "url": None,
+            "message": (
+                f"date={error.file_date.isoformat()}: {error.message}"
+            ),
+        } for error in result.errors)
+        requested_dates = _japan_dates(result.window_start, result.window_end)
+        failed_dates = {error.file_date for error in result.errors}
+        if result.errors:
+            self._last_collection_status = (
+                "failure"
+                if requested_dates and failed_dates.issuperset(requested_dates)
+                else "partial"
+            )
+        else:
+            self._last_collection_status = (
+                "success" if result.items else "empty"
+            )
+        self._last_errors = tuple(
+            (error.file_date.isoformat(), error.message)
+            for error in result.errors
+        )
+        self._last_failure_details = details
+        self._last_records_read = len(result.items)
         return [_to_information_item(item, result.fetched_at) for item in result.items]
 
 

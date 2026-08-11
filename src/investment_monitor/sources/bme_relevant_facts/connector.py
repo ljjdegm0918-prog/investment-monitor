@@ -17,6 +17,7 @@ from typing import List, Mapping, Optional, Tuple
 
 from ...daily import date_only_market_noon
 from ...models import CollectionRequest, InformationItem, MARKET_ES
+from ...provenance import build_raw_provenance
 from ...universe.es_universe import es_universe_name_map
 from ...web_repository import normalize_es_ticker
 from .client import (
@@ -131,6 +132,26 @@ def _map_records(
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
+                    **build_raw_provenance(
+                        official_source_id=str(
+                            record.get("cnmv_reg_number")
+                            or record["external_id"]
+                        ),
+                        official_source_url=str(record["url"]),
+                        retrieval_url=str(
+                            record.get("retrieval_url") or ""
+                        ),
+                        raw_payload=record.get("raw_payload") or record,
+                        raw_payload_format="json",
+                        classification_code=str(
+                            record.get("code") or ""
+                        ),
+                        classification_label=None,
+                        published_at_raw=str(
+                            record.get("published_at_raw") or ""
+                        ),
+                        published_timezone="Europe/Madrid",
+                    ),
                     "provider": "bme_relevant_facts_api",
                     "stock_code": ticker,
                     "document_id": str(record["external_id"]),

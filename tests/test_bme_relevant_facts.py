@@ -12,6 +12,7 @@ from investment_monitor import (
 )
 from investment_monitor.registry import create_default_registry
 from zoneinfo import ZoneInfo
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bme_relevant_facts"
@@ -210,6 +211,26 @@ class BmeRelevantFactsConnectorTests(unittest.TestCase):
             datetime(2026, 8, 6, 12, tzinfo=MADRID),
         )
         self.assertIn("companyKey=13900", opener.requested[0])
+        payload = next(
+            record
+            for record in json.loads(
+                (FIXTURES / "san_facts.json").read_text(encoding="utf-8")
+            )["data"]
+            if record["cnmvRegNumber"] == "OI0000042373"
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id="OI0000042373",
+            official_source_url=first.url,
+            retrieval_url=opener.requested[0],
+            raw_payload_format="json",
+            classification_code=payload["relevantFactCode"],
+            classification_label=None,
+            published_at_raw=payload["relevantFactDate"],
+            published_timezone="Europe/Madrid",
+        )
 
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         def failing_opener(request, timeout=None):

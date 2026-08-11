@@ -343,7 +343,7 @@ class SourceStatusAndFilterTests(unittest.TestCase):
         self.assertEqual(connectors, [])
         self.assertEqual(missing, ["news"])
 
-    def test_enabled_unimplemented_source_does_not_crash_or_write_fake_data(
+    def test_enabled_unavailable_source_records_truthful_failure_without_fake_data(
         self,
     ) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -361,12 +361,31 @@ class SourceStatusAndFilterTests(unittest.TestCase):
                 settings_path=settings_path,
                 start_date=date(2026, 8, 1),
                 end_date=date(2026, 8, 2),
+                markets={"AAPL": "us"},
+                initial_backfill=True,
             )
 
             self.assertEqual(result.items, ())
-            self.assertEqual(result.failures, ())
+            self.assertEqual(len(result.failures), 1)
+            self.assertEqual(result.failures[0].source, "news")
+            self.assertEqual(result.failures[0].ticker, "AAPL")
+            self.assertIn("unavailable", result.failures[0].message)
+            self.assertEqual(len(result.events), 1)
+            event = result.events[0]
+            self.assertEqual((event.source, event.ticker), ("news", "AAPL"))
+            self.assertEqual(event.status, "failure")
+            self.assertEqual(event.market, "us")
+            self.assertEqual(event.records_read, 0)
+            self.assertTrue(event.initial_backfill)
             self.assertEqual(result.stored_count, 0)
             self.assertEqual(result.save_result.inserted, 0)
+            state = WebRepository(
+                result.database_path
+            ).source_ticker_sync_states(
+                source="news", ticker="AAPL", market="us"
+            )[0]
+            self.assertEqual(state["initial_status"], "failure")
+            self.assertEqual(state["last_status"], "failure")
 
 
 class ConfigFormatTests(unittest.TestCase):
@@ -454,6 +473,44 @@ class MarketAwarePipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(seen_markets, ["us", "hk"])
+
+    def test_direct_pipeline_without_source_map_and_unknown_custom_keep_all_tickers(
+        self,
+    ) -> None:
+        request = CollectionRequest(
+            tickers=("AAPL", "SAN"),
+            start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 2),
+            markets={"AAPL": "us", "SAN": "es"},
+        )
+        scenarios = (
+            ("sec", None),
+            ("custom_source", {"sec": "us"}),
+        )
+        for name, source_markets in scenarios:
+            with self.subTest(name=name):
+                calls = []
+
+                class RecordingConnector:
+                    def __init__(self):
+                        self.name = name
+
+                    def collect(self, ticker_request: CollectionRequest):
+                        calls.append(ticker_request.tickers[0])
+                        return []
+
+                pipeline = CollectionPipeline(
+                    [RecordingConnector()],
+                    source_markets=source_markets,
+                )
+
+                pipeline.collect(request)
+
+                self.assertEqual(calls, ["AAPL", "SAN"])
+                self.assertEqual(
+                    [event.ticker for event in pipeline.last_events],
+                    ["AAPL", "SAN"],
+                )
 
 
 if __name__ == "__main__":

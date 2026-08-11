@@ -8,8 +8,10 @@ from urllib.error import HTTPError
 import zipfile
 
 from investment_monitor.sources.edinet import (
-    EDINETClient, EDINETCompanyInput, EDINETConnector, EDINETStore,
+    EDINETClient, EDINETCompanyInput, EDINETConnector, EDINETRequestError,
+    EDINETStore,
 )
+from investment_monitor.models import CollectionRequest
 
 
 def record(doc_id, submitted, *, edinet="E00001", sec="72030", dtype="999",
@@ -80,7 +82,6 @@ class EDINETConnectorTests(unittest.TestCase):
         self.assertEqual(connector.client.calls, [date(2026, 8, 7), date(2026, 8, 8)])
 
     def test_cache_avoids_login_storm_and_partial_date_error_is_returned(self):
-        from investment_monitor.sources.edinet.connector import EDINETRequestError
         now = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)
         connector = self.make_connector({
             date(2026, 8, 7): [record("ONE", "2026-08-07 13:00")],
@@ -97,6 +98,91 @@ class EDINETConnectorTests(unittest.TestCase):
         self.assertEqual(connector.client.calls.count(date(2026, 8, 7)), 1)
         self.assertEqual(connector.client.calls.count(date(2026, 8, 8)), 1)
         self.assertTrue(second.partial)
+
+    def test_source_wide_collection_status_matrix_preserves_date_failures(self):
+        now = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)
+        first_day = date(2026, 8, 7)
+        second_day = date(2026, 8, 8)
+        scenarios = {
+            "partial_with_items": (
+                {
+                    first_day: [record("ONE", "2026-08-07 13:00")],
+                    second_day: EDINETRequestError("second day blocked", 503),
+                },
+                "partial",
+                1,
+                1,
+            ),
+            "partial_without_items": (
+                {
+                    first_day: [],
+                    second_day: EDINETRequestError("second day blocked", 503),
+                },
+                "partial",
+                0,
+                1,
+            ),
+            "all_failure": (
+                {
+                    first_day: EDINETRequestError("first day blocked", 503),
+                    second_day: EDINETRequestError("second day blocked", 503),
+                },
+                "failure",
+                0,
+                2,
+            ),
+            "success": (
+                {
+                    first_day: [record("ONE", "2026-08-07 13:00")],
+                    second_day: [],
+                },
+                "success",
+                1,
+                0,
+            ),
+            "empty": (
+                {first_day: [], second_day: []},
+                "empty",
+                0,
+                0,
+            ),
+        }
+        request = CollectionRequest(
+            tickers=("7203",),
+            start_date=first_day,
+            end_date=second_day,
+            markets={"7203": "jp"},
+        )
+        for label, (responses, status, item_count, failure_count) in scenarios.items():
+            with self.subTest(label=label):
+                connector = self.make_connector(responses, now)
+
+                items = connector.collect(request)
+
+                self.assertEqual(len(items), item_count)
+                self.assertEqual(connector.last_collection_status, status)
+                self.assertEqual(connector.last_records_read, item_count)
+                self.assertEqual(
+                    len(connector.last_failure_details), failure_count
+                )
+                failed_dates = {
+                    detail["feed"] for detail in connector.last_failure_details
+                }
+                self.assertEqual(
+                    failed_dates,
+                    (
+                        {first_day.isoformat(), second_day.isoformat()}
+                        if failure_count == 2
+                        else {second_day.isoformat()}
+                        if failure_count == 1
+                        else set()
+                    ),
+                )
+                if failure_count:
+                    self.assertTrue(all(
+                        "blocked" in detail["message"]
+                        for detail in connector.last_failure_details
+                    ))
 
     def test_code_resolution_and_download_integrity(self):
         now = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)

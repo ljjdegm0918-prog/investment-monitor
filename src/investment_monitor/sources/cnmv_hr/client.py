@@ -185,6 +185,8 @@ class CnmvHrClient:
                     body,
                     start_date=start_date,
                     end_date=end_date,
+                    feed_id=feed,
+                    retrieval_url=url,
                 ))
                 collected.extend(records)
                 feed_outcomes.append(CnmvHrFeedOutcome(
@@ -297,6 +299,8 @@ def _parse_rss(
     *,
     start_date: date,
     end_date: date,
+    feed_id: str = "unknown",
+    retrieval_url: Optional[str] = None,
 ) -> List[Mapping[str, Any]]:
     try:
         root = ElementTree.fromstring(body)
@@ -315,14 +319,16 @@ def _parse_rss(
         guid = _child_text(item, "guid") or link
         if not company or not link:
             continue
-        published = _parse_rfc822(_child_text(item, "pubDate"))
+        published_at_raw = _child_text(item, "pubDate")
+        description_raw = _child_text(item, "description")
+        published = _parse_rfc822(published_at_raw)
         if published is None:
             continue
         day = madrid_day(published)
         if day < start_date or day > end_date:
             continue
         category, text, local_time = _parse_description(
-            _child_text(item, "description")
+            description_raw
         )
         nreg = _nreg(guid or link)
         external_id = (
@@ -342,6 +348,16 @@ def _parse_rss(
                 "effective": local_time or published,
                 "category": category,
                 "text": text,
+                "feed_id": feed_id,
+                "retrieval_url": retrieval_url,
+                "published_at_raw": published_at_raw,
+                "raw_payload": {
+                    "title": company,
+                    "link": link,
+                    "guid": guid,
+                    "pubDate": published_at_raw,
+                    "description": description_raw,
+                },
             }
         )
     return records

@@ -1,11 +1,13 @@
 """Tests for EQS News / DGAP disclosures (market=de)."""
 
 from datetime import date
+import json
 from pathlib import Path
 import unittest
 
 from investment_monitor.models import CollectionRequest
 from investment_monitor.sources.eqs_dgap import EqsDgapClient, EqsDgapConnector
+from provenance_assertions import assert_official_provenance
 
 FIXTURES = Path(__file__).parent / "fixtures" / "eqs_dgap"
 SAP_UNIVERSE = {
@@ -65,6 +67,26 @@ class EqsDgapTests(unittest.TestCase):
         self.assertTrue(all(item.market == "de" for item in items))
         self.assertTrue(all(item.source_type == "regulatory_filing" for item in items))
         self.assertIn("isin=DE0007164600", opener.requested[0])
+        first = next(
+            item for item in items
+            if item.external_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        )
+        payload = json.loads(
+            (FIXTURES / "news_sap.json").read_text(encoding="utf-8")
+        )["records"][0]
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=payload["id"],
+            official_source_url=first.url,
+            retrieval_url=opener.requested[0],
+            raw_payload_format="json",
+            classification_code=payload["categoryCode"],
+            classification_label=payload["category"],
+            published_at_raw=payload["dateUtc"],
+            published_timezone="UTC",
+        )
 
     def test_skips_non_de_without_http(self) -> None:
         opener = FakeOpener(b"{}")

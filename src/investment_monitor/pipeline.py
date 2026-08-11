@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import logging
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Mapping, Optional, Tuple
 
 from .connectors.base import SourceConnector
-from .models import CollectionRequest, InformationItem
+from .models import CollectionRequest, InformationItem, MARKET_UNKNOWN
 from .repository import InformationRepository, SaveResult
 
 LOGGER = logging.getLogger(__name__)
@@ -58,11 +58,13 @@ class CollectionPipeline:
         repository: Optional[InformationRepository] = None,
         logger: logging.Logger = LOGGER,
         initial_backfill: bool = False,
+        source_markets: Optional[Mapping[str, str]] = None,
     ) -> None:
         self._connectors = tuple(connectors)
         self._repository = repository
         self._logger = logger
         self._initial_backfill = initial_backfill
+        self._source_markets = dict(source_markets or {})
         self._last_failures: Tuple[CollectionFailure, ...] = ()
         self._last_save_result = SaveResult()
         self._last_events: Tuple[CollectionEvent, ...] = ()
@@ -115,18 +117,60 @@ class CollectionPipeline:
                         commit_checkpoint()
                     save_result = save_result + source_save
                     items.extend(collected)
-                    status = "success" if collected else "empty"
+                    status_hint = str(
+                        getattr(connector, "last_collection_status", "") or ""
+                    )
+                    failure_details = self._connector_failure_details(connector)
+                    error_message = None
+                    if status_hint in {"partial", "failure"}:
+                        status = status_hint
+                        error_message = "; ".join(
+                            self._format_failure_detail(detail)
+                            for detail in failure_details
+                        ) or f"connector reported {status_hint} collection"
+                        if failure_details:
+                            failures.extend(
+                                CollectionFailure(
+                                    source=connector.name,
+                                    ticker="*",
+                                    message=self._format_failure_detail(detail),
+                                    feed=detail.get("feed"),
+                                    url=detail.get("url"),
+                                )
+                                for detail in failure_details
+                            )
+                        else:
+                            failures.append(CollectionFailure(
+                                source=connector.name,
+                                ticker="*",
+                                message=error_message,
+                            ))
+                        self._logger.warning(
+                            "collection source=%s ticker=* status=%s error=%s",
+                            connector.name,
+                            status,
+                            error_message,
+                        )
+                    elif status_hint in {"success", "empty"}:
+                        status = status_hint
+                    else:
+                        # Preserve legacy source-wide behavior (notably TDnet)
+                        # when a connector exposes no structured outcome.
+                        status = "success" if collected else "empty"
                     events.append(CollectionEvent(
                         source=connector.name,
                         ticker="*",
                         started_at=started_at,
                         finished_at=datetime.now(timezone.utc),
                         status=status,
-                        records_read=len(collected),
+                        records_read=int(
+                            getattr(connector, "last_records_read", len(collected))
+                        ),
                         records_written=source_save.inserted + source_save.updated,
                         records_inserted=source_save.inserted,
                         records_updated=source_save.updated,
                         duplicate_records=source_save.updated,
+                        error_message=error_message,
                         requested_start_date=request.start_date,
                         requested_end_date=request.end_date,
                         effective_start_date=source_start_date,
@@ -174,7 +218,18 @@ class CollectionPipeline:
                         initial_backfill=self._initial_backfill,
                     ))
                 continue
-            for ticker in request.tickers:
+            declared_market = self._source_markets.get(connector.name)
+            connector_tickers = (
+                request.tickers
+                if declared_market is None
+                else tuple(
+                    ticker
+                    for ticker in request.tickers
+                    if request.market_for(ticker)
+                    in {declared_market, MARKET_UNKNOWN}
+                )
+            )
+            for ticker in connector_tickers:
                 started_at = datetime.now(timezone.utc)
                 ticker_start_date = self._clamped_start_date(
                     connector,

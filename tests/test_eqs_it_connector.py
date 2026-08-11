@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import json
 from pathlib import Path
 import unittest
 
@@ -9,6 +10,7 @@ from investment_monitor import (
     EqsItRequestError,
 )
 from investment_monitor.registry import create_default_registry
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "eqs_it"
@@ -134,6 +136,22 @@ class EqsItConnectorTests(unittest.TestCase):
         self.assertEqual(first.raw_metadata["provider"], "eqs_news")
         self.assertEqual(first.raw_metadata["isin"], "IT0005239360")
         self.assertIn("isin=IT0005239360", opener.requested[0])
+        payload = json.loads(
+            (FIXTURES / "eqs_unicredit.json").read_text(encoding="utf-8")
+        )["records"][0]
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=payload["id"],
+            official_source_url=first.url,
+            retrieval_url=opener.requested[0],
+            raw_payload_format="json",
+            classification_code=payload["categoryCode"],
+            classification_label=payload["category"],
+            published_at_raw=payload["dateUtc"],
+            published_timezone="UTC",
+        )
 
     def test_it_universe_isin_matches_ticker(self) -> None:
         connector, _ = self.make_connector(
