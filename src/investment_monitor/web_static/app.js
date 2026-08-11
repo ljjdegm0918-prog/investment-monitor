@@ -66,8 +66,12 @@ async function renderDaily() {
 function dailyContent(data) {
   const days = data.days || [data];
   const total = data.item_count ?? days.reduce((sum, day) => sum + day.item_count, 0);
-  if (!total && days.length === 1) return `<div class="empty"><h2>No information for this date</h2><p>No filing, news, or community updates were published in the selected day.</p></div>`;
-  return `<section class="range-summary" aria-label="Range summary"><div><strong>${total}</strong><span>updates</span></div><p>${days.length} daily report${days.length === 1 ? "" : "s"} · America/New_York</p></section>
+  const perf = data.performance;
+  const perfBanner = perf?.warnings?.length
+    ? `<aside class="range-performance-warn" role="status">${perf.warnings.map(w => `<p>${esc(w)}</p>`).join("")}</aside>`
+    : "";
+  if (!total && days.length === 1) return `${perfBanner}<div class="empty"><h2>No information for this date</h2><p>No filing, news, or community updates were published in the selected day.</p></div>`;
+  return `${perfBanner}<section class="range-summary" aria-label="Range summary"><div><strong>${total}</strong><span>updates</span></div><p>${days.length} daily report${days.length === 1 ? "" : "s"} · America/New_York</p></section>
     <div class="daily-range">${days.map(day => dailyDay(day)).join("")}</div>`;
 }
 

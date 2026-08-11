@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from time import perf_counter
 from typing import (
     Any,
     Dict,
@@ -267,6 +268,13 @@ class FeedFilters:
             "research",
         }:
             raise ValueError("unsupported information_type")
+
+
+@dataclass(frozen=True)
+class FeedDisplayAllResult:
+    items: Tuple[Mapping[str, Any], ...]
+    pages_fetched: int
+    query_ms: int
 
 
 @dataclass(frozen=True)
@@ -938,12 +946,13 @@ class WebRepository:
             result.page_size,
         )
 
-    def query_feed_display_all(self, filters: FeedFilters) -> Tuple[Mapping[str, Any], ...]:
+    def query_feed_display_all(self, filters: FeedFilters) -> FeedDisplayAllResult:
         """Return a complete filtered display set with dedupe done globally.
 
         Daily reports need every matching row.  Applying display annotation to
         each 100-row database page loses relationships that straddle pages.
         """
+        started = perf_counter()
         scoped = FeedFilters(**{**filters.__dict__, "page": 1, "page_size": 100})
         items: List[Mapping[str, Any]] = []
         page = 1
@@ -953,10 +962,15 @@ class WebRepository:
             if page >= result.pages:
                 break
             page += 1
-        return tuple(annotate_feed_items(
-            items,
-            enabled=self._kr_soft_dedupe_enabled(),
-        ))
+        query_ms = int((perf_counter() - started) * 1000)
+        return FeedDisplayAllResult(
+            items=tuple(annotate_feed_items(
+                items,
+                enabled=self._kr_soft_dedupe_enabled(),
+            )),
+            pages_fetched=page,
+            query_ms=query_ms,
+        )
 
     @staticmethod
     def _kr_soft_dedupe_enabled() -> bool:

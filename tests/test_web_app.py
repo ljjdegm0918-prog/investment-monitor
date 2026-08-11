@@ -233,6 +233,41 @@ class WebApplicationTests(unittest.TestCase):
         # 02:00 UTC is still the previous Eastern calendar day.
         self.assertEqual(payload["days"][1]["counts"]["news"], 1)
         self.assertEqual(payload["days"][2]["item_count"], 0)
+        performance = payload["performance"]
+        self.assertEqual(performance["day_count"], 3)
+        self.assertGreaterEqual(performance["query_ms"], 0)
+        self.assertGreaterEqual(performance["pages_fetched"], 1)
+        self.assertEqual(performance["warn_days"], 90)
+        self.assertEqual(performance["slow_ms"], 3000)
+        self.assertEqual(performance["warnings"], [])
+
+    def test_daily_range_warns_on_large_span_and_slow_query(self) -> None:
+        from investment_monitor.web_repository import FeedDisplayAllResult
+
+        original = WebRepository.query_feed_display_all
+
+        def slow_feed(self, filters):
+            result = original(self, filters)
+            return FeedDisplayAllResult(
+                items=result.items,
+                pages_fetched=result.pages_fetched,
+                query_ms=5000,
+            )
+
+        with patch.dict(os.environ, {
+            "DAILY_RANGE_WARN_DAYS": "2",
+            "DAILY_RANGE_SLOW_MS": "100",
+        }), patch.object(WebRepository, "query_feed_display_all", slow_feed):
+            response = self.application.handle(
+                "GET",
+                "/api/daily-range?start_date=2026-08-02&end_date=2026-08-04",
+            )
+
+        payload = self.payload(response)
+        warnings = payload["performance"]["warnings"]
+        self.assertEqual(len(warnings), 2)
+        self.assertIn("Large date range (3 days)", warnings[0])
+        self.assertIn("Slow query (5000 ms)", warnings[1])
 
     def test_daily_range_validates_order_and_size(self) -> None:
         reversed_response = self.application.handle(

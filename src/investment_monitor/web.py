@@ -896,13 +896,20 @@ class WebApplication:
     ) -> Mapping[str, Any]:
         # Filter the report categories in SQL, then annotate the complete
         # range once so soft-dedupe can see pairs split across DB pages.
-        items = self.repository.query_feed_display_all(FeedFilters(
+        feed_result = self.repository.query_feed_display_all(FeedFilters(
             list_slug=list_slug,
             information_type="daily",
             start_date=start_date,
             end_date=end_date,
             page_size=100,
         ))
+        items = feed_result.items
+        day_count = (end_date - start_date).days + 1
+        performance = _daily_range_performance(
+            day_count=day_count,
+            query_ms=feed_result.query_ms,
+            pages_fetched=feed_result.pages_fetched,
+        )
         day_payloads: Dict[date, Dict[str, Any]] = {}
         cursor = start_date
         while cursor <= end_date:
@@ -963,6 +970,7 @@ class WebApplication:
             "item_count": sum(
                 int(payload["item_count"]) for payload in day_payloads.values()
             ),
+            "performance": performance,
         }
 
     def _html(self, path: str) -> WebResponse:
@@ -1250,6 +1258,52 @@ def _daily_source_label(item: Mapping[str, Any]) -> str:
         if publisher:
             return publisher
     return str(item.get("source_label") or item.get("source") or "Unavailable")
+
+
+def _daily_range_warn_days() -> int:
+    return _environment_int("DAILY_RANGE_WARN_DAYS", 90, minimum=1, maximum=366)
+
+
+def _daily_range_slow_ms() -> int:
+    return _environment_int("DAILY_RANGE_SLOW_MS", 3000, minimum=0, maximum=120_000)
+
+
+def _daily_range_performance(
+    *,
+    day_count: int,
+    query_ms: int,
+    pages_fetched: int,
+) -> Mapping[str, Any]:
+    warn_days = _daily_range_warn_days()
+    slow_ms = _daily_range_slow_ms()
+    warnings: List[str] = []
+    if day_count >= warn_days:
+        warnings.append(
+            f"Large date range ({day_count} days). "
+            "Daily reports load the full filtered result set; "
+            "consider a shorter range for faster loads."
+        )
+    if query_ms >= slow_ms:
+        warnings.append(
+            f"Slow query ({query_ms} ms). "
+            "Consider narrowing the date range or list filter."
+        )
+    if warnings:
+        LOGGER.warning(
+            "daily-range performance: days=%s query_ms=%s pages=%s warnings=%s",
+            day_count,
+            query_ms,
+            pages_fetched,
+            warnings,
+        )
+    return {
+        "day_count": day_count,
+        "query_ms": query_ms,
+        "pages_fetched": pages_fetched,
+        "warn_days": warn_days,
+        "slow_ms": slow_ms,
+        "warnings": warnings,
+    }
 
 
 def _environment_bool(name: str, default: bool) -> bool:
