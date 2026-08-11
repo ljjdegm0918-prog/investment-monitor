@@ -283,7 +283,11 @@ def create_default_registry() -> SourceRegistry:
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)
-    registry.register(XueqiuConnector.name, XueqiuConnector)
+    registry.register(
+        XueqiuConnector.name,
+        XueqiuConnector,
+        secret_fields=XueqiuConnector.secret_fields,
+    )
     registry.register(SeekingAlphaConnector.name, SeekingAlphaConnector)
     registry.register(YellowbrickConnector.name, YellowbrickConnector)
     registry.register(SubstackConnector.name, SubstackConnector)

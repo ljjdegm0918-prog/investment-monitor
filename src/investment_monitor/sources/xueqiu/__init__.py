@@ -1,12 +1,9 @@
-"""Xueqiu (雪球) CN/HK community connector — honest stub after spike.
+"""Xueqiu (雪球) CN/HK community connector — stub + optional cookie LIVE.
 
-Live public HTML/JSON collection is **not** wired: every xueqiu.com HTML
-request is answered by an Aliyun WAF JS-challenge shell, and the JSON APIs
-(``search.json``, ``query/v1/symbol/search/status.json``,
-``statuses/hot/listV2.json``) demand a valid ``xq_a_token`` session cookie
-(error ``400016``) (spike 2026-08-11). Do not enable login/WAF bypass
-scraping. ``collect()`` returns an empty list until a stable public
-day-filter feed exists.
+Without ``XUEQIU_COOKIE``: ``collect()`` returns ``[]`` (honest stub). Public
+HTML is an Aliyun WAF JS-challenge shell; JSON APIs need ``xq_a_token``
+(spike 2026-08-11). With a non-empty cookie, ``statuses/search.json`` is used
+and results are filtered to the request calendar day. Do not enable WAF bypass.
 """
 
 from .connector import XueqiuConnector, local_day, parse_board_html_for_day
