@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
 import unittest
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 
 from investment_monitor.dedupe import annotate_feed_items, dedupe_key
 from investment_monitor.models import MARKET_CN, MARKET_HK, CollectionRequest
@@ -235,6 +238,50 @@ class XueqiuConnectorTests(unittest.TestCase):
             ["Xueqiu (CN/HK)"],
         )
 
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake_token_for_testing"})
+    def test_collect_live_via_cookie(self) -> None:
+        """When XUEQIU_COOKIE is set, collect should attempt the JSON API path.
 
-if __name__ == "__main__":
-    unittest.main()
+        Because the real API is not reachable from this sandbox, we mock the
+        response and verify the live path is entered (items returned, status
+        reflects cookie-enabled mode) rather than staying purely in stub.
+        """
+        connector = XueqiuConnector()
+        # Mock _fetch_via_cookie to return empty list (cookie set, no posts)
+        with patch.object(
+            connector, "_fetch_via_cookie", return_value=[]
+        ):
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+            # When cookie is set and _fetch_via_cookie returns [] (not None),
+            # the live path is taken and items (empty list) are returned.
+            self.assertEqual(items, [])
+            # Status should reflect the live/cookie-enabled state,
+            # not pure stub.
+            self.assertIn("LIVE", connector.status)
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=invalid_token"})
+    def test_collect_cookie_rejected_falls_to_stub(self) -> None:
+        """When XUEQIU_COOKIE has invalid token, _fetch_via_cookie returns None
+        and the connector falls back to honest stub."""
+        connector = XueqiuConnector()
+        # Mock _fetch_via_cookie to return None (simulates 400016 token rejection)
+        with patch.object(
+            connector, "_fetch_via_cookie", return_value=None
+        ):
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+            # When _fetch_via_cookie returns None, stub path is taken.
+            self.assertEqual(items, [])
+            # Status should be pure stub.
+            self.assertEqual(connector.status, "stub")

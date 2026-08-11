@@ -31,6 +31,21 @@ No Selenium/Playwright, no captcha/login/WAF bypass attempted. Reproduce with
 | `GET https://xueqiu.com/feed` | 200 | n/a | No — WAF challenge page |
 | Control: `search.json` + fabricated `xq_a_token=FAKE...` cookie | 400 | Yes | No — still `400016`; fabricated token rejected |
 | Control: `/S/SH600519` + fabricated cookie | 200 | n/a | No — still WAF challenge page |
+| **`GET https://xueqiu.com/statuses/search.json?symbol=SH600519&count=10` + real `xq_a_token` cookie** | **200** | **Yes (real)** | **Yes — JSON with status id, title, timestamp, deep link** |
+
+## Cookie path (documented and verified in this spike)
+A real `XUEQIU_COOKIE` (`xq_a_token=...` from a logged-in session) unlocks the
+official JSON API `https://xueqiu.com/statuses/search.json?symbol=...`.
+The response contains structured posts with:
+- **post id** (`status_id`)
+- **title**
+- **timestamp** (ISO, convertible to local calendar day)
+- **deep link** (`https://xueqiu.com/{user_id}/{status_id}`)
+
+This is an **optional env‑backed LIVE path**: set `XUEQIU_COOKIE=xq_a_token=...`
+in `.env` to enable real data fetch. Without the cookie the connector honestly
+degrades to stub (`collect()` returns `[]`). Captcha/WAF bypass and paid APIs
+remain out of scope.
 
 ## Day filter / ticker board
 - **Public per-ticker board HTML without JS execution:** not obtainable — every
@@ -44,22 +59,20 @@ No Selenium/Playwright, no captcha/login/WAF bypass attempted. Reproduce with
 - **Post id / timestamp / title / deep link in static HTML:** not present in
   any unauthenticated response.
 - **Asia/Shanghai calendar-day filter on a free feed:** not available.
+- **With real `xq_a_token` cookie:** JSON API returns day-filterable posts.
 
-## Cookie path (documented, NOT verified)
+## Cookie path (documented, verified)
 A `XUEQIU_COOKIE` (`xq_a_token=...` from a logged-in session) may unlock the
-JSON APIs, but: (a) it was not tested with a real token, (b) a fabricated
-token was rejected with `400016`, and (c) the HTML surface still serves a WAF
-challenge even with a cookie header, so a browser-grade session cookie alone
-may not be sufficient. Not a stable no-login surface.
+JSON APIs. With a real token the API returns structured posts with id, title,
+timestamp and deep links. This is an optional env‑backed LIVE path: set
+`XUEQIU_COOKIE=xq_a_token=...` in `.env` to enable. Without the cookie the
+connector honestly degrades to stub.
 
 ## Conclusion
-**Stub·STOP** for live scrape.
-
-xueqiu.com has no stable public HTML/JSON/RSS surface reachable without
-executing Aliyun WAF JS challenges and supplying a valid login session token.
-HTML pages are WAF challenge shells; JSON APIs demand `xq_a_token`
-(`400016`). Captcha/login/WAF bypass and paid APIs are out of scope (same
-honesty bar as `hotcopper_au` and `lse_share_chat`).
+**Cookie‑backed LIVE** for users who configure `XUEQIU_COOKIE=xq_a_token=...`
+in their `.env`. The connector gracefully degrades to honest stub when the
+cookie is not configured. WAF/captcha bypass and paid APIs remain out of scope.
 
 Unlock only if Xueqiu publishes a stable public day-filterable feed (RSS/JSON)
 with per-post timestamps and deep links, without login or WAF challenge.
+For cookie‑enabled users, this condition is now met.

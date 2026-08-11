@@ -1,8 +1,10 @@
-"""Xueqiu (雪球) CN/HK community connector (registered stub; no live scrape)."""
+"""Xueqiu (雪球) CN/HK community connector (supports stub + optional cookie LIVE)."""
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from datetime import date, datetime, timezone
 from typing import List, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
@@ -27,6 +29,9 @@ LOGGER = logging.getLogger(__name__)
 # automated clients; JSON APIs require xq_a_token, 2026-08-11).
 SYMBOL_URL_TEMPLATE = "https://xueqiu.com/S/{symbol}"
 
+# Optional cookie-backed LIVE path. Read dynamically via os.getenv()
+# so that @patch.dict / .env changes are picked up each time collect() runs.
+
 
 class XueqiuConnector:
     """CN/HK community source for Xueqiu public statuses.
@@ -38,18 +43,166 @@ class XueqiuConnector:
 
     name = "xueqiu"
     provider = "Xueqiu"
-    status = "stub"
+    _STUB_STATUS = "stub"
+    _LIVE_VIA_COOKIE_STATUS = "LIVE(cookie)"
 
     def __init__(self) -> None:
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self._status = self._STUB_STATUS  # default; overridden by collect() if cookie path taken
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
         return self._last_errors
 
+    @property
+    def status(self) -> str:
+        """Return the current connector status.
+
+        - ``"stub"`` when no ``XUEQIU_COOKIE`` is configured, or when the
+          cookie-backed LIVE attempt failed/fell back.
+        - ``"live(cookie)"`` when ``XUEQIU_COOKIE`` is set and the JSON API
+          path was successfully entered (even if it returned zero posts).
+        """
+        return self._status
+
+    def _fetch_via_cookie(self, ticker: str, market: str) -> Optional[List[InformationItem]]:
+        """Try to fetch Xueqiu posts via the official JSON API using a cookie.
+
+        Returns a list of InformationItem if the API call succeeds, or None
+        when the response indicates token error / WAF page etc.
+        """
+        code = normalize_xq_symbol(ticker, market=market)
+        cookie = os.getenv("XUEQIU_COOKIE")
+        if not cookie:
+            return None
+
+        url = (
+            f"https://xueqiu.com/statuses/search.json"
+            f"?symbol={code}&count=10"
+        )
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/126.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "application/json, text/plain, */*",
+                    "Cookie": cookie,
+                },
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                # Some endpoints return JSON wrapped in a callback or gzip.
+                data = json.loads(body)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.debug("xueqiu cookie fetch failed for %s: %s", ticker, exc)
+            return None
+
+        # Validate we got real data and not a WAF/error response.
+        if not isinstance(data, dict):
+            return None
+
+        error_code = data.get("error_code") or data.get("err_code")
+        if error_code and str(error_code) == "400016":
+            # Token invalid/rejected — fall back to stub.
+            LOGGER.info(
+                "xueqiu ticker=%s cookie rejected (400016) — stub fallthrough",
+                ticker,
+            )
+            return None
+
+        # Extract status list from the response.
+        # The search.json response structure: {"error_code":0,"response":[...]}
+        posts = data.get("response") or data.get("data") or []
+        if not isinstance(posts, list):
+            return None
+
+        zone = SHANGHAI if market == MARKET_CN else HONG_KONG
+        rows: List[XueqiuPostRow] = []
+        for post in posts:
+            status_id = str(post.get("status_id") or post.get("id") or "")
+            title = str(post.get("title") or "").strip()
+            if not title:
+                title = f"Xueqiu status {status_id}"[:500]
+            # published_at is an ISO timestamp string.
+            ts = str(post.get("timestamp") or post.get("created_at") or "")
+            published_at: Optional[datetime] = None
+            if ts:
+                try:
+                    published_at = datetime.fromisoformat(
+                        ts.replace("Z", "+00:00")
+                    )
+                except ValueError:
+                    pass
+            url = f"https://xueqiu.com/{post.get('user_id') or ''}/{status_id}"
+            summary = str(post.get("summary") or post.get("description") or "")[:500] or None
+            # Determine a local date for day-filtering; if none, use now.
+            if published_at:
+                published_local = published_at.astimezone(zone).date()
+            else:
+                published_local = date.today()
+
+            rows.append(
+                XueqiuPostRow(
+                    status_id=status_id,
+                    title=title,
+                    url=url,
+                    published_at=published_at or datetime.now(timezone.utc),
+                    summary=summary,
+                )
+            )
+
+        # Map parsed rows to InformationItems via the existing test helper logic.
+        items: List[InformationItem] = []
+        for row in rows:
+            from .parser import _market_zone  # local import to avoid cycle
+
+            code2 = normalize_xq_symbol(ticker, market=market)
+            collected = datetime.now(timezone.utc)
+            itm: InformationItem = InformationItem(
+                source=self.name,
+                source_type="community",
+                external_id=f"xueqiu-{row.status_id}",
+                tickers=(code2,),
+                issuer=code2,
+                published_at=row.published_at,
+                title=row.title,
+                document_type="community_post",
+                url=row.url,
+                collected_at=collected,
+                raw_metadata={
+                    "provider": "xueqiu",
+                    "status_id": row.status_id,
+                    "stock_code": code2,
+                    "symbol_url": SYMBOL_URL_TEMPLATE.format(
+                        symbol=code2
+                    ),
+                    "stub": False,
+                    "via": "cookie",
+                    "market": market,
+                },
+                market=market,
+                summary=(row.summary or None)[:500],
+                effective_at=row.published_at,
+            )
+            items.append(itm)
+
+        return items
+
     def collect(self, request: CollectionRequest) -> List[InformationItem]:
-        """Honest stub: no live Xueqiu fetch (WAF challenge / token required)."""
+        """Collect Xueqiu posts.
+
+        If ``XUEQIU_COOKIE`` env var is set, attempt the official JSON API
+        path and return real structured items.  When no cookie is configured
+        the connector honestly degrades to stub (``collect()`` returns ``[]``).
+        """
         notes: List[Tuple[str, str]] = []
+        live_mode = os.getenv("XUEQIU_COOKIE") is not None
         for ticker in request.tickers:
             market = request.market_for(ticker)
             if market not in (MARKET_CN, MARKET_HK):
@@ -60,6 +213,26 @@ class XueqiuConnector:
                 )
                 continue
             code = normalize_xq_symbol(ticker, market=market)
+
+            if live_mode:
+                items = self._fetch_via_cookie(ticker, market)
+                if items is not None:
+                    # Live path succeeded — record notes and return items.
+                    self._status = self._LIVE_VIA_COOKIE_STATUS
+                    for itm in items:
+                        notes.append(
+                            (itm.tickers[0], "xueqiu LIVE via XUEQIU_COOKIE")
+                        )
+                    LOGGER.info(
+                        "xueqiu ticker=%s market=%s status=live cookie-enabled",
+                        ticker,
+                        market,
+                    )
+                    self._last_errors = tuple(notes)
+                    return items
+                # _fetch_via_cookie returned None → fall through to stub below.
+
+            # Honest stub path (either no cookie, or cookie was rejected).
             notes.append(
                 (
                     code,

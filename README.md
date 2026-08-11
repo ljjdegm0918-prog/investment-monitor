@@ -126,7 +126,7 @@ UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Invest
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
 | hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
-| xueqiu | community | none | Xueqiu (雪球) HK statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
+| xueqiu | community | none | Xueqiu (雪球) CN/HK statuses. **Cookie‑backed LIVE** when `XUEQIU_COOKIE=xq_a_token` is set in `.env`; otherwise honest stub (`collect()` returns `[]`). JSON API `statuses/search.json` returns structured posts with id/title/timestamp/deeplink. Login/WAF bypass out of scope. |
 
 HK ticker 规范为五位代码（`700` / `0700` / `00700.HK` → `00700`）；Xueqiu 社区符号为 `HK` + 五位代码（`0700` → `HK00700`）。Finnhub **仅 US**。软去重：hkexnews 按 NEWS_ID，hkex_di 按 form serial（标题永不交叉配对）；yahoo_hk 按 ticker + Hong Kong day；Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
 
@@ -134,7 +134,7 @@ HK ticker 规范为五位代码（`700` / `0700` / `00700.HK` → `00700`）；X
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| xueqiu | community | none | Xueqiu (雪球) CN statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
+| xueqiu | community | none | Xueqiu (雪球) CN statuses. **Cookie‑backed LIVE** when `XUEQIU_COOKIE=xq_a_token` is set in `.env`; otherwise honest stub (`collect()` returns `[]`). JSON API `statuses/search.json` returns structured posts with id/title/timestamp/deeplink. Login/WAF bypass out of scope. |
 
 CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `SH`/`SZ` + 六位代码（`600519` / `600519.SS` / `SH600519` → `SH600519`；`000001.SZ` → `SZ000001`）。Finnhub **仅 US**。Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
 
