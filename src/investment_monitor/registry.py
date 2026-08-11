@@ -43,11 +43,16 @@ from .sources.fr_news import (
     GoogleFrNewsConnector,
     YahooFrNewsConnector,
 )
+from .sources.de_news import (
+    GoogleDeNewsConnector,
+    YahooDeNewsConnector,
+)
 from .sources.hkexnews import HkexNewsConnector
 from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
+from .sources.eqs_dgap import EqsDgapConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -177,6 +182,9 @@ def create_default_registry() -> SourceRegistry:
     registry.register(AmfOamConnector.name, AmfOamConnector)
     registry.register(YahooFrNewsConnector.name, YahooFrNewsConnector)
     registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
+    registry.register(EqsDgapConnector.name, EqsDgapConnector)
+    registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
+    registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(
         TDnetConnector.name,
         TDnetConnector.from_environment,

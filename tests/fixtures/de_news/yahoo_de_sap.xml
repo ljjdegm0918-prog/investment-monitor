@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: SAP.DE News</title>
+    <item>
+      <title>SAP steigert Cloud-Umsatz</title>
+      <link>https://de.finance.yahoo.com/news/sap-cloud-110000301.html</link>
+      <pubDate>Sat, 08 Aug 2026 03:25:44 +0000</pubDate>
+      <description>Cloud-Umsatz wächst weiter.</description>
+    </item>
+    <item>
+      <title>Alte Meldung</title>
+      <link>https://de.finance.yahoo.com/news/alt-110000304.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Zu alt.</description>
+    </item>
+  </channel>
+</rss>

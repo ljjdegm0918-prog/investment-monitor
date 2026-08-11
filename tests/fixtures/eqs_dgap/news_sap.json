@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "records": [
+    {
+      "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee_en",
+      "date": "2026-08-07 16:27:53",
+      "dateUtc": "2026-08-07 14:27:53",
+      "category": "Ad hoc Release",
+      "categoryCode": "ADHOC",
+      "companyName": "SAP SE",
+      "isin": "DE0007164600",
+      "headline": "SAP SE: Supervisory Board Changes"
+    },
+    {
+      "id": "11111111-2222-3333-4444-555555555555_en",
+      "date": "2026-08-04 10:00:00",
+      "dateUtc": "2026-08-04 08:00:00",
+      "category": "Other capital market information",
+      "categoryCode": "CMS",
+      "companyName": "SAP SE",
+      "isin": "DE0007164600",
+      "headline": "SAP SE: Share Buy-Back Update"
+    },
+    {
+      "id": "99999999-aaaa-bbbb-cccc-dddddddddddd_en",
+      "date": "2026-07-01 10:00:00",
+      "dateUtc": "2026-07-01 08:00:00",
+      "category": "Ad hoc Release",
+      "categoryCode": "ADHOC",
+      "companyName": "SAP SE",
+      "isin": "DE0007164600",
+      "headline": "Too old for window"
+    }
+  ],
+  "error": [],
+  "module": "news",
+  "language": "en",
+  "post_fields": {"api": true, "isin": "DE0007164600", "pageNo": 1}
+}

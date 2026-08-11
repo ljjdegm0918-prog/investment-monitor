@@ -86,6 +86,7 @@ async function renderManage() {
             <option value="ca">CA</option>
             <option value="au">AU</option>
             <option value="fr">France (Euronext)</option>
+            <option value="de">Germany (XETRA/Frankfurt)</option>
           </select>
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
           <button class="button primary" type="submit">Search</button>
@@ -128,6 +129,7 @@ const MARKET_HINTS = {
   ca: "CA market (partial — not a full Canadian stack): root tickers strip .TO/.TSX/.V/.TSXV/.CN/.NE/.NEO; board backfills from ca_universe (TSX/TSXV) or typed suffix when cold. Universe does NOT cover CSE/NEO directories. Disclosure is NOT wired: SEDAR+/CSE/NEO filings unwired. News: Yahoo Finance CA + Google News CA. Finnhub is US-only.",
   au: "AU market: root tickers strip .AX/.ASX. ASX announcements via key-free research API (latest 5 per company; may change). Universe backfills names/board. News: Yahoo Finance AU + Google News AU. Finnhub is US-only.",
   fr: "FR market (Euronext Paris): root tickers strip .PA/.PAR; French ISINs kept as-is. AMF OAM disclosure + Euronext Paris/Growth/Access universe cache + Yahoo/Google FR news. Companies stay unmapped. Finnhub is US-only.",
+  de: "DE market (Xetra): root tickers strip .DE/.XETRA/.XE/.F; German ISINs kept as-is. EQS News (DGAP) disclosure via key-free JSON (needs ISIN from universe or typed ISIN). Xetra CS universe cache backfills name/board/ISIN. News: Yahoo DE + Google News DE. Unternehmensregister/BaFin HTML not wired. Companies stay unmapped. Finnhub is US-only.",
 };
 
 function updateMarketHint() {
@@ -228,7 +230,7 @@ function renderSources(sources) {
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
 function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
-function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",fr:"France"})[market] || "Unavailable"; }
+function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",fr:"France",de:"Germany"})[market] || "Unavailable"; }
 function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
 function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }

@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_HK, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_CA, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -61,6 +61,9 @@ SOURCE_LABELS = {
     "amf_oam": "AMF OAM",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
+    "eqs_dgap": "EQS News (DGAP)",
+    "yahoo_de": "Yahoo Finance DE",
+    "google_news_de": "Google News (DE)",
     "sedar_plus": "SEDAR+ (not wired)",
     "cse_filings": "CSE filings (not wired)",
     "neo_filings": "NEO filings (not wired)",
@@ -94,6 +97,9 @@ PROVIDER_LABELS = {
     "amf_oam": "AMF OAM",
     "yahoo_fr": "Yahoo Finance FR",
     "google_news_fr": "Google News (FR)",
+    "eqs_dgap": "EQS News (DGAP)",
+    "yahoo_de": "Yahoo Finance DE",
+    "google_news_de": "Google News (DE)",
 }
 EXTRA_ENV_PREFIX = "extra_env:"
 EXTRA_ENV_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -545,6 +551,10 @@ class WebRepository:
         if market == MARKET_FR:
             tickers = tuple(
                 dict.fromkeys(normalize_fr_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_DE:
+            tickers = tuple(
+                dict.fromkeys(normalize_de_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -1881,6 +1891,7 @@ def _market_region(market: str) -> str:
         "ca": "Canada",
         "au": "Australia",
         "fr": "France",
+        "de": "Germany",
     }.get(market, "Unavailable")
 
 
@@ -2030,6 +2041,43 @@ def normalize_fr_ticker(ticker: str) -> str:
         changed = False
         for separator in _FR_TICKER_SEPARATORS:
             for suffix in _FR_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_DE_TICKER_SUFFIXES = ("XETRA", "XE", "DE", "F")
+_DE_TICKER_SEPARATORS = (".", " ", "-")
+_DE_ISIN_PATTERN = re.compile(r"DE[0-9A-Z]{10}")
+
+
+def normalize_de_ticker(ticker: str) -> str:
+    """Normalize a German (XETRA/Frankfurt) symbol to its canonical form.
+
+    Accepts plain symbols (``SAP``) and the common exchange suffixes used by
+    data providers (``SAP.DE``, ``SAP.XETRA``, ``SAP.F``, ``SAP.XE``; space or
+    dash separators are tolerated too, and stacked suffixes collapse to the
+    root). The suffix is stripped and the root symbol is uppercased; a plain
+    symbol without a suffix is preserved as-is. Suffix words without a
+    separator (``DE``, ``F``) are never erased. When the input contains a
+    German ISIN (``DE`` followed by 10 alphanumeric characters, e.g.
+    ``DE0007164600``), the ISIN is extracted and returned instead, since an
+    ISIN is a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _DE_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _DE_TICKER_SEPARATORS:
+            for suffix in _DE_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

@@ -248,7 +248,7 @@ class MultiMarketCompanyTests(unittest.TestCase):
         self.assertEqual(len(result["added"]), 1)
         self.assertEqual(result["failed"], [])
         added = result["added"][0]
-        self.assertEqual(added["ticker"], "0700.HK")
+        self.assertEqual(added["ticker"], "00700")
         self.assertEqual(added["market"], "hk")
         self.assertEqual(added["mapping_status"], "unmapped")
         self.assertEqual(self.repository.companies()[0]["cik"], "")

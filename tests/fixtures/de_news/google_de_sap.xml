@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Google News</title>
+    <item>
+      <title>SAP SE meldet Zahlen</title>
+      <link>https://news.google.com/rss/articles/CBMiSAP</link>
+      <pubDate>Fri, 07 Aug 2026 12:00:00 GMT</pubDate>
+      <description>Kurzmeldung zu SAP.</description>
+      <guid isPermaLink="false">SAP-DE-1</guid>
+    </item>
+    <item>
+      <title>Zu alt</title>
+      <link>https://news.google.com/rss/articles/CBMiOLD</link>
+      <pubDate>Mon, 01 Jun 2026 12:00:00 GMT</pubDate>
+      <guid isPermaLink="false">SAP-DE-OLD</guid>
+    </item>
+  </channel>
+</rss>

@@ -213,6 +213,21 @@ kept as-is). Add-company can backfill name/board from `fr_universe_name_map()`
 when warm. Finnhub is **US only**. Soft-dedupe: AMF filings pair on OAM
 document id (or same-source title fallback); news pairs on ticker + Paris day.
 
+### Germany sources (DE)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| eqs_dgap | filings | none | EQS News JSON (ex-DGAP; key-free unofficial WP API; may change); only wired DE disclosure source; matched by ISIN |
+| de_universe | breadth cache | none | Xetra `t7-xetr-allTradableInstruments.csv` common shares (CS); never enters the feed |
+| yahoo_de | news | none | Yahoo Finance DE public RSS (`region=DE`); `.DE` at request time |
+| google_news_de | news | none | Key-free Google News RSS (`hl=de&gl=DE&ceid=DE:de`) |
+
+`market=de` uses canonical root tickers (`SAP` / `SAP.DE` → `SAP`; German ISINs
+kept as-is). Add-company can backfill name/board/ISIN from `de_universe_name_map()`
+when warm. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
+(or same-source title fallback); news pairs on ticker + Berlin day.
+Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON).
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
