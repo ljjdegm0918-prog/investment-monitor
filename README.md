@@ -174,7 +174,8 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | au_universe | breadth cache | none | ASX company directory; never enters the feed |
 | yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
 | google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
-| hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
+| hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; re-probe 2026-08-12; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
+| stockhead_au | community | none | Stockhead.com.au ASX news/analysis. **LIVE** (spike 2026-08-12): WordPress search RSS `/?s={TICKER}&feed=rss2` returns ticker-tagged articles (`CompanyName - TICKER` category). 50-item rolling window; URL slug as external ID. Independent source — not a substitute label for HotCopper. |
 
 `market=au` 使用规范根 ticker（`BHP` / `BHP.AX` → `BHP`）。Finnhub **仅 US**。软去重：ASX filings 按 document key 配对（或同源标题回退）；news 按 ticker + Sydney day + normalized title 配对。Community 软去重使用 HotCopper thread id（或同源 scoped 标题回退）；仅接入 `hotcopper_au` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
 

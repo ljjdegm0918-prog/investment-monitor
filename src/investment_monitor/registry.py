@@ -40,6 +40,7 @@ from .sources.au_news import (
 )
 from .sources.ceoca_ca import CeocaCaConnector
 from .sources.hotcopper_au import HotCopperAuConnector
+from .sources.stockhead_au import StockheadAuConnector
 from .sources.lse_share_chat import LseShareChatConnector
 from .sources.xueqiu import XueqiuConnector
 from .sources.seeking_alpha import SeekingAlphaConnector
@@ -282,6 +283,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
+    registry.register(StockheadAuConnector.name, StockheadAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)
     registry.register(
         XueqiuConnector.name,

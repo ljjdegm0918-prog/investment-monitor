@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+	<title>Stockhead &#8211; BHP</title>
+	<atom:link href="https://stockhead.com.au/?s=BHP&amp;feed=rss2" rel="self" type="application/rss+xml" />
+	<link>https://stockhead.com.au/</link>
+	<description>Search results for BHP on Stockhead.</description>
+
+	<!-- 条目1: BHP 标签, 2026-08-11 UTC → Sydney 2026-08-11 AEST 应命中 -->
+	<item>
+		<title>BHP flags major copper expansion at Olympic Dam</title>
+		<link>https://stockhead.com.au/resources/bhp-flags-major-copper-expansion-at-olympic-dam/</link>
+		<dc:creator><![CDATA[Jane Reporter]]></dc:creator>
+		<pubDate>Mon, 11 Aug 2026 03:10:55 +0000</pubDate>
+		<category><![CDATA[Resources]]></category>
+		<category><![CDATA[BHP - BHP]]></category>
+		<guid isPermaLink="false"></guid>
+		<description><![CDATA[<p>BHP has flagged a major expansion at its Olympic Dam copper-uranium mine in South Australia. Read More</p>]]></description>
+	</item>
+
+	<!-- 条目2: BHP + RIO 双标签, 2026-08-11 UTC → Sydney 2026-08-11 AEST 应命中 -->
+	<item>
+		<title>ASX iron ore roundup: BHP and RIO dip on China demand concerns</title>
+		<link>https://stockhead.com.au/news/asx-iron-ore-roundup-bhp-and-rio-dip-on-china-demand-concerns/</link>
+		<dc:creator><![CDATA[Rob Analyst]]></dc:creator>
+		<pubDate>Mon, 11 Aug 2026 06:45:00 +0000</pubDate>
+		<category><![CDATA[News]]></category>
+		<category><![CDATA[BHP - BHP]]></category>
+		<category><![CDATA[Rio Tinto - RIO]]></category>
+		<guid isPermaLink="false"></guid>
+		<description><![CDATA[<p>Iron ore prices weakened overnight as Chinese steel mill demand figures disappointed.</p>]]></description>
+	</item>
+
+	<!-- 条目3: BHP 标签, 2026-08-10 UTC → Sydney 2026-08-10 AEST, 应被 2026-08-11 过滤器排除 -->
+	<item>
+		<title>BHP quarterly production update: record copper output</title>
+		<link>https://stockhead.com.au/resources/bhp-quarterly-production-update-record-copper-output/</link>
+		<dc:creator><![CDATA[Tom Writer]]></dc:creator>
+		<pubDate>Sun, 10 Aug 2026 02:00:00 +0000</pubDate>
+		<category><![CDATA[Resources]]></category>
+		<category><![CDATA[BHP - BHP]]></category>
+		<guid isPermaLink="false"></guid>
+		<description><![CDATA[<p>BHP released quarterly production figures showing record copper output.</p>]]></description>
+	</item>
+
+	<!-- 条目4: 同一天 2026-08-11 但只有 RIO 标签, 搜 BHP 时仍在 feed 里出现但应被 ticker 过滤器排除 -->
+	<item>
+		<title>Rio Tinto surges on dividend announcement</title>
+		<link>https://stockhead.com.au/resources/rio-tinto-surges-on-dividend-announcement/</link>
+		<dc:creator><![CDATA[Alex Journo]]></dc:creator>
+		<pubDate>Mon, 11 Aug 2026 04:30:00 +0000</pubDate>
+		<category><![CDATA[Resources]]></category>
+		<category><![CDATA[Rio Tinto - RIO]]></category>
+		<guid isPermaLink="false"></guid>
+		<description><![CDATA[<p>Rio Tinto surged on a generous dividend announcement.</p>]]></description>
+	</item>
+
+</channel>
+</rss>
