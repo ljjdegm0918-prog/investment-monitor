@@ -501,15 +501,31 @@ class WebApplication:
                 "source": failure.source,
                 "ticker": failure.ticker,
                 "message": failure.message,
+                **({"feed": failure.feed} if failure.feed else {}),
+                **({"url": failure.url} if failure.url else {}),
             }
             for failure in result.failures
         ]
-        status = (
-            "partial" if result.items and failures
-            else "success" if result.items
-            else "failure" if failures
-            else "empty"
-        )
+        event_statuses = tuple(event.status for event in result.events)
+        if event_statuses:
+            status = (
+                "partial"
+                if "partial" in event_statuses
+                or (
+                    "failure" in event_statuses
+                    and any(value != "failure" for value in event_statuses)
+                )
+                else "failure" if set(event_statuses) == {"failure"}
+                else "success" if "success" in event_statuses
+                else "empty"
+            )
+        else:
+            status = (
+                "partial" if result.items and failures
+                else "success" if result.items
+                else "failure" if failures
+                else "empty"
+            )
         return {
             "status": status,
             "tickers": list(normalized),
