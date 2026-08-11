@@ -4,6 +4,8 @@ from .client import (
     CnmvHrClient,
     CnmvHrDataError,
     CnmvHrError,
+    CnmvHrFeedOutcome,
+    CnmvHrFetchResult,
     CnmvHrRequestError,
 )
 from .connector import CnmvHrConnector
@@ -15,5 +17,7 @@ __all__ = [
     "CnmvHrConnector",
     "CnmvHrDataError",
     "CnmvHrError",
+    "CnmvHrFeedOutcome",
+    "CnmvHrFetchResult",
     "CnmvHrRequestError",
 ]

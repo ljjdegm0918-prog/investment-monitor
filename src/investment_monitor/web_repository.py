@@ -1030,7 +1030,7 @@ class WebRepository:
             latest_item = item_row["latest"] if item_row else None
             latest_success = (
                 (run_row["finished_at"] or run_row["started_at"])
-                if run_row and run_row["status"] in {"success", "partial"}
+                if run_row and run_row["status"] in {"success", "partial", "empty"}
                 else latest_item
             )
             is_stale = bool(
@@ -1118,7 +1118,7 @@ class WebRepository:
                 SELECT MAX(finished_at) AS latest
                 FROM ingestion_runs
                 WHERE source IN ({placeholders})
-                  AND status IN ('success', 'partial')
+                  AND status IN ('success', 'partial', 'empty')
                 """,
                 parameters,
             ).fetchone()
@@ -1410,19 +1410,24 @@ class WebRepository:
                 failures = [
                     event for event in source_events if event.status == "failure"
                 ]
+                partial = [
+                    event for event in source_events if event.status == "partial"
+                ]
                 successful = [
-                    event for event in source_events if event.status != "failure"
+                    event
+                    for event in source_events
+                    if event.status in {"success", "empty"}
                 ]
                 status = (
-                    "failure"
-                    if not successful
-                    else "partial"
-                    if failures
+                    "partial" if partial or (failures and successful)
+                    else "failure" if failures
                     else "success"
+                    if any(event.status == "success" for event in source_events)
+                    else "empty"
                 )
                 error_summary = "; ".join(
                     f"{event.ticker}: {event.error_message}"
-                    for event in failures
+                    for event in failures + partial
                 ) or None
                 cursor = connection.execute(
                     """
@@ -1444,7 +1449,7 @@ class WebRepository:
                         status,
                         len(source_events),
                         len(successful),
-                        len(failures),
+                        len(failures) + len(partial),
                         sum(event.records_read for event in source_events),
                         sum(
                             getattr(

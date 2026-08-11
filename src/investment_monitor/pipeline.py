@@ -21,6 +21,8 @@ class CollectionFailure:
     source: str
     ticker: str
     message: str
+    feed: Optional[str] = None
+    url: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,13 @@ class CollectionEvent:
     records_updated: int
     duplicate_records: int
     error_message: Optional[str] = None
+    market: str = "unknown"
+    requested_start_date: Optional[date] = None
+    requested_end_date: Optional[date] = None
+    effective_start_date: Optional[date] = None
+    effective_end_date: Optional[date] = None
+    coverage_kind: str = "unknown"
+    initial_backfill: bool = False
 
 
 class CollectionPipeline:
@@ -48,10 +57,12 @@ class CollectionPipeline:
         connectors: Iterable[SourceConnector],
         repository: Optional[InformationRepository] = None,
         logger: logging.Logger = LOGGER,
+        initial_backfill: bool = False,
     ) -> None:
         self._connectors = tuple(connectors)
         self._repository = repository
         self._logger = logger
+        self._initial_backfill = initial_backfill
         self._last_failures: Tuple[CollectionFailure, ...] = ()
         self._last_save_result = SaveResult()
         self._last_events: Tuple[CollectionEvent, ...] = ()
@@ -78,6 +89,7 @@ class CollectionPipeline:
         for connector in self._connectors:
             if bool(getattr(connector, "source_wide_collection", False)):
                 started_at = datetime.now(timezone.utc)
+                source_start_date = request.start_date
                 try:
                     source_start_date = self._clamped_start_date(
                         connector,
@@ -115,6 +127,16 @@ class CollectionPipeline:
                         records_inserted=source_save.inserted,
                         records_updated=source_save.updated,
                         duplicate_records=source_save.updated,
+                        requested_start_date=request.start_date,
+                        requested_end_date=request.end_date,
+                        effective_start_date=source_start_date,
+                        effective_end_date=request.end_date,
+                        coverage_kind=self._coverage_kind(
+                            connector,
+                            request.start_date,
+                            source_start_date,
+                        ),
+                        initial_backfill=self._initial_backfill,
                     ))
                 except Exception as error:
                     message = str(error) or error.__class__.__name__
@@ -140,6 +162,16 @@ class CollectionPipeline:
                         records_updated=0,
                         duplicate_records=0,
                         error_message=message,
+                        requested_start_date=request.start_date,
+                        requested_end_date=request.end_date,
+                        effective_start_date=source_start_date,
+                        effective_end_date=request.end_date,
+                        coverage_kind=self._coverage_kind(
+                            connector,
+                            request.start_date,
+                            source_start_date,
+                        ),
+                        initial_backfill=self._initial_backfill,
                     ))
                 continue
             for ticker in request.tickers:
@@ -162,12 +194,63 @@ class CollectionPipeline:
                         per_ticker_save = self._repository.save(collected)
                     save_result = save_result + per_ticker_save
                     items.extend(collected)
+                    status_hint = str(
+                        getattr(connector, "last_collection_status", "") or ""
+                    )
+                    failure_details = self._connector_failure_details(connector)
                     connector_error = (
                         None
                         if collected
                         else self._connector_error_for_ticker(connector, ticker)
                     )
-                    if connector_error:
+                    if status_hint == "partial":
+                        event_status = "partial"
+                        for detail in failure_details:
+                            failures.append(CollectionFailure(
+                                source=connector.name,
+                                ticker=ticker,
+                                message=self._format_failure_detail(detail),
+                                feed=detail.get("feed"),
+                                url=detail.get("url"),
+                            ))
+                        connector_error = "; ".join(
+                            self._format_failure_detail(detail)
+                            for detail in failure_details
+                        ) or connector_error or "connector reported partial failure"
+                        self._logger.warning(
+                            "collection source=%s ticker=%s status=partial error=%s",
+                            connector.name,
+                            ticker,
+                            connector_error,
+                        )
+                    elif status_hint == "failure" and failure_details:
+                        event_status = "failure"
+                        connector_error = "; ".join(
+                            self._format_failure_detail(detail)
+                            for detail in failure_details
+                        )
+                        failures.append(CollectionFailure(
+                            source=connector.name,
+                            ticker=ticker,
+                            message=connector_error,
+                            feed=",".join(
+                                str(detail["feed"])
+                                for detail in failure_details
+                                if detail.get("feed")
+                            ) or None,
+                            url=",".join(
+                                str(detail["url"])
+                                for detail in failure_details
+                                if detail.get("url")
+                            ) or None,
+                        ))
+                        self._logger.error(
+                            "collection source=%s ticker=%s status=failure error=%s",
+                            connector.name,
+                            ticker,
+                            connector_error,
+                        )
+                    elif connector_error:
                         event_status = "failure"
                         failures.append(CollectionFailure(
                             source=connector.name,
@@ -180,7 +263,7 @@ class CollectionPipeline:
                             ticker,
                             connector_error,
                         )
-                    elif collected:
+                    elif collected or status_hint == "success":
                         event_status = "success"
                         self._logger.info(
                             "collection source=%s ticker=%s status=success "
@@ -204,22 +287,50 @@ class CollectionPipeline:
                         started_at=started_at,
                         finished_at=datetime.now(timezone.utc),
                         status=event_status,
-                        records_read=len(collected),
+                        records_read=int(
+                            getattr(connector, "last_records_read", len(collected))
+                        ),
                         records_written=per_ticker_save.inserted + per_ticker_save.updated,
                         records_inserted=per_ticker_save.inserted,
                         records_updated=per_ticker_save.updated,
                         duplicate_records=per_ticker_save.updated,
                         error_message=connector_error,
+                        market=request.market_for(ticker),
+                        requested_start_date=request.start_date,
+                        requested_end_date=request.end_date,
+                        effective_start_date=ticker_start_date,
+                        effective_end_date=request.end_date,
+                        coverage_kind=self._coverage_kind(
+                            connector,
+                            request.start_date,
+                            ticker_start_date,
+                        ),
+                        initial_backfill=self._initial_backfill,
                     ))
                 except Exception as error:
                     message = str(error) or error.__class__.__name__
-                    failures.append(
-                        CollectionFailure(
+                    failure_details = self._connector_failure_details(connector)
+                    if failure_details:
+                        failures.extend(
+                            CollectionFailure(
+                                source=connector.name,
+                                ticker=ticker,
+                                message=detail["message"],
+                                feed=detail.get("feed"),
+                                url=detail.get("url"),
+                            )
+                            for detail in failure_details
+                        )
+                        message = "; ".join(
+                            self._format_failure_detail(detail)
+                            for detail in failure_details
+                        )
+                    else:
+                        failures.append(CollectionFailure(
                             source=connector.name,
                             ticker=ticker,
                             message=message,
-                        )
-                    )
+                        ))
                     self._logger.error(
                         "collection source=%s ticker=%s status=failure error=%s",
                         connector.name,
@@ -238,12 +349,48 @@ class CollectionPipeline:
                         records_updated=0,
                         duplicate_records=0,
                         error_message=message,
+                        market=request.market_for(ticker),
+                        requested_start_date=request.start_date,
+                        requested_end_date=request.end_date,
+                        effective_start_date=ticker_start_date,
+                        effective_end_date=request.end_date,
+                        coverage_kind=self._coverage_kind(
+                            connector,
+                            request.start_date,
+                            ticker_start_date,
+                        ),
+                        initial_backfill=self._initial_backfill,
                     ))
 
         self._last_failures = tuple(failures)
         self._last_save_result = save_result
         self._last_events = tuple(events)
         return items
+
+    @staticmethod
+    def _connector_failure_details(
+        connector: SourceConnector,
+    ) -> Tuple[dict, ...]:
+        details = []
+        for detail in tuple(
+            getattr(connector, "last_failure_details", ()) or ()
+        ):
+            if not isinstance(detail, dict) and not hasattr(detail, "get"):
+                continue
+            message = str(detail.get("message") or "connector feed failed")
+            details.append({
+                "feed": str(detail.get("feed") or "") or None,
+                "url": str(detail.get("url") or "") or None,
+                "message": message,
+            })
+        return tuple(details)
+
+    @staticmethod
+    def _format_failure_detail(detail: dict) -> str:
+        prefix = f"feed={detail.get('feed')}" if detail.get("feed") else "feed"
+        if detail.get("url"):
+            prefix += f" url={detail['url']}"
+        return f"{prefix}: {detail['message']}"
 
     @staticmethod
     def _connector_error_for_ticker(
@@ -279,3 +426,18 @@ class CollectionPipeline:
             return start_date
         minimum_start = end_date - timedelta(days=int(max_lookback))
         return start_date if start_date >= minimum_start else minimum_start
+
+    @staticmethod
+    def _coverage_kind(
+        connector: SourceConnector,
+        requested_start: date,
+        effective_start: date,
+    ) -> str:
+        declared = str(getattr(connector, "coverage_kind", "") or "")
+        if declared in {
+            "complete_window", "bounded_window", "feed_snapshot", "unknown"
+        }:
+            return declared
+        if effective_start > requested_start:
+            return "bounded_window"
+        return "unknown"

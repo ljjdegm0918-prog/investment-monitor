@@ -10,7 +10,7 @@ from typing import Iterable, List, Mapping, Optional, Tuple
 
 from .config import load_environment_file, load_settings, load_universe
 from .models import CollectionRequest, InformationItem
-from .pipeline import CollectionFailure, CollectionPipeline
+from .pipeline import CollectionEvent, CollectionFailure, CollectionPipeline
 from .registry import SourceRegistry, create_default_registry
 from .report import ReportResult, generate_html_report
 from .repository import SaveResult
@@ -27,6 +27,7 @@ class ConfiguredCollectionResult:
     save_result: SaveResult
     database_path: Path
     stored_count: int
+    events: Tuple[CollectionEvent, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,8 @@ def run_ticker_collection(
     end_date: date,
     registry: Optional[SourceRegistry] = None,
     markets: Optional[Mapping[str, str]] = None,
+    sources: Optional[Iterable[str]] = None,
+    initial_backfill: bool = False,
 ) -> ConfiguredCollectionResult:
     """Collect an explicit ticker set, independent of the initial universe CSV."""
     normalized_tickers = tuple(
@@ -78,8 +81,18 @@ def run_ticker_collection(
     active_registry = registry or create_default_registry()
     missing_sources: List[str] = []
     unavailable_sources: List[str] = []
+    requested_sources = (
+        None
+        if sources is None
+        else frozenset(str(value) for value in sources)
+    )
+    selected_sources = tuple(
+        source
+        for source in settings.enabled_sources
+        if requested_sources is None or source in requested_sources
+    )
     connectors = active_registry.load_enabled(
-        settings.enabled_sources,
+        selected_sources,
         missing=missing_sources,
         unavailable=unavailable_sources,
     )
@@ -95,7 +108,11 @@ def run_ticker_collection(
             unavailable_source,
         )
     repository = SQLiteInformationRepository(settings.database_path)
-    pipeline = CollectionPipeline(connectors, repository=repository)
+    pipeline = CollectionPipeline(
+        connectors,
+        repository=repository,
+        initial_backfill=initial_backfill,
+    )
     items = pipeline.collect(
         CollectionRequest(
             tickers=normalized_tickers,
@@ -113,6 +130,7 @@ def run_ticker_collection(
         save_result=pipeline.last_save_result,
         database_path=settings.database_path,
         stored_count=repository.count(),
+        events=pipeline.last_events,
     )
 
 

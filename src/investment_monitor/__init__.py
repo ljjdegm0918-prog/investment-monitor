@@ -201,6 +201,8 @@ from .sources.cnmv_hr import (
     CnmvHrConnector,
     CnmvHrDataError,
     CnmvHrError,
+    CnmvHrFeedOutcome,
+    CnmvHrFetchResult,
     CnmvHrRequestError,
 )
 from .sources.bme_relevant_facts import (
@@ -523,6 +525,14 @@ __all__ = [
     "ConfigurationError",
     "ConfiguredCollectionResult",
     "ConnectorUnavailableError",
+    "CnmvHrClient",
+    "CnmvHrCompanyMatcher",
+    "CnmvHrConnector",
+    "CnmvHrDataError",
+    "CnmvHrError",
+    "CnmvHrFeedOutcome",
+    "CnmvHrFetchResult",
+    "CnmvHrRequestError",
     "AsxAnnouncementsClient",
     "AsxAnnouncementsConnector",
     "AsxAnnouncementsDataError",

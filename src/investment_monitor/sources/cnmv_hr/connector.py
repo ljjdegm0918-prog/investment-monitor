@@ -21,7 +21,6 @@ from ...universe.es_universe import es_universe_name_map
 from ...web_repository import normalize_es_ticker
 from .client import (
     CnmvHrClient,
-    CnmvHrRequestError,
 )
 from .matcher import CnmvHrCompanyMatcher
 
@@ -36,6 +35,7 @@ class CnmvHrConnector:
     name = "cnmv_hr"
     provider = "CNMV (hechos relevantes)"
     max_lookback_days = MAX_LOOKBACK_DAYS
+    coverage_kind = "feed_snapshot"
 
     def __init__(
         self,
@@ -49,10 +49,25 @@ class CnmvHrConnector:
             else es_universe_name_map()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self._last_collection_status = "empty"
+        self._last_failure_details: Tuple[Mapping[str, str], ...] = ()
+        self._last_records_read = 0
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
         return self._last_errors
+
+    @property
+    def last_collection_status(self) -> str:
+        return self._last_collection_status
+
+    @property
+    def last_failure_details(self) -> Tuple[Mapping[str, str], ...]:
+        return self._last_failure_details
+
+    @property
+    def last_records_read(self) -> int:
+        return self._last_records_read
 
     def collect(self, request: CollectionRequest) -> List[InformationItem]:
         failures: List[Tuple[str, str]] = []
@@ -72,21 +87,40 @@ class CnmvHrConnector:
             # No ES ticker has a universe identity: nothing can be matched
             # and no HTTP request is made (non-es requests stay at zero).
             self._last_errors = tuple(failures)
+            self._last_collection_status = "failure" if failures else "empty"
+            self._last_failure_details = ()
+            self._last_records_read = 0
             return []
 
         collected_at = datetime.now(timezone.utc)
-        try:
-            records = self._client.fetch_disclosures(
-                request.start_date,
-                request.end_date,
-            )
-        except Exception as error:
-            message = str(error) or error.__class__.__name__
-            failures.extend((ticker, message) for ticker, _ in identities)
+        outcome = self._client.fetch_disclosures_result(
+            request.start_date,
+            request.end_date,
+        )
+        failed_feeds = tuple(
+            feed for feed in outcome.feed_outcomes if feed.status == "failure"
+        )
+        failure_details = tuple({
+            "feed": feed.feed_id,
+            "url": feed.retrieval_url,
+            "message": str(feed.error_message or "CNMV feed failed"),
+        } for feed in failed_feeds)
+        feed_error = "; ".join(
+            f"feed={detail['feed']} url={detail['url']}: "
+            f"{detail['message']}"
+            for detail in failure_details
+        )
+        if feed_error:
+            failures.extend((ticker, feed_error) for ticker, _ in identities)
+        self._last_collection_status = outcome.status
+        self._last_failure_details = failure_details
+        self._last_records_read = sum(
+            feed.records_read for feed in outcome.feed_outcomes
+        )
+        self._last_errors = tuple(failures)
+        if outcome.status == "failure":
+            message = feed_error or "CNMV HR feeds failed"
             LOGGER.warning("cnmv_hr status=failure error=%s", message)
-            self._last_errors = tuple(failures)
-            if len(request.tickers) == 1:
-                raise CnmvHrRequestError(message) from error
             return []
 
         matcher = CnmvHrCompanyMatcher()
@@ -94,7 +128,7 @@ class CnmvHrConnector:
         for ticker, identity in identities:
             matched = [
                 record
-                for record in records
+                for record in outcome.records
                 if matcher.matches(
                     record,
                     name=identity.get("name") or "",
@@ -108,7 +142,6 @@ class CnmvHrConnector:
                     collected_at=collected_at,
                 )
             )
-        self._last_errors = tuple(failures)
         return items
 
     def _identity_for(
