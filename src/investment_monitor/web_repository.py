@@ -159,6 +159,70 @@ CONTENT_TYPE_LABELS = (
     ("Research", "research"),
 )
 
+CONNECTOR_REGIONS = {
+    "sec": ("United States",),
+    "news": ("United States",),
+    "dart": ("Korea",),
+    "kind": ("Korea",),
+    "naver_news": ("Korea",),
+    "hankyung": ("Korea",),
+    "thebell": ("Korea",),
+    "companies_house": ("United Kingdom",),
+    "investegate": ("United Kingdom",),
+    "yahoo_uk": ("United Kingdom",),
+    "hkexnews": ("Hong Kong",),
+    "hkex_di": ("Hong Kong",),
+    "yahoo_hk": ("Hong Kong",),
+    "yahoo_ca": ("Canada",),
+    "google_news_ca": ("Canada",),
+    "sedar_plus": ("Canada",),
+    "cse_filings": ("Canada",),
+    "neo_filings": ("Canada",),
+    "twse_material": ("Taiwan",),
+    "tpex_material": ("Taiwan",),
+    "yahoo_tw": ("Taiwan",),
+    "google_news_tw": ("Taiwan",),
+    "asx_announcements": ("Australia",),
+    "yahoo_au": ("Australia",),
+    "google_news_au": ("Australia",),
+    "amf_oam": ("France",),
+    "yahoo_fr": ("France",),
+    "google_news_fr": ("France",),
+    "eqs_dgap": ("Germany",),
+    "de_community": ("Germany",),
+    "yahoo_de": ("Germany",),
+    "google_news_de": ("Germany",),
+    "eqs_nl": ("Netherlands",),
+    "yahoo_nl": ("Netherlands",),
+    "google_news_nl": ("Netherlands",),
+    "eqs_it": ("Italy",),
+    "yahoo_it": ("Italy",),
+    "google_news_it": ("Italy",),
+    "cnmv_hr": ("Spain",),
+    "bme_relevant_facts": ("Spain",),
+    "yahoo_es": ("Spain",),
+    "google_news_es": ("Spain",),
+    "sgx_announcements": ("Singapore",),
+    "yahoo_sg": ("Singapore",),
+    "google_news_sg": ("Singapore",),
+    "fsma_stori": ("Belgium",),
+    "be_second_disclosure": ("Belgium",),
+    "yahoo_be": ("Belgium",),
+    "google_news_be": ("Belgium",),
+    "eqs_ch": ("Switzerland",),
+    "six_official_notices": ("Switzerland",),
+    "yahoo_ch": ("Switzerland",),
+    "google_news_ch": ("Switzerland",),
+    "gpw_espi": ("Poland",),
+    "yahoo_pl": ("Poland",),
+    "google_news_pl": ("Poland",),
+    "fi_oam": ("Sweden",),
+    "yahoo_se": ("Sweden",),
+    "google_news_se": ("Sweden",),
+    "tdnet_public_web": ("Japan",),
+    "edinet": ("Japan",),
+}
+
 
 @dataclass(frozen=True)
 class FeedFilters:
@@ -240,6 +304,11 @@ class WebRepository:
         self._database_path = database_path
         self._allowed_sources = tuple(allowed_sources)
         self._source_catalog = self._complete_source_catalog(known_sources)
+        self._connector_catalog = (
+            tuple(known_sources)
+            if known_sources is not None
+            else self._source_catalog
+        )
         self._implemented_sources = tuple(
             implemented_sources if implemented_sources is not None else self._allowed_sources
         )
@@ -948,14 +1017,8 @@ class WebRepository:
         current_time = now or datetime.now(timezone.utc)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=timezone.utc)
-        coverage = {
-            "sec": ("United States",),
-            "news": ("United States",),
-            "tdnet_public_web": ("Japan",),
-            "edinet": ("Japan",),
-        }
         records: List[Mapping[str, Any]] = []
-        for source in self._source_catalog:
+        for source in self._connector_catalog:
             if source.name.startswith("mock"):
                 continue
             run_row, failure_row = self._source_run_status(source.name)
@@ -995,7 +1058,7 @@ class WebRepository:
                 "name": source.name,
                 "provider": PROVIDER_LABELS.get(source.name, source.label),
                 "type": _display_source_type(source.source_type),
-                "regions": list(coverage.get(source.name, ())),
+                "regions": list(CONNECTOR_REGIONS.get(source.name, ())),
                 "enabled": enabled,
                 "implemented": implemented,
                 "status": status,
@@ -1942,6 +2005,13 @@ def _market_region(market: str) -> str:
         "be": "Belgium",
         "fr": "France",
         "de": "Germany",
+        "nl": "Netherlands",
+        "it": "Italy",
+        "es": "Spain",
+        "sg": "Singapore",
+        "ch": "Switzerland",
+        "pl": "Poland",
+        "se": "Sweden",
     }.get(market, "Unavailable")
 
 

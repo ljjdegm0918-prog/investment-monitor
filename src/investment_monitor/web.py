@@ -49,14 +49,14 @@ from .models import (
 )
 from .tw_universe import tw_universe_name_map
 from .universe.fr_universe import fr_universe_name_map
-from .universe.de_universe import de_universe_name_map
-from .universe.be_universe import be_universe_name_map
-from .universe.nl_universe import nl_universe_name_map
-from .universe.it_universe import it_universe_name_map
+from .universe.de_universe import de_universe_name_map, refresh_de_universe
+from .universe.be_universe import be_universe_name_map, refresh_be_universe
+from .universe.nl_universe import nl_universe_name_map, refresh_nl_universe
+from .universe.it_universe import it_universe_name_map, refresh_it_universe
 from .universe.es_universe import es_universe_name_map
 from .universe.sg_universe import sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
-from .universe.pl_universe import pl_universe_name_map
+from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.se_universe import se_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import SourceRegistry, create_default_registry
@@ -72,6 +72,26 @@ from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
+
+
+def _warm_universe_on_first_add(
+    market: str,
+    loader: Callable[[], Mapping[str, Mapping[str, str]]],
+    refresher: Callable[[], Mapping[str, Any]],
+) -> Optional[Mapping[str, Mapping[str, str]]]:
+    """Load a universe and make one best-effort refresh when its cache is cold."""
+    universe = loader()
+    if universe:
+        return universe
+    try:
+        refresher()
+    except Exception:
+        LOGGER.warning(
+            "%s_universe refresh failed on add-company; continuing without fallback",
+            market,
+            exc_info=True,
+        )
+    return loader() or None
 
 
 def build_provider_catalog(
@@ -286,23 +306,49 @@ class WebApplication:
                 elif market == MARKET_AU:
                     name_fallback = au_universe_name_map()
                 elif market == MARKET_BE:
-                    name_fallback = be_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        be_universe_name_map,
+                        refresh_be_universe,
+                    )
                 elif market == MARKET_FR:
                     name_fallback = fr_universe_name_map()
                 elif market == MARKET_DE:
-                    name_fallback = de_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        de_universe_name_map,
+                        refresh_de_universe,
+                    )
                 elif market == MARKET_NL:
-                    name_fallback = nl_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        nl_universe_name_map,
+                        refresh_nl_universe,
+                    )
                 elif market == MARKET_IT:
-                    name_fallback = it_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        it_universe_name_map,
+                        refresh_it_universe,
+                    )
                 elif market == MARKET_ES:
                     name_fallback = es_universe_name_map()
+                    if not name_fallback:
+                        LOGGER.warning(
+                            "es_universe cache is cold on add-company; "
+                            "synchronous refresh skipped because ticker enrichment "
+                            "can take several minutes"
+                        )
                 elif market == MARKET_SG:
                     name_fallback = sg_universe_name_map()
                 elif market == MARKET_CH:
                     name_fallback = ch_universe_name_map()
                 elif market == MARKET_PL:
-                    name_fallback = pl_universe_name_map()
+                    name_fallback = _warm_universe_on_first_add(
+                        market,
+                        pl_universe_name_map,
+                        refresh_pl_universe,
+                    )
                 elif market == MARKET_SE:
                     name_fallback = se_universe_name_map()
                 elif market == MARKET_CA:
@@ -442,20 +488,26 @@ class WebApplication:
                     "inserted": 0,
                     "updated": 0,
                     "failures": [
-                        {"ticker": ticker, "message": message} for ticker in normalized
+                        {
+                            "source": "collection_setup",
+                            "ticker": ticker,
+                            "message": message,
+                        }
+                        for ticker in normalized
                     ],
                 }
         failures = [
-            {"ticker": failure.ticker, "message": failure.message}
+            {
+                "source": failure.source,
+                "ticker": failure.ticker,
+                "message": failure.message,
+            }
             for failure in result.failures
         ]
         status = (
-            "failure"
-            if failures and len(failures) == len(normalized)
-            else "partial"
-            if failures
-            else "success"
-            if result.items
+            "partial" if result.items and failures
+            else "success" if result.items
+            else "failure" if failures
             else "empty"
         )
         return {

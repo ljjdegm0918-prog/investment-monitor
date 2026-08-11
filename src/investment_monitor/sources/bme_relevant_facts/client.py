@@ -136,6 +136,11 @@ class BmeRelevantFactsClient:
             records.extend(page_records)
             if not _has_more(payload):
                 break
+            if page == max_pages:
+                raise BmeRelevantFactsDataError(
+                    "BME relevant-facts results exceed "
+                    f"max_pages={max_pages} for companyKey={company_key}."
+                )
         return records
 
     def _get_json(self, url: str) -> Any:

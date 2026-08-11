@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import json
 from pathlib import Path
 import unittest
 
@@ -46,6 +47,48 @@ def make_client(opener):
 
 
 class BmeRelevantFactsClientTests(unittest.TestCase):
+    def test_confirmed_more_results_at_page_limit_raises_truncation(self) -> None:
+        body = json.loads((FIXTURES / "san_facts.json").read_text(encoding="utf-8"))
+        template = body["data"][0]
+        body["data"] = [
+            dict(template, cnmvRegNumber=f"OI{index:010d}")
+            for index in range(50)
+        ]
+        body["totalResults"] = 51
+        body["hasMoreResults"] = True
+        opener = FakeOpener(json.dumps(body).encode("utf-8"))
+
+        with self.assertRaises(BmeRelevantFactsDataError):
+            make_client(opener).fetch_by_company(
+                "13900",
+                date(2026, 8, 1),
+                date(2026, 8, 8),
+                max_pages=1,
+            )
+
+        self.assertEqual(len(opener.requested), 1)
+
+    def test_full_final_page_without_more_results_is_not_truncation(self) -> None:
+        body = json.loads((FIXTURES / "san_facts.json").read_text(encoding="utf-8"))
+        template = body["data"][0]
+        body["data"] = [
+            dict(template, cnmvRegNumber=f"OI{index:010d}")
+            for index in range(50)
+        ]
+        body["totalResults"] = 50
+        body["hasMoreResults"] = False
+        opener = FakeOpener(json.dumps(body).encode("utf-8"))
+
+        records = make_client(opener).fetch_by_company(
+            "13900",
+            date(2026, 8, 1),
+            date(2026, 8, 8),
+            max_pages=1,
+        )
+
+        self.assertEqual(len(records), 50)
+        self.assertEqual(len(opener.requested), 1)
+
     def test_parses_records_and_filters_window(self) -> None:
         body = (FIXTURES / "san_facts.json").read_bytes()
         opener = FakeOpener(body)

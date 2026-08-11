@@ -162,7 +162,25 @@ class CollectionPipeline:
                         per_ticker_save = self._repository.save(collected)
                     save_result = save_result + per_ticker_save
                     items.extend(collected)
-                    if collected:
+                    connector_error = (
+                        None
+                        if collected
+                        else self._connector_error_for_ticker(connector, ticker)
+                    )
+                    if connector_error:
+                        event_status = "failure"
+                        failures.append(CollectionFailure(
+                            source=connector.name,
+                            ticker=ticker,
+                            message=connector_error,
+                        ))
+                        self._logger.error(
+                            "collection source=%s ticker=%s status=failure error=%s",
+                            connector.name,
+                            ticker,
+                            connector_error,
+                        )
+                    elif collected:
                         event_status = "success"
                         self._logger.info(
                             "collection source=%s ticker=%s status=success "
@@ -191,6 +209,7 @@ class CollectionPipeline:
                         records_inserted=per_ticker_save.inserted,
                         records_updated=per_ticker_save.updated,
                         duplicate_records=per_ticker_save.updated,
+                        error_message=connector_error,
                     ))
                 except Exception as error:
                     message = str(error) or error.__class__.__name__
@@ -225,6 +244,28 @@ class CollectionPipeline:
         self._last_save_result = save_result
         self._last_events = tuple(events)
         return items
+
+    @staticmethod
+    def _connector_error_for_ticker(
+        connector: SourceConnector,
+        ticker: str,
+    ) -> Optional[str]:
+        """Return a connector-reported per-ticker error after an empty result."""
+        reported = tuple(getattr(connector, "last_errors", ()) or ())
+        for error in reported:
+            if isinstance(error, (tuple, list)) and len(error) >= 2:
+                if str(error[0]).strip().upper() == ticker.strip().upper():
+                    return str(error[1]) or "connector reported a failure"
+                continue
+            error_ticker = str(getattr(error, "ticker", "") or "")
+            if error_ticker.strip().upper() == ticker.strip().upper():
+                return str(getattr(error, "message", "") or error)
+        if len(reported) == 1:
+            error = reported[0]
+            if isinstance(error, (tuple, list)) and len(error) >= 2:
+                return str(error[1]) or "connector reported a failure"
+            return str(getattr(error, "message", "") or error)
+        return None
 
     @staticmethod
     def _clamped_start_date(

@@ -129,6 +129,26 @@ class EqsNlClient:
                 records.append(parsed)
             if len(page_records) < 10:
                 break
+            if page == max_pages:
+                probe_url = (
+                    f"{self._base_url}/news?isin={quote(code)}"
+                    f"&page={max_pages + 1}"
+                )
+                probe_records = self._get_json(probe_url).get("records")
+                if not isinstance(probe_records, list):
+                    raise EqsNlDataError(
+                        "EQS pagination probe had no records list."
+                    )
+                probe_has_window_record = any(
+                    parsed is not None
+                    and start_date <= amsterdam_day(parsed["published_at"]) <= end_date
+                    for parsed in (self._parse_record(raw) for raw in probe_records)
+                )
+                if probe_has_window_record:
+                    raise EqsNlDataError(
+                        "EQS results in the requested window exceed "
+                        f"max_pages={max_pages} for {code}."
+                    )
         return records
 
     def _parse_record(

@@ -183,6 +183,7 @@ class StoriClient:
         collected: List[Mapping[str, Any]] = []
         page_size = max(1, int(params.get("pageSize") or 100))
         expected_total: Optional[int] = None
+        rows_seen = 0
         for page in range(max_pages):
             body = dict(params)
             body["startRowIndex"] = page * page_size
@@ -202,14 +203,38 @@ class StoriClient:
             total = payload.get("resultCount")
             if isinstance(total, int):
                 expected_total = total
+            rows_seen += len(rows)
             for raw in rows:
                 parsed = _parse_record(raw)
                 if parsed is not None:
                     collected.append(parsed)
             if not rows or len(rows) < page_size:
                 break
-            if expected_total is not None and len(collected) >= expected_total:
+            if expected_total is not None and rows_seen >= expected_total:
                 break
+            if page == max_pages - 1:
+                if expected_total is not None:
+                    raise StoriDataError(
+                        "STORI results exceed "
+                        f"max_pages={max_pages}: "
+                        f"received {rows_seen} of {expected_total} rows."
+                    )
+                probe_body = dict(body)
+                probe_body["startRowIndex"] = max_pages * page_size
+                probe_payload = self._post_json(self.result_url, probe_body)
+                if not isinstance(probe_payload, Mapping):
+                    raise StoriDataError(
+                        "STORI pagination probe JSON root must be an object."
+                    )
+                probe_rows = probe_payload.get("storiResultItems")
+                if not isinstance(probe_rows, list):
+                    raise StoriDataError(
+                        "STORI pagination probe is missing storiResultItems."
+                    )
+                if probe_rows:
+                    raise StoriDataError(
+                        f"STORI results exceed max_pages={max_pages}."
+                    )
         # Authoritative client-side window filter by Brussels calendar day.
         return [
             record

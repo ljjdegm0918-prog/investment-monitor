@@ -40,7 +40,49 @@ class PartialFailureConnector:
         ]
 
 
+class HonestEmptyFailureConnector:
+    """Connector that cannot collect because required universe data is absent."""
+
+    name = "official-with-universe"
+
+    def __init__(self) -> None:
+        self.last_errors = ()
+
+    def collect(self, request: CollectionRequest) -> List[InformationItem]:
+        ticker = request.tickers[0]
+        self.last_errors = ((ticker, "no_universe_identity"),)
+        return []
+
+
 class PersistentPipelineTests(unittest.TestCase):
+    def test_empty_with_connector_error_is_recorded_as_failure(self) -> None:
+        logger = logging.getLogger("tests.persistent_pipeline.honest_empty")
+        pipeline = CollectionPipeline(
+            [HonestEmptyFailureConnector()],
+            logger=logger,
+        )
+        request = CollectionRequest(
+            tickers=("SAN",),
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 31),
+            markets={"SAN": "es"},
+        )
+
+        with self.assertLogs(logger, level="ERROR") as captured_logs:
+            items = pipeline.collect(request)
+
+        self.assertEqual(items, [])
+        self.assertEqual(len(pipeline.last_failures), 1)
+        failure = pipeline.last_failures[0]
+        self.assertEqual(failure.source, "official-with-universe")
+        self.assertEqual(failure.ticker, "SAN")
+        self.assertEqual(failure.message, "no_universe_identity")
+        self.assertEqual(len(pipeline.last_events), 1)
+        event = pipeline.last_events[0]
+        self.assertEqual(event.status, "failure")
+        self.assertEqual(event.error_message, "no_universe_identity")
+        self.assertIn("ticker=SAN status=failure", "\n".join(captured_logs.output))
+
     def test_partial_failure_does_not_stop_storage_or_other_tickers(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             repository = SQLiteInformationRepository(

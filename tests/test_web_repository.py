@@ -112,6 +112,70 @@ class WebRepositoryTests(unittest.TestCase):
             record["slug"] for record in self.repository.fixed_lists()
         })
 
+    def test_connector_statuses_report_new_market_regions(self) -> None:
+        expected = {
+            "eqs_dgap": "Germany",
+            "yahoo_de": "Germany",
+            "google_news_de": "Germany",
+            "eqs_nl": "Netherlands",
+            "yahoo_nl": "Netherlands",
+            "google_news_nl": "Netherlands",
+            "eqs_it": "Italy",
+            "yahoo_it": "Italy",
+            "google_news_it": "Italy",
+            "cnmv_hr": "Spain",
+            "bme_relevant_facts": "Spain",
+            "yahoo_es": "Spain",
+            "google_news_es": "Spain",
+            "sgx_announcements": "Singapore",
+            "yahoo_sg": "Singapore",
+            "google_news_sg": "Singapore",
+            "fsma_stori": "Belgium",
+            "be_second_disclosure": "Belgium",
+            "yahoo_be": "Belgium",
+            "google_news_be": "Belgium",
+            "eqs_ch": "Switzerland",
+            "six_official_notices": "Switzerland",
+            "yahoo_ch": "Switzerland",
+            "google_news_ch": "Switzerland",
+            "gpw_espi": "Poland",
+            "yahoo_pl": "Poland",
+            "google_news_pl": "Poland",
+            "fi_oam": "Sweden",
+            "yahoo_se": "Sweden",
+            "google_news_se": "Sweden",
+        }
+        sources = tuple(
+            SourceConfig(
+                name=name,
+                label=name,
+                source_type="filings" if name in {
+                    "eqs_dgap", "eqs_nl", "eqs_it", "cnmv_hr",
+                    "bme_relevant_facts", "sgx_announcements", "fsma_stori",
+                    "be_second_disclosure", "eqs_ch", "six_official_notices",
+                    "gpw_espi", "fi_oam",
+                } else "news",
+                enabled=True,
+            )
+            for name in expected
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=tuple(expected),
+            known_sources=sources,
+            implemented_sources=tuple(expected),
+        )
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses()
+        }
+
+        self.assertTrue(set(expected).issubset(statuses))
+        for name, region in expected.items():
+            with self.subTest(source=name):
+                self.assertEqual(statuses[name]["regions"], [region])
+
     def test_company_search_matches_recorded_exchange(self) -> None:
         self.add_company("AAPL", "holdings")
 

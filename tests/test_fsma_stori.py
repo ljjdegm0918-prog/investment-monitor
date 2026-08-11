@@ -97,6 +97,48 @@ def fixture_body() -> bytes:
 
 
 class StoriClientTests(unittest.TestCase):
+    def test_remaining_result_count_at_page_limit_raises_truncation(self) -> None:
+        body = json.loads(fixture_body().decode("utf-8"))
+        page = dict(
+            body,
+            resultCount=3,
+            storiResultItems=body["storiResultItems"][:2],
+        )
+        opener = FakeOpener(json.dumps(page).encode("utf-8"))
+
+        with self.assertRaises(StoriDataError):
+            make_client(opener).fetch_by_isin(
+                AB_INBEV_ISIN,
+                WINDOW_START,
+                WINDOW_END,
+                page_size=2,
+                max_pages=1,
+            )
+
+        self.assertEqual(len(opener.requests), 1)
+
+    def test_exact_result_count_at_page_limit_is_not_truncation(self) -> None:
+        body = json.loads(fixture_body().decode("utf-8"))
+        page = dict(
+            body,
+            resultCount=2,
+            storiResultItems=body["storiResultItems"][:2],
+        )
+        opener = FakeOpener(json.dumps(page).encode("utf-8"))
+
+        records = make_client(opener).fetch_by_isin(
+            AB_INBEV_ISIN,
+            WINDOW_START,
+            WINDOW_END,
+            page_size=2,
+            max_pages=1,
+        )
+
+        # One of the two authoritative rows is outside the requested window;
+        # returning the in-window row proves a full terminal page was accepted.
+        self.assertEqual(len(records), 1)
+        self.assertEqual(len(opener.requests), 1)
+
     def test_fetch_by_isin_parses_and_filters_brussels_window(self) -> None:
         opener = FakeOpener(fixture_body())
         client = make_client(opener)

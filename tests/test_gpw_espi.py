@@ -55,6 +55,18 @@ class FakeOpener:
         raise AssertionError(f"unexpected url: {url}")
 
 
+class ScriptedOpener:
+    def __init__(self, bodies) -> None:
+        self.bodies = list(bodies)
+        self.requested: list = []
+
+    def __call__(self, request, timeout=None):
+        self.requested.append(request.full_url)
+        if not self.bodies:
+            raise AssertionError(f"unexpected extra request: {request.full_url}")
+        return FakeResponse(self.bodies.pop(0))
+
+
 def client_opener(**kwargs):
     return FakeOpener(
         {
@@ -78,6 +90,44 @@ def empty_opener(**kwargs):
 
 
 class GpwEspiClientTests(unittest.TestCase):
+    def test_full_limit_page_with_confirmed_next_page_raises_truncation(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        full_page = (FIXTURES / "komunikaty_pko.html").read_bytes()
+        opener = ScriptedOpener((full_page, full_page))
+        client = GpwEspiClient(opener=opener, requests_per_second=1000)
+
+        with self.assertRaises(GpwEspiDataError):
+            client.fetch_reports(
+                "PLPKO0000016",
+                date(2026, 7, 1),
+                date(2026, 8, 10),
+                page_size=4,
+                max_pages=1,
+            )
+
+        self.assertEqual(len(opener.requested), 2)
+        self.assertIn("offset=4", opener.requested[1])
+
+    def test_full_final_page_with_empty_probe_is_not_truncation(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        full_page = (FIXTURES / "komunikaty_pko.html").read_bytes()
+        empty_page = (FIXTURES / "komunikaty_empty.html").read_bytes()
+        opener = ScriptedOpener((full_page, empty_page))
+        client = GpwEspiClient(opener=opener, requests_per_second=1000)
+
+        records = client.fetch_reports(
+            "PLPKO0000016",
+            date(2026, 7, 1),
+            date(2026, 8, 10),
+            page_size=4,
+            max_pages=1,
+        )
+
+        self.assertEqual(len(records), 4)
+        self.assertEqual(len(opener.requested), 2)
+
     def test_parses_reports_and_filters_warsaw_window(self) -> None:
         from investment_monitor.sources.gpw_espi.client import (
             GpwEspiClient,
