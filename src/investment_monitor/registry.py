@@ -291,7 +291,12 @@ def create_default_registry() -> SourceRegistry:
     registry.register(SeekingAlphaConnector.name, SeekingAlphaConnector)
     registry.register(YellowbrickConnector.name, YellowbrickConnector)
     registry.register(SubstackConnector.name, SubstackConnector)
-    registry.register(XCommunityConnector.name, XCommunityConnector)
+    registry.register(
+        XCommunityConnector.name,
+        XCommunityConnector.from_environment,
+        secret_fields=XCommunityConnector.secret_fields,
+        configuration_error=XCommunityConnector.configuration_error,
+    )
     registry.register(VicConnector.name, VicConnector)
     registry.register(AmfOamConnector.name, AmfOamConnector)
     registry.register(StoriConnector.name, StoriConnector)

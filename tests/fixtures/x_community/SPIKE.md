@@ -97,28 +97,22 @@ connector. Applies only if an API-key path is enabled.
 
 ## Conclusion
 
-**Stub·STOP** for key-free collection.
+**LIVE（需 `X_BEARER_TOKEN`）** for official API collection.
 
-1. **No key-free surface**: X search/Communities/timelines are login-walled
-   SPA shells (no SSR), there is no official public RSS/JSON, and every Nitter
-   mirror is dead or bot-walled. Same honesty bar as `hotcopper_au`,
-   `lse_share_chat`, `xueqiu`.
-2. **Official path exists but requires a paid key**: X API v2
+1. **No key-free surface** remains true: X search/Communities/timelines are
+   login-walled SPA shells (no SSR), there is no official public RSS/JSON, and
+   every Nitter mirror is dead or bot-walled. Same honesty bar as
+   `hotcopper_au`, `lse_share_chat`, `xueqiu`.
+2. **Official path now wired**: X API v2
    `GET /2/tweets/search/recent` (Bearer/OAuth2, pay-per-usage credits,
    ~`$0.005`/Post read) supports cashtag queries, `start_time`/`end_time`
    within a 7-day window, and returns stable `id` / `created_at` / `text` /
-   `community_id`; Communities lookup/search also exist behind the same auth.
-   This is the **only compliant LIVE path** — but it needs a user-provided
-   paid API key (Bearer, `.env.example` placeholder), so it is **not default
-   LIVE** under the no-key rule.
-3. **No account-whitelist analog** (unlike Substack): there is no public RSS
-   or syndication feed per account/community; account timelines require the
-   same paid API key.
+   `community_id`.
+3. **No token fallback is honest unavailable**: when `X_BEARER_TOKEN` is not
+   set, the connector stays Not connected instead of pretending to be live.
 4. Category = social post stream, keyword-level cashtag matching only, no
    structured ticker recall. Timezone America/New_York via UTC `created_at`.
 
-Unlock only if the product accepts a **user-provided official X API key**
-(pay-per-usage credits): then `search/recent?query=$TICKER&start_time=…` is a
-viable LIVE connector (id/time/text/link + `community_id` filter), matching
-the API+key option. Without a key, stay Stub·STOP — do not scrape x.com HTML
-and do not depend on the undocumented syndication endpoint.
+Unlock condition is now explicit: provide a user-owned official X API Bearer
+token. Without it, keep the connector unavailable; do not scrape x.com HTML or
+depend on the undocumented syndication endpoint.
