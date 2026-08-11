@@ -28,7 +28,11 @@ on ticker + Paris day + normalized title. For DE, the only wired disclosure
 source is eqs_dgap, which pairs on its stable EQS news id, or on a
 source-scoped title fallback (ticker + Berlin day + normalized title); DE
 news (yahoo_de / google_news_de) pairs across sources on ticker + Berlin day
-+ normalized title.
++ normalized title. For NL, the only wired disclosure source is eqs_nl,
+which pairs on its stable EQS news id, or on a source-scoped title fallback
+(ticker + Amsterdam day + normalized title); NL news (yahoo_nl /
+google_news_nl) pairs across sources on ticker + Amsterdam day + normalized
+title.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ TORONTO = ZoneInfo("America/Toronto")
 SYDNEY = ZoneInfo("Australia/Sydney")
 PARIS = ZoneInfo("Europe/Paris")
 BERLIN = ZoneInfo("Europe/Berlin")
+AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 RECEIPT_LENGTH = 14
 
 FILING_SOURCE_PRIORITY = {
@@ -61,6 +66,7 @@ FILING_SOURCE_PRIORITY = {
     "asx_announcements": 9,
     "amf_oam": 10,
     "eqs_dgap": 11,
+    "eqs_nl": 12,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -79,6 +85,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_fr": 13,
     "yahoo_de": 14,
     "google_news_de": 15,
+    "yahoo_nl": 16,
+    "google_news_nl": 17,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -109,6 +117,9 @@ SOURCE_DISPLAY_LABELS = {
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
     "google_news_de": "Google News (DE)",
+    "eqs_nl": "EQS News (NL)",
+    "yahoo_nl": "Yahoo Finance NL",
+    "google_news_nl": "Google News (NL)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -119,7 +130,7 @@ _TRAILING_ETC = re.compile(r"\s+등\s*$")
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     """Return a stable cross-source key, or None when not deduplicable."""
     market = str(item.get("market") or "")
-    if market not in {"kr", "uk", "hk", "tw", "ca", "au", "fr", "de"}:
+    if market not in {"kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl"}:
         return None
     source_type = str(item.get("source_type") or "")
     if source_type == "regulatory_filing":
@@ -216,6 +227,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return _fr_filing_key(item)
     if market == "de":
         return _de_filing_key(item)
+    if market == "nl":
+        return _nl_filing_key(item)
     return _uk_filing_key(item)
 
 
@@ -235,6 +248,29 @@ def _de_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"de:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _nl_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """NL filings pair on the stable EQS news id, or a title fallback.
+
+    ``eqs_nl`` is the only wired NL disclosure source; its news id
+    (``external_id``) is the primary identity. Without one, the fallback is
+    source-scoped (source + ticker + Amsterdam day + normalized title), so a
+    hypothetical second NL disclosure source is never cross-annotated by
+    title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"nl:filing:eqs:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, AMSTERDAM)
+    if title and day:
+        return (
+            f"nl:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -385,6 +421,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "fr"
         else BERLIN
         if market == "de"
+        else AMSTERDAM
+        if market == "nl"
         else LONDON
     )
     title = normalize_title(item.get("title"))

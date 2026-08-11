@@ -1,0 +1,11 @@
+Name;ISIN;Symbol;Market;Currency;"Open Price";"High Price";"low Price";"last Price";"last Trade MIC Time";"Time Zone";Volume;Turnover;"Closing Price";"Closing Price DateTime"
+"European Equities"
+"10 Aug 2026"
+"All datapoints provided as of end of last active trading day."
+ASML HOLDING;NL0010273215;ASML;"Euronext Amsterdam";EUR;920.00;930.00;915.00;925.00;" 17:35";CET;100000;92000000.00;925.00;
+ING GROEP;NL0011821202;INGA;"Euronext Amsterdam";EUR;17.50;17.60;17.40;17.55;" 17:35";CET;500000;8775000.00;17.55;
+AALBERTS NV;NL0000852564;AALB;"Euronext Amsterdam";EUR;41.00;41.20;40.80;41.10;" 17:35";CET;20000;822000.00;41.10;
+AHOLD DEL;NL0011794037;AD;"Euronext Amsterdam, Brussels";EUR;31.20;31.30;31.10;31.25;" 17:35";CET;30000;937500.00;31.25;
+AIRBUS;NL0000235190;AIR;"Euronext Paris";EUR;213.50;216.20;212.85;213.60;" 17:35";CET;694849;148771400.10;213.60;
+LVMH;FR0000121014;1MC;"Euronext Global Equity Market";EUR;480.30;482.95;478.50;480.00;" 17:24";CET;1354;650320.00;479.85;
+SANOFI;FR0000120578;4SAN;EuroTLX;EUR;75.18;75.18;75.18;75.18;" 15:58";CET;500;37590.00;75.32;

@@ -228,6 +228,32 @@ when warm. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
 (or same-source title fallback); news pairs on ticker + Berlin day.
 Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON).
 
+### Netherlands sources (NL)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). NL-4 re-verified (2026-08-10): AFM registers are HTML-only, Euronext announcement pages use Drupal antibot and the guessed JSON endpoint 404s — no second free disclosure source. Needs ISIN from the NL universe cache or a typed Dutch ISIN. |
+| nl_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Amsterdam segment rows (key-free; live 2026-08-10: ~119 `Euronext Amsterdam` + ~16 multi-venue rows mentioning Amsterdam, e.g. `Euronext Amsterdam, Brussels`; non-Amsterdam boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. |
+| yahoo_nl | news | none | Yahoo Finance NL public RSS (`region=NL`, `lang=nl-NL` + `en-US` merged); `.AS` at request time; may be loosely related and break without notice |
+| google_news_nl | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=nl&gl=NL&ceid=NL:nl`); may be loosely related and break without notice |
+
+`market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` /
+`ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA`
+are stripped at add time, Dutch ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped;
+`nl_universe_name_map()` backfills names, board and ISIN for add-company.
+Finnhub is **US only** and never queried for NL. News comes from `yahoo_nl`
+/ `google_news_nl`.
+
+NL feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_nl` / `google_news_nl` news
+pairs across sources on ticker + Amsterdam day (`Europe/Amsterdam`) +
+normalized title. `eqs_nl` filings pair on the stable EQS news id, or on a
+same-source title fallback (ticker + Amsterdam day + normalized title);
+with only one disclosure source wired there is no cross-source filing
+pairing. Every row stays in the feed with an "Also seen on …" label;
+totals and page sizes are never shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
