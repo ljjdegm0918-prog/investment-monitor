@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_BE
+from ...provenance import build_raw_provenance
 from ...web_repository import normalize_be_ticker
 from .client import (
     DEFAULT_PUBLIC_PORTAL,
@@ -200,6 +201,21 @@ def _map_record(
         url=url,
         collected_at=collected_at,
         raw_metadata={
+            **build_raw_provenance(
+                official_source_id=str(record["external_id"]),
+                official_source_url=(url if first else None),
+                retrieval_url=str(record.get("retrieval_url") or ""),
+                raw_payload=record.get("raw") or record,
+                raw_payload_format="json",
+                classification_code=None,
+                classification_label=str(
+                    record.get("document_type") or ""
+                ),
+                published_at_raw=str(
+                    record.get("published_at_raw") or ""
+                ),
+                published_timezone="Europe/Brussels",
+            ),
             "provider": "fsma_stori",
             "stock_code": ticker,
             "isin": isin,
@@ -215,4 +231,3 @@ def _map_record(
         summary=None,
         effective_at=record["published"],
     )
-

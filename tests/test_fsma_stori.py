@@ -21,6 +21,7 @@ from investment_monitor import (
     StoriRequestError,
 )
 from investment_monitor.registry import create_default_registry
+from provenance_assertions import assert_official_provenance
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "fsma_stori"
@@ -97,6 +98,48 @@ def fixture_body() -> bytes:
 
 
 class StoriClientTests(unittest.TestCase):
+    def test_remaining_result_count_at_page_limit_raises_truncation(self) -> None:
+        body = json.loads(fixture_body().decode("utf-8"))
+        page = dict(
+            body,
+            resultCount=3,
+            storiResultItems=body["storiResultItems"][:2],
+        )
+        opener = FakeOpener(json.dumps(page).encode("utf-8"))
+
+        with self.assertRaises(StoriDataError):
+            make_client(opener).fetch_by_isin(
+                AB_INBEV_ISIN,
+                WINDOW_START,
+                WINDOW_END,
+                page_size=2,
+                max_pages=1,
+            )
+
+        self.assertEqual(len(opener.requests), 1)
+
+    def test_exact_result_count_at_page_limit_is_not_truncation(self) -> None:
+        body = json.loads(fixture_body().decode("utf-8"))
+        page = dict(
+            body,
+            resultCount=2,
+            storiResultItems=body["storiResultItems"][:2],
+        )
+        opener = FakeOpener(json.dumps(page).encode("utf-8"))
+
+        records = make_client(opener).fetch_by_isin(
+            AB_INBEV_ISIN,
+            WINDOW_START,
+            WINDOW_END,
+            page_size=2,
+            max_pages=1,
+        )
+
+        # One of the two authoritative rows is outside the requested window;
+        # returning the in-window row proves a full terminal page was accepted.
+        self.assertEqual(len(records), 1)
+        self.assertEqual(len(opener.requests), 1)
+
     def test_fetch_by_isin_parses_and_filters_brussels_window(self) -> None:
         opener = FakeOpener(fixture_body())
         client = make_client(opener)
@@ -215,6 +258,26 @@ class StoriConnectorTests(unittest.TestCase):
         ))
         self.assertEqual(first.raw_metadata["provider"], "fsma_stori")
         self.assertEqual(first.raw_metadata["isin"], AB_INBEV_ISIN)
+        payload = next(
+            record
+            for record in json.loads(fixture_body().decode("utf-8"))[
+                "storiResultItems"
+            ]
+            if record["requiredReportingTopicId"] == first.external_id
+        )
+        assert_official_provenance(
+            self,
+            first,
+            expected_payload=payload,
+            official_source_id=first.external_id,
+            official_source_url=first.url,
+            retrieval_url=opener.requests[0][0],
+            raw_payload_format="json",
+            classification_code=None,
+            classification_label=payload["reportingTopicName"],
+            published_at_raw=payload["datePublication"],
+            published_timezone="Europe/Brussels",
+        )
 
     def test_be_universe_isin_matches_mnemonic_ticker(self) -> None:
         connector, _ = make_connector(
@@ -285,6 +348,7 @@ class StoriConnectorTests(unittest.TestCase):
             if item.external_id == "90f6f9b5-5555-4d0b-8ae6-fe2272036666"
         )
         self.assertEqual(portal.url, "https://www.fsma.be/en/stori")
+        self.assertIsNone(portal.raw_metadata["official_source_url"])
 
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         def failing_opener(request, timeout=None):
