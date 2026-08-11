@@ -355,6 +355,17 @@ only one disclosure source wired there is no cross-source filing pairing.
 Every row stays in the feed with an "Also seen on —" label; totals and page
 sizes are never shrunk.
 
+### Poland sources (PL)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `gpw_espi` | Filings | None (key-free) | Official GPW ESPI/EBI reports page (`www.gpw.pl/komunikaty`, server-rendered HTML list, ISIN-filterable via `searchText=` + `limit=`/`offset=`; live verified 2026-08-10). Matches by Polish ISIN from the PL universe cache (the list shows issuer name + ISIN, not ticker mnemonics); companies without a universe ISIN are skipped honestly (`no_universe_identity`). Europe/Warsaw day bounds; stable `geru_id` external ids; deep link to the report page (`komunikat?geru_id=...`, which also exposes attachment PDF paths). The PL-1 A3 boundary was based on `espi.gpw.pl` TLS failure and empty EQS records; PL-4 re-spike found this page reachable. `espi.gpw.pl` itself remains unreachable, EQS is still empty for sampled Polish ISINs, KNF has no per-issuer feed, and GPW paid data products are not used. |
+| `pl_universe` | Universe | None (key-free) | Official GPW HTML directories, breadth only (never written to the feed): GPW Main Market (`www.gpw.pl/spolki?limit=403`, ~400 companies; observed 401–403 live 2026-08-10) and NewConnect (`newconnect.pl/spolki?limit=403`, ~350 companies; observed 348–349). Both are server-rendered tables with ISIN/name/mnemonic ticker; the old `lista-spolek*` URLs return a 404 shell and the `ajaxindex.php` search endpoint rejects non-browser clients, so only the public GET pages are used. The GPW hosts also drop TLS connections intermittently from this network (a refresh may need a retry; per-board partial failure keeps the other board and only a full failure raises `PlUniverseError`). No WIG20/WIG30 seed and no paid GPW data product. Refreshed via `refresh_pl_universe()`; `pl_universe_name_map()` backfills name/board/ISIN on add-company and drives `gpw_espi` disclosure matching. `market=pl` companies use canonical root tickers (`PKO` / `PKO.WA` / `PKO-GPW` all store as `PKO`; exchange suffixes `.WA` / `.WSE` / `.GPW` are stripped at add time, Polish ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for PL. |
+| `yahoo_pl` | News | None (key-free) | Yahoo Finance PL public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.WA&region=PL&lang=pl-PL`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`PKO`), `.WA` is request-time only. |
+| `google_news_pl` | News | None (key-free) | Google News PL RSS (`news.google.com/rss/search?q={ROOT}.WA&hl=pl&gl=PL&ceid=PL:pl`). Live verified 2026-08-10; results can be loosely related (a `PKO.WA` query can include unrelated PKO BP Ekstraklasa football items); public RSS may break without notice. |
+
+PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings: `gpw_espi` pairs on its stable GPW report id (`geru_id`); the title fallback is source-scoped (source + ticker + Warsaw day + normalized title), so a hypothetical second PL disclosure source would never be cross-annotated by title. News: `yahoo_pl` ↔ `google_news_pl` pair across sources on ticker + Warsaw day + normalized title.
+
 ### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |

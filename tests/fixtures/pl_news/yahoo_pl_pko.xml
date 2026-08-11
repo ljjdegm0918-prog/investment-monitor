@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: PKO.WA News</title>
+    <item>
+      <title>PKO Bank Polski raportuje rekordowy zysk kwartalny</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>PKO Bank Polski publikuje wyniki za drugi kwartal.</description>
+    </item>
+    <item>
+      <title>Zyski banków w Polsce rosną</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000602.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Banki notowane na GPW poprawiaja wyniki.</description>
+    </item>
+    <item>
+      <title>Artykuł spoza okna czasowego</title>
+      <link>https://pl.finance.yahoo.com/news/pko-110000603.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Za stary artykuł.</description>
+    </item>
+  </channel>
+</rss>

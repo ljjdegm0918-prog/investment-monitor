@@ -211,6 +211,14 @@ sources:
     label: Google News (CH)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=de, gl=CH); may be loosely related / break without notice
+  - name: yahoo_pl
+    label: Yahoo Finance PL
+    source_type: news
+    enabled: true          # key-free public RSS mirror (pl-PL + en-US); may be loosely related / break without notice
+  - name: google_news_pl
+    label: Google News (PL)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=pl, gl=PL); may be loosely related / break without notice
   # Switzerland second disclosure - deliberately not wired (CH-4):
   # SIX official notices are a React SPA without a public JSON list,
   # api.six-group.com routes are undocumented, and SIX equity-issuer news
@@ -219,6 +227,16 @@ sources:
     label: SIX Official Notices (not wired)
     source_type: filings
     enabled: false
+  # Poland disclosure: official GPW ESPI/EBI reports page
+  # (www.gpw.pl/komunikaty), key-free HTML list with ISIN filtering
+  # (PL-4 re-spike 2026-08-10 found it reachable; the PL-1 A3 boundary was
+  # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
+  # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
+  # still unreachable from this network; GPW paid data products are unused.
+  - name: gpw_espi
+    label: GPW ESPI/EBI
+    source_type: filings
+    enabled: true
   - name: yahoo_be
     label: Yahoo Finance BE
     source_type: news
