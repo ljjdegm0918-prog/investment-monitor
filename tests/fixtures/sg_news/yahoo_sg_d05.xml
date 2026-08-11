@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: D05.SI News</title>
+    <item>
+      <title>DBS reports record quarterly profit</title>
+      <link>https://sg.finance.yahoo.com/news/dbs-profit-110000501.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>DBS posts record income.</description>
+    </item>
+    <item>
+      <title>Singapore shares close higher</title>
+      <link>https://sg.finance.yahoo.com/news/sgx-close-110000502.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>The Straits Times Index rises.</description>
+    </item>
+    <item>
+      <title>Old article outside window</title>
+      <link>https://sg.finance.yahoo.com/news/old-110000503.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Too old.</description>
+    </item>
+  </channel>
+</rss>

@@ -309,6 +309,28 @@ source-scoped (ticker + Madrid day + normalized title). Every row stays in
 the feed with an "Also seen on —" label; totals and page sizes are never
 shrunk.
 
+### Singapore sources (SG)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| sgx_announcements | filings | none | **Not wired (SG-1 spike A3; SG-4 re-verified 2026-08-10)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector or second disclosure source is registered; SGX DataLink / LSEG / paid market-data products are deliberately not used (locked by tests). |
+| sg_universe | breadth cache | none | **Boundary stub (SG-2 spike B2)**: no stable key-free SGX securities directory exists (`www.sgx.com/securities/*` is a JS SPA, the screener is Refinitiv/LSEG-powered; `api.sgx.com` 403; `data.gov.sg` has only aggregate SINGSTAT turnover; ACRA is the full company register without SGX codes). `load_sg_universe` / `sg_universe_name_map` / `search_sg_universe` read a local cache if one ever exists; `refresh_sg_universe` raises `SgUniverseError` instead of faking an STI-only universe. Never enters the feed. |
+| yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
+| google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
+
+`market=sg` companies use canonical root tickers (`D05` / `D05.SI` /
+`D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped
+at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no
+fixed width is assumed) and remain unmapped. Finnhub is **US only** and
+never queried for SG. News comes from `yahoo_sg` / `google_news_sg`. SG
+feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_sg` / `google_news_sg`
+news pairs across sources on ticker + Singapore day (`Asia/Singapore`) +
+normalized title. No SG disclosure connector is wired, so regulatory
+filings never get a dedupe key and are never annotated. Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

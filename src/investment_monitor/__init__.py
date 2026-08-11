@@ -259,6 +259,18 @@ from .sources.es_news import (
     YahooEsNewsError,
     YahooEsNewsRequestError,
 )
+from .sources.sg_news import (
+    GoogleSgNewsClient,
+    GoogleSgNewsConnector,
+    GoogleSgNewsDataError,
+    GoogleSgNewsError,
+    GoogleSgNewsRequestError,
+    YahooSgNewsClient,
+    YahooSgNewsConnector,
+    YahooSgNewsDataError,
+    YahooSgNewsError,
+    YahooSgNewsRequestError,
+)
 from .sources.fr_news import (
     GoogleFrNewsClient,
     GoogleFrNewsConnector,
@@ -317,6 +329,13 @@ from .universe.es_universe import (
     load_es_universe,
     refresh_es_universe,
     search_es_universe,
+)
+from .universe.sg_universe import (
+    SgUniverseError,
+    load_sg_universe,
+    refresh_sg_universe,
+    search_sg_universe,
+    sg_universe_name_map,
 )
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
@@ -379,6 +398,7 @@ from .models import (
     MARKET_FR,
     MARKET_DE,
     MARKET_ES,
+    MARKET_SG,
     MARKET_IT,
     MARKET_NL,
     MARKET_UNKNOWN,
@@ -444,6 +464,7 @@ __all__ = [
     "NlUniverseError",
     "ItUniverseError",
     "EsUniverseError",
+    "SgUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -525,6 +546,7 @@ __all__ = [
     "MARKET_FR",
     "MARKET_DE",
     "MARKET_ES",
+    "MARKET_SG",
     "MARKET_IT",
     "MARKET_NL",
     "MARKET_UNKNOWN",
