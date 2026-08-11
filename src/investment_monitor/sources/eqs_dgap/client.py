@@ -120,12 +120,34 @@ class EqsDgapClient:
                 parsed = self._parse_record(raw)
                 if parsed is None:
                     continue
+                parsed = dict(parsed)
+                parsed["retrieval_url"] = url
                 day = berlin_day(parsed["published_at"])
                 if day < start_date or day > end_date:
                     continue
                 records.append(parsed)
             if len(page_records) < 10:
                 break
+            if page == max_pages:
+                probe_url = (
+                    f"{self._base_url}/news?isin={quote(code)}"
+                    f"&page={max_pages + 1}"
+                )
+                probe_records = self._get_json(probe_url).get("records")
+                if not isinstance(probe_records, list):
+                    raise EqsDgapDataError(
+                        "EQS pagination probe had no records list."
+                    )
+                probe_has_window_record = any(
+                    parsed is not None
+                    and start_date <= berlin_day(parsed["published_at"]) <= end_date
+                    for parsed in (self._parse_record(raw) for raw in probe_records)
+                )
+                if probe_has_window_record:
+                    raise EqsDgapDataError(
+                        "EQS results in the requested window exceed "
+                        f"max_pages={max_pages} for {code}."
+                    )
         return records
 
     def _parse_record(
@@ -158,6 +180,13 @@ class EqsDgapClient:
             "company_name": str(raw.get("companyName") or ""),
             "isin": str(raw.get("isin") or "").upper(),
             "locale_id": external_id,
+            "published_at_raw": str(
+                raw.get("dateUtc") or raw.get("date") or ""
+            ),
+            "published_timezone": (
+                "UTC" if raw.get("dateUtc") else "unknown"
+            ),
+            "raw_payload": dict(raw),
         }
 
     def _get_json(self, url: str) -> Mapping[str, Any]:
