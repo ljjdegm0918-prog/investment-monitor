@@ -1,4 +1,4 @@
-"""Google News (FR) connector for market=de companies."""
+"""Google News (DE) connector for market=de companies."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class GoogleDeNewsConnector:
     """Collect Google News RSS items for market=de companies."""
 
     name = "google_news_de"
-    provider = "Google News (FR)"
+    provider = "Google News (DE)"
     max_lookback_days = MAX_LOOKBACK_DAYS
 
     def __init__(

@@ -41,6 +41,10 @@ class FakeOpener:
 
 
 class DeNewsTests(unittest.TestCase):
+    def test_provider_labels_identify_germany(self) -> None:
+        self.assertEqual(YahooDeNewsConnector.provider, "Yahoo Finance DE")
+        self.assertEqual(GoogleDeNewsConnector.provider, "Google News (DE)")
+
     def test_yahoo_de_merges_de_and_en(self) -> None:
         opener = FakeOpener(
             {

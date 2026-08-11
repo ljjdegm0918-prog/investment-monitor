@@ -120,7 +120,7 @@ class GpwEspiClient:
         """Fetch ESPI/EBI report rows for one issuer ISIN within the window."""
         records: List[Mapping[str, Any]] = []
         offset = 0
-        for _ in range(max_pages):
+        for page in range(max_pages):
             url = (
                 f"{self._base_url}?searchText={quote(isin)}"
                 f"&limit={page_size}&offset={offset}"
@@ -131,6 +131,21 @@ class GpwEspiClient:
             if len(page_records) < page_size:
                 break
             offset += page_size
+            if page == max_pages - 1:
+                probe_url = (
+                    f"{self._base_url}?searchText={quote(isin)}"
+                    f"&limit={page_size}&offset={offset}"
+                )
+                probe_records = _parse_page(
+                    self._get_html(probe_url),
+                    self._public_base,
+                )
+                if _filter_window(probe_records, start_date, end_date):
+                    raise GpwEspiDataError(
+                        "GPW ESPI results in the requested window exceed "
+                        f"max_pages={max_pages} "
+                        f"for {isin}."
+                    )
         return _filter_window(records, start_date, end_date)
 
     def _get_html(self, url: str) -> bytes:

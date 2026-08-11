@@ -1,4 +1,4 @@
-"""Yahoo Finance FR news connector for market=de companies."""
+"""Yahoo Finance DE news connector for market=de companies."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ class YahooDeNewsConnector:
     """Collect Yahoo Finance Germany stock news for market=de companies."""
 
     name = "yahoo_de"
-    provider = "Yahoo Finance FR"
+    provider = "Yahoo Finance DE"
     max_lookback_days = MAX_LOOKBACK_DAYS
 
     def __init__(
