@@ -121,8 +121,20 @@ def run_ticker_collection(
             markets=dict(markets or {}),
         )
     )
-    WebRepository(settings.database_path, allowed_sources=settings.enabled_sources).record_collection_events(
-        pipeline.last_events
+    source_wide_state_targets = {
+        connector.name: tuple(
+            (ticker, str((markets or {}).get(ticker) or "unknown"))
+            for ticker in normalized_tickers
+        )
+        for connector in connectors
+        if bool(getattr(connector, "source_wide_collection", False))
+    }
+    WebRepository(
+        settings.database_path,
+        allowed_sources=settings.enabled_sources,
+    ).record_collection_events(
+        pipeline.last_events,
+        state_targets=source_wide_state_targets,
     )
     return ConfiguredCollectionResult(
         items=tuple(items),

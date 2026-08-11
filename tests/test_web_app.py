@@ -1135,20 +1135,19 @@ class WebApplicationTests(unittest.TestCase):
 
         self.assertTrue(first_run)
         self.assertFalse(second_run)
-        self.assertEqual(len(self.collection_calls), 2)
-        calls_by_ticker = {
-            call["tickers"]: call for call in self.collection_calls
-        }
-        self.assertEqual(
-            calls_by_ticker[("NVDA",)]["start_date"], date(2025, 8, 3)
-        )
-        self.assertEqual(
-            calls_by_ticker[("AAPL",)]["start_date"], date(2026, 7, 27)
-        )
-        self.assertTrue(all(
-            call["end_date"] == date(2026, 8, 3)
+        # Ordinary scheduling is always incremental, including pending legacy
+        # state; it must not silently turn missing state into a 365-day call.
+        collected_tickers = [
+            ticker
             for call in self.collection_calls
-        ))
+            for ticker in call["tickers"]
+        ]
+        self.assertEqual(sorted(collected_tickers), ["AAPL", "NVDA"])
+        for call in self.collection_calls:
+            self.assertEqual(call["sources"], ("sec",))
+            self.assertFalse(call["initial_backfill"])
+            self.assertEqual(call["start_date"], date(2026, 7, 27))
+            self.assertEqual(call["end_date"], date(2026, 8, 3))
 
 
 if __name__ == "__main__":
