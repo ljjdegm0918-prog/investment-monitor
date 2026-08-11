@@ -49,6 +49,13 @@ from .sg_universe import (
     search_sg_universe,
     sg_universe_name_map,
 )
+from .ch_universe import (
+    ChUniverseError,
+    ch_universe_name_map,
+    load_ch_universe,
+    refresh_ch_universe,
+    search_ch_universe,
+)
 
 __all__ = [
     "BeUniverseError",
@@ -58,6 +65,7 @@ __all__ = [
     "ItUniverseError",
     "EsUniverseError",
     "SgUniverseError",
+    "ChUniverseError",
     "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",
@@ -65,6 +73,7 @@ __all__ = [
     "it_universe_name_map",
     "es_universe_name_map",
     "sg_universe_name_map",
+    "ch_universe_name_map",
     "load_be_universe",
     "load_de_universe",
     "load_fr_universe",
@@ -86,4 +95,7 @@ __all__ = [
     "refresh_sg_universe",
     "load_sg_universe",
     "search_sg_universe",
+    "search_ch_universe",
+    "load_ch_universe",
+    "refresh_ch_universe",
 ]

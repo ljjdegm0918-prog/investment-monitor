@@ -199,6 +199,26 @@ sources:
     label: Google News (SG)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=en-SG); may be loosely related / break without notice
+  - name: eqs_ch
+    label: EQS News (CH)
+    source_type: filings
+    enabled: true          # key-free EQS News JSON by CH ISIN (unofficial; partial Swiss coverage; not SIX/FINMA official); needs ISIN from universe or typed ISIN
+  - name: yahoo_ch
+    label: Yahoo Finance CH
+    source_type: news
+    enabled: true          # key-free public RSS mirror (de-CH + en-US); may be loosely related / break without notice
+  - name: google_news_ch
+    label: Google News (CH)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=de, gl=CH); may be loosely related / break without notice
+  # Switzerland second disclosure - deliberately not wired (CH-4):
+  # SIX official notices are a React SPA without a public JSON list,
+  # api.six-group.com routes are undocumented, and SIX equity-issuer news
+  # is the paid Exfeed product. FINMA has no per-issuer announcement feed.
+  - name: six_official_notices
+    label: SIX Official Notices (not wired)
+    source_type: filings
+    enabled: false
   - name: yahoo_be
     label: Yahoo Finance BE
     source_type: news

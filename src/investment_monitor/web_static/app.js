@@ -92,6 +92,7 @@ async function renderManage() {
             <option value="it">Italy (Euronext)</option>
             <option value="es">Spain (BME/Madrid)</option>
             <option value="sg">Singapore (SGX)</option>
+            <option value="ch">Switzerland (SIX)</option>
           </select>
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
           <button class="button primary" type="submit">Search</button>
@@ -140,6 +141,7 @@ const MARKET_HINTS = {
   it: "IT market (Euronext Milan): root tickers strip .MI/.MIL/.BIT; Italian ISINs kept as-is. EQS News (IT) disclosure via key-free JSON by Italian ISIN (partial coverage; not Consob official; second disclosure source not wired — Consob captcha/Borsa Italiana/Euronext have no free JSON). Universe cache backfills names/board/ISIN from Euronext Milan directories. News: Yahoo Finance IT + Google News IT. Companies stay unmapped. Finnhub is US-only and never queried for IT.",
   es: "ES market (BME / Bolsa de Madrid): root tickers strip .MC/.MAD/.BME; Spanish ISINs kept as-is. Disclosure: CNMV official RSS (IP + OIR) plus BME relevant-facts JSON (official, key-free, same CNMV registration numbers; ~31-day range cap). The ES universe cache (BME official API: SIBE/Floor/Latibex + BME Growth/ScaleUp equities; funds excluded) backfills names/board/ISIN and drives disclosure matching. News: Yahoo Finance ES + Google News ES (key-free RSS; loosely related possible; .MC at request time). Feed soft-dedupe is display-only (Also seen on; all rows kept; KR_FEED_SOFT_DEDUPE). ES companies are added as unmapped. Finnhub is US-only and never queried for ES.",
   sg: "SG market (SGX): root tickers strip .SI/.SG; Singapore ISINs kept as-is; SGX codes vary in length (no fixed width). Disclosure is NOT wired (SG-1/SG-4 spikes: SGX announcements are a JS SPA; api.sgx.com returns 403; legacy infopub SGXNet JSON retired; links.sgx.com has deep links only; no paid SGX DataLink). The SG universe is a boundary stub (no stable free SGX directory; refresh raises; cache shape reserved). News: Yahoo Finance SG + Google News SG (key-free RSS; loosely related possible; .SI at request time). Feed soft-dedupe is display-only (Also seen on; all rows kept; KR_FEED_SOFT_DEDUPE; filings not annotated since no disclosure source). SG companies are added as unmapped. Finnhub is US-only and never queried for SG.",
+  ch: "CH market (SIX Swiss Exchange): root tickers strip .SW/.SWX/.S; Swiss ISINs kept as-is. Disclosure: EQS News (CH) via key-free JSON by Swiss ISIN (unofficial; partial coverage - Roche/UBS yes, some ISINs empty; NOT SIX/FINMA official; SIX official notices are a JS SPA and equity-issuer news is paid Exfeed). Needs ISIN from the CH universe cache or a typed Swiss ISIN. The CH universe is a boundary stub (no stable free SIX directory; refresh raises; cache shape reserved). News: Yahoo Finance CH + Google News CH (key-free RSS; German-Swiss; loosely related possible; .SW at request time). Feed soft-dedupe is display-only (Also seen on; all rows kept; KR_FEED_SOFT_DEDUPE; eqs_ch filings pair on EQS id). CH companies are added as unmapped. Finnhub is US-only and never queried for CH.",
 };
 
 function updateMarketHint() {
@@ -240,7 +242,7 @@ function renderSources(sources) {
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
 function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
-function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore"})[market] || "Unavailable"; }
+function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore",ch:"Switzerland"})[market] || "Unavailable"; }
 function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
 function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
