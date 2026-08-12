@@ -81,6 +81,15 @@ class MarketTRQTickerTests(unittest.TestCase):
         self.assertEqual(normalize_trq_ticker("VOD"), "VOD")
         self.assertEqual(normalize_trq_ticker("abcd"), "ABCD")
 
+    def test_normalize_trq_ticker_does_not_truncate_long_non_isin(self) -> None:
+        # 13+ 字符的非 ISIN 符号不得被截断成伪 ISIN。
+        self.assertEqual(
+            normalize_trq_ticker("STANDARDCHARTERED"), "STANDARDCHARTERED"
+        )
+        self.assertEqual(
+            normalize_trq_ticker("INTERNATIONAL"), "INTERNATIONAL"
+        )
+
     def test_normalize_trq_ticker_does_not_erase_suffix_like_codes(self) -> None:
         self.assertEqual(normalize_trq_ticker("TRQ"), "TRQ")
         self.assertEqual(normalize_trq_ticker("TRQX"), "TRQX")

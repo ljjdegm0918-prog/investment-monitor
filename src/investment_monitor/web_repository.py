@@ -2445,7 +2445,7 @@ _EMF_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
 
 _TRQ_TICKER_SUFFIXES = ("TRQ", "TRQX", "TQEX")
 _TRQ_TICKER_SEPARATORS = (".", " ", "-")
-_TRQ_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
+_TRQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 
 
 def normalize_se_ticker(ticker: str) -> str:
