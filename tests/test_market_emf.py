@@ -81,6 +81,15 @@ class MarketEMFTickerTests(unittest.TestCase):
         self.assertEqual(normalize_emf_ticker("BLACKROCK"), "BLACKROCK")
         self.assertEqual(normalize_emf_ticker("abcd"), "ABCD")
 
+    def test_normalize_emf_ticker_does_not_truncate_long_non_isin(self) -> None:
+        # 13+ 字符的非 ISIN 标识不得被截断成伪 ISIN。
+        self.assertEqual(
+            normalize_emf_ticker("GLOBALALLOCATION"), "GLOBALALLOCATION"
+        )
+        self.assertEqual(
+            normalize_emf_ticker("LU0171254561X"), "LU0171254561X"
+        )
+
     def test_normalize_emf_ticker_does_not_erase_suffix_like_codes(self) -> None:
         self.assertEqual(normalize_emf_ticker("F"), "F")
         self.assertEqual(normalize_emf_ticker("MF"), "MF")
