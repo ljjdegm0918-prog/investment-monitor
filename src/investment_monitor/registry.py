@@ -97,6 +97,7 @@ from .sources.aq_news import (
 )
 from .sources.cxe_news import GoogleCxeNewsConnector
 from .sources.emf_news import GoogleEmfNewsConnector
+from .sources.trq_news import GoogleTrqNewsConnector
 from .sources.gpw_espi import GpwEspiConnector
 
 ConnectorFactory = Callable[[], SourceConnector]
@@ -302,6 +303,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleAqNewsConnector.name, GoogleAqNewsConnector)
     registry.register(GoogleCxeNewsConnector.name, GoogleCxeNewsConnector)
     registry.register(GoogleEmfNewsConnector.name, GoogleEmfNewsConnector)
+    registry.register(GoogleTrqNewsConnector.name, GoogleTrqNewsConnector)
     registry.register(GpwEspiConnector.name, GpwEspiConnector)
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)

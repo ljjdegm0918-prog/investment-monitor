@@ -362,6 +362,13 @@ from .sources.emf_news import (
     GoogleEmfNewsError,
     GoogleEmfNewsRequestError,
 )
+from .sources.trq_news import (
+    GoogleTrqNewsClient,
+    GoogleTrqNewsConnector,
+    GoogleTrqNewsDataError,
+    GoogleTrqNewsError,
+    GoogleTrqNewsRequestError,
+)
 from .sources.gpw_espi import (
     GpwEspiClient,
     GpwEspiConnector,
@@ -484,6 +491,13 @@ from .universe.emf_universe import (
     search_emf_universe,
     emf_universe_name_map,
 )
+from .universe.trq_universe import (
+    TrqUniverseError,
+    load_trq_universe,
+    refresh_trq_universe,
+    search_trq_universe,
+    trq_universe_name_map,
+)
 from .sources.hkexnews import (
     HKEXNewsCompanyResolver,
     HkexNewsClient,
@@ -553,6 +567,7 @@ from .models import (
     MARKET_AQ,
     MARKET_CXE,
     MARKET_EMF,
+    MARKET_TRQ,
     MARKET_IT,
     MARKET_NL,
     MARKET_UNKNOWN,
@@ -645,6 +660,7 @@ __all__ = [
     "AqUniverseError",
     "CxeUniverseError",
     "EmfUniverseError",
+    "TrqUniverseError",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
@@ -734,6 +750,7 @@ __all__ = [
     "MARKET_AQ",
     "MARKET_CXE",
     "MARKET_EMF",
+    "MARKET_TRQ",
     "MARKET_IT",
     "MARKET_NL",
     "MARKET_UNKNOWN",
@@ -889,5 +906,9 @@ __all__ = [
     "load_emf_universe",
     "refresh_emf_universe",
     "search_emf_universe",
+    "trq_universe_name_map",
+    "load_trq_universe",
+    "refresh_trq_universe",
+    "search_trq_universe",
     "ReportResult",
 ]
