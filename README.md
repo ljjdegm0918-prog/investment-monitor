@@ -92,7 +92,7 @@ News 数据源为 Finnhub 公司新闻。在 `.env` 中设置 `FINNHUB_API_KEY`�
 | seeking_alpha | community | none | **LIVE** public combined RSS `https://seekingalpha.com/api/sa/combined/{SYMBOL}.xml` (spike 2026-08-11; `tests/fixtures/seeking_alpha/SPIKE.md`). Article/news metadata only (`MarketCurrent` + `Article`); ~30-item rolling window; America/New_York day filter; stdlib urllib, no cookie. HTML symbol/forum/comments pages return PerimeterX 403 — out of scope. **Not** forum discussion posts. |
 | substack | community | none | **LIVE** publication-whitelist article/news metadata via public RSS (`https://{publication}/feed`; spike 2026-08-11; `tests/fixtures/substack/SPIKE.md`). stdlib urllib, no cookie. Default whitelist: noahpinion.blog, notboring.co, astralcodexten.com, paulkrugman.substack.com, oneusefulthing.org. America/New_York calendar-day filter. **No structured ticker binding:** optional client-side keyword match (best-effort, false positives/negatives). Category is newsletter article/news metadata, **not** forum/discussion posts. Whitelist requires maintenance against off-platform publication migration. |
 | yellowbrick | community | none | Yellowbrick Investing (US) social stock-pitch community. **Honest stub:** no stable public login-free surface (spike 2026-08-11; `tests/fixtures/yellowbrick/SPIKE.md`): `ybrick.co` dead (DNS/transport error); `joinyellowbrick.com/stocks`, `/ideas`, `/pitches` all return HTTP 404; Substack is waitlist-only. `collect()` returns `[]`. Login/Supabase-key scraping out of scope. |
-| x_community | community | none | X (formerly Twitter) US social post stream. **Honest stub (Stub·STOP):** no stable public login-free surface for ticker discovery (spike 2026-08-11; `tests/fixtures/x_community/SPIKE.md`): `x.com` search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Official X API v2 `search/recent` requires paid Bearer/OAuth2 — **this connector does not wire a key path**. No-key HTML / undocumented syndication scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: social post stream (not forum/article). |
+| x_community | community | `X_BEARER_TOKEN` | X (formerly Twitter) US social post stream. **LIVE (requires `X_BEARER_TOKEN`):** uses official X API v2 `GET /2/tweets/search/recent` with cashtag `$TICKER` + day window, returning structured post items (`id` / `created_at` / `text` / deeplink, plus `community_id` when present). No key-free discovery path exists: `x.com` search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors are dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Without a token the source stays Not connected. Category: social post stream (not forum/article). |
 | vic | community | none | Value Investors Club (US) investment-idea club. **Honest stub (Stub·STOP):** no stable public login-free ticker+day surface (spike 2026-08-11; `tests/fixtures/vic/SPIKE.md`): `/feed` `/rss` `/api/ideas` `/sitemap.xml` return HTML shells (not RSS/JSON); `/ideas?symbol=TICKER` does not filter (identical idea-href set for MSFT/AAPL/bare `/ideas`); homepage free signup only unlocks **45-day delayed** guest ideas; membership/login and HTML catalog scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: club investment-idea write-ups (not forum/article RSS). |
 
 US feed Community 软去重：Seeking Alpha 用 `content_id`（或同源 scoped 标题回退）；Substack 用稳定 post id（`external_id` = `substack-{guid}`）或同源 scoped 标题回退（ticker + New York day + normalized title）。Yellowbrick / X / VIC 为 stub，`collect()` 无行，不产生去重键。
@@ -113,7 +113,7 @@ US feed Community 软去重：Seeking Alpha 用 `content_id`（或同源 scoped 
 | investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
 | uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
-| lse_share_chat | community | none | LSE.co.uk Share Chat. **Honest stub:** HTTP 403 to automated clients; londonstockexchange.com discussion URLs are SPA shells (spike 2026-08-11; `tests/fixtures/lse_share_chat/SPIKE.md`). `collect()` returns `[]`. Login/paywall out of scope. |
+| lse_share_chat | community | none | LSE.co.uk Share Chat. **Honest stub:** HTTP 403 to automated clients; official LSE gateway probes and discussion/news/RNS pages do not expose anonymous post rows (spike 2026-08-12; `tests/fixtures/lse_share_chat/SPIKE.md`). `collect()` returns `[]`. Investegate RNS is a separate existing source, not community chat. Login/paywall out of scope. |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
 UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Investegate）或 Companies House transaction id 上标注；标题回退仅限同源，Companies House 与 Investegate 不会因标题交叉标注。News 按 ticker + London day + normalized title 配对。Community 软去重使用 LSE Share Chat thread id（或同源 scoped 标题回退）；当前仅 `lse_share_chat` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
@@ -126,7 +126,7 @@ UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Invest
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
 | hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
-| xueqiu | community | none | Xueqiu (雪球) HK statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
+| xueqiu | community | none | Xueqiu (雪球) CN/HK statuses. **Cookie‑backed LIVE** when `XUEQIU_COOKIE=xq_a_token` is set in `.env`; otherwise honest stub (`collect()` returns `[]`). JSON API `statuses/search.json` returns structured posts with id/title/timestamp/deeplink. Login/WAF bypass out of scope. |
 
 HK ticker 规范为五位代码（`700` / `0700` / `00700.HK` → `00700`）；Xueqiu 社区符号为 `HK` + 五位代码（`0700` → `HK00700`）。Finnhub **仅 US**。软去重：hkexnews 按 NEWS_ID，hkex_di 按 form serial（标题永不交叉配对）；yahoo_hk 按 ticker + Hong Kong day；Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
 
@@ -134,7 +134,7 @@ HK ticker 规范为五位代码（`700` / `0700` / `00700.HK` → `00700`）；X
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| xueqiu | community | none | Xueqiu (雪球) CN statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
+| xueqiu | community | none | Xueqiu (雪球) CN statuses. **Cookie‑backed LIVE** when `XUEQIU_COOKIE=xq_a_token` is set in `.env`; otherwise honest stub (`collect()` returns `[]`). JSON API `statuses/search.json` returns structured posts with id/title/timestamp/deeplink. Login/WAF bypass out of scope. |
 
 CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `SH`/`SZ` + 六位代码（`600519` / `600519.SS` / `SH600519` → `SH600519`；`000001.SZ` → `SZ000001`）。Finnhub **仅 US**。Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
 
@@ -174,7 +174,8 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | au_universe | breadth cache | none | ASX company directory; never enters the feed |
 | yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
 | google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
-| hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
+| hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; re-probe 2026-08-12; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
+| stockhead_au | community | none | Stockhead.com.au ASX news/analysis. **LIVE** (spike 2026-08-12): WordPress search RSS `/?s={TICKER}&feed=rss2` returns ticker-tagged articles (`CompanyName - TICKER` category). 50-item rolling window; URL slug as external ID. Independent source — not a substitute label for HotCopper. |
 
 `market=au` 使用规范根 ticker（`BHP` / `BHP.AX` → `BHP`）。Finnhub **仅 US**。软去重：ASX filings 按 document key 配对（或同源标题回退）；news 按 ticker + Sydney day + normalized title 配对。Community 软去重使用 HotCopper thread id（或同源 scoped 标题回退）；仅接入 `hotcopper_au` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
 

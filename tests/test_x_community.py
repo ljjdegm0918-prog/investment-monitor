@@ -1,103 +1,160 @@
-"""Unit tests for the X (Twitter) community connector — honest stub.
+"""Unit tests for the X (Twitter) community connector.
 
-Mirrors the ``yellowbrick`` / ``xueqiu`` registered-stub tests: the spike
-(2026-08-11, see ``tests/fixtures/x_community/probe_public.py``) showed X has
-no stable public login-free surface for ticker discovery — search, Communities
-and profile timelines are client-rendered SPA shells behind a login wall for
-stdlib urllib, every Nitter mirror is dead or bot-walled, and the only
-key-free endpoints (single status page SSR, oEmbed, undocumented syndication
-``tweet-result``) require a known tweet id/URL in advance and cannot
-enumerate or search by ticker. The official X API v2 search/recent endpoint
-needs a paid Bearer/OAuth2 key. So ``collect()`` never hits the network and
-returns ``[]`` with honest ``last_errors``. No live network is used in these
-tests.
+The connector now has an official X API v2 path behind ``X_BEARER_TOKEN``.
+Without that token it must stay honest and report unavailable instead of
+pretending to be live.
 """
 
 from __future__ import annotations
 
-import unittest
 from datetime import date
+import os
+import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 
-from investment_monitor.models import MARKET_US, CollectionRequest
-from investment_monitor.registry import create_default_registry
+from investment_monitor import CollectionRequest, create_default_registry
+from investment_monitor.connectors.base import ConnectorUnavailableError
 from investment_monitor.sources.x_community import XCommunityConnector
+from investment_monitor.sources.x_community.connector import XCommunityAPIError
 
 
-class XCommunityStubTests(unittest.TestCase):
-    def test_connector_attributes(self) -> None:
-        connector = XCommunityConnector()
-        self.assertEqual(connector.name, "x_community")
-        self.assertEqual(connector.provider, "X")
-        self.assertEqual(connector.status, "stub")
+class XCommunityTests(unittest.TestCase):
+    def test_connector_attributes_and_secret_field(self) -> None:
+        self.assertEqual(XCommunityConnector.name, "x_community")
+        self.assertEqual(XCommunityConnector.provider, "X")
+        self.assertEqual(XCommunityConnector.status, "live")
+        self.assertEqual(XCommunityConnector.secret_fields[0].env, "X_BEARER_TOKEN")
 
-    def test_collect_is_empty_stub(self) -> None:
-        connector = XCommunityConnector()
+    def test_configuration_error_is_truthful_without_token(self) -> None:
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("X_BEARER_TOKEN", None)
+
+            self.assertIsNotNone(XCommunityConnector.configuration_error())
+            with self.assertRaises(ConnectorUnavailableError):
+                XCommunityConnector.from_environment()
+
+            registry = create_default_registry()
+            self.assertEqual(
+                registry.secret_fields_for("x_community")[0].env,
+                "X_BEARER_TOKEN",
+            )
+            self.assertEqual(
+                registry.configuration_error_for("x_community"),
+                "X_BEARER_TOKEN is not configured; X is not connected.",
+            )
+
+    def test_collect_maps_official_api_results(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "id": "200",
+                    "created_at": "2026-08-11T13:01:00Z",
+                    "text": "$AAPL prints after-hours strength",
+                    "entities": {"cashtags": [{"tag": "AAPL"}]},
+                    "attachments": {"community_id": "98765"},
+                },
+                {
+                    "id": "201",
+                    "created_at": "2026-08-12T05:00:00Z",
+                    "text": "$AAPL older day item",
+                    "entities": {"cashtags": [{"tag": "AAPL"}]},
+                },
+            ],
+            "includes": {"communities": [{"id": "98765"}]},
+        }
+
+        def fake_fetch(url: str):
+            self.assertIn("search/recent", url)
+            self.assertIn("query=%24AAPL+-is%3Aretweet", url)
+            self.assertIn("start_time=2026-08-11T04%3A00%3A00Z", url)
+            self.assertIn("end_time=2026-08-12T03%3A59%3A59Z", url)
+            return payload
+
+        connector = XCommunityConnector(
+            bearer_token="test-token",
+            fetch_json=fake_fetch,
+        )
         request = CollectionRequest(
-            tickers=("AAPL",),
+            tickers=("aapl",),
             start_date=date(2026, 8, 11),
             end_date=date(2026, 8, 11),
-            markets={"AAPL": "us"},
+            markets={"aapl": "us"},
         )
-        items = connector.collect(request)
-        self.assertEqual(items, [])
-        self.assertEqual(connector.status, "stub")
-        self.assertTrue(connector.last_errors)
-        self.assertEqual(connector.last_errors[0][0], "AAPL")
-        message = connector.last_errors[0][1]
-        self.assertIn("x.com/search", message)
-        self.assertIn("login wall", message)
-        self.assertIn("Nitter", message)
-        self.assertIn("Bearer", message)
 
-    def test_collect_records_each_us_ticker(self) -> None:
-        connector = XCommunityConnector()
-        request = CollectionRequest(
-            tickers=("aapl", "NVDA"),
-            start_date=date(2026, 8, 11),
-            end_date=date(2026, 8, 11),
-            markets={"aapl": "us", "NVDA": "us"},
-        )
         items = connector.collect(request)
-        self.assertEqual(items, [])
-        self.assertEqual(len(connector.last_errors), 2)
-        self.assertEqual(
-            [note[0] for note in connector.last_errors],
-            ["AAPL", "NVDA"],
-        )
+
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item.external_id, "x-200")
+        self.assertEqual(item.source, "x_community")
+        self.assertEqual(item.tickers, ("AAPL",))
+        self.assertEqual(item.document_type, "community_post")
+        self.assertEqual(item.url, "https://x.com/i/web/status/200")
+        self.assertEqual(item.raw_metadata["deeplink"], "https://x.com/i/web/status/200")
+        self.assertEqual(item.raw_metadata["community_id"], "98765")
+        self.assertEqual(item.raw_metadata["cashtags"], ("AAPL",))
+        self.assertEqual(item.summary, "$AAPL prints after-hours strength")
+        self.assertEqual(connector.last_errors, ())
 
     def test_collect_skips_non_us(self) -> None:
-        connector = XCommunityConnector()
+        connector = XCommunityConnector(bearer_token="test-token", fetch_json=lambda url: {"data": []})
         request = CollectionRequest(
             tickers=("0700",),
             start_date=date(2026, 8, 11),
             end_date=date(2026, 8, 11),
             markets={"0700": "hk"},
         )
+
         items = connector.collect(request)
+
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
 
-    def test_registry_registers_x_community(self) -> None:
-        registry = create_default_registry()
-        self.assertIsNotNone(registry.factory_for("x_community"))
-        connector = registry.factory_for("x_community")()
-        self.assertEqual(connector.name, "x_community")
-        self.assertEqual(connector.status, "stub")
-
-    def test_collect_mixed_us_and_other(self) -> None:
-        # Only US tickers get honest stub notes; other markets are skipped
-        # without a network attempt or failure record.
-        connector = XCommunityConnector()
+    def test_missing_created_at_entry_is_skipped_not_fatal(self) -> None:
+        payload = {
+            "data": [
+                {"id": "300", "text": "$AAPL no timestamp"},
+                {
+                    "id": "301",
+                    "created_at": "2026-08-11T13:30:00Z",
+                    "text": "$AAPL valid item",
+                    "entities": {"cashtags": [{"tag": "AAPL"}]},
+                },
+            ],
+        }
+        connector = XCommunityConnector(
+            bearer_token="test-token",
+            fetch_json=lambda url: payload,
+        )
         request = CollectionRequest(
-            tickers=("AAPL", "0700"),
+            tickers=("aapl",),
             start_date=date(2026, 8, 11),
             end_date=date(2026, 8, 11),
-            markets={"AAPL": "us", "0700": "hk"},
+            markets={"aapl": "us"},
         )
+
         items = connector.collect(request)
-        self.assertEqual(items, [])
-        self.assertEqual(len(connector.last_errors), 1)
-        self.assertEqual(connector.last_errors[0][0], "AAPL")
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "x-301")
+        self.assertEqual(connector.last_errors, ())
+
+    def test_fetch_search_http_error_raises_x_community_api_error(self) -> None:
+        connector = XCommunityConnector(bearer_token="test-token")
+        with patch(
+            "investment_monitor.sources.x_community.connector.urlopen",
+            side_effect=HTTPError(
+                "https://api.x.com/2/tweets/search/recent",
+                500,
+                "Internal Server Error",
+                None,
+                None,
+            ),
+        ):
+            with self.assertRaises(XCommunityAPIError) as ctx:
+                connector._fetch_search("https://api.x.com/2/tweets/search/recent")
+        self.assertIn("HTTP 500", str(ctx.exception))
 
 
 if __name__ == "__main__":

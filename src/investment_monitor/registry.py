@@ -40,6 +40,7 @@ from .sources.au_news import (
 )
 from .sources.ceoca_ca import CeocaCaConnector
 from .sources.hotcopper_au import HotCopperAuConnector
+from .sources.stockhead_au import StockheadAuConnector
 from .sources.lse_share_chat import LseShareChatConnector
 from .sources.xueqiu import XueqiuConnector
 from .sources.seeking_alpha import SeekingAlphaConnector
@@ -282,12 +283,22 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
+    registry.register(StockheadAuConnector.name, StockheadAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)
-    registry.register(XueqiuConnector.name, XueqiuConnector)
+    registry.register(
+        XueqiuConnector.name,
+        XueqiuConnector,
+        secret_fields=XueqiuConnector.secret_fields,
+    )
     registry.register(SeekingAlphaConnector.name, SeekingAlphaConnector)
     registry.register(YellowbrickConnector.name, YellowbrickConnector)
     registry.register(SubstackConnector.name, SubstackConnector)
-    registry.register(XCommunityConnector.name, XCommunityConnector)
+    registry.register(
+        XCommunityConnector.name,
+        XCommunityConnector.from_environment,
+        secret_fields=XCommunityConnector.secret_fields,
+        configuration_error=XCommunityConnector.configuration_error,
+    )
     registry.register(VicConnector.name, VicConnector)
     registry.register(AmfOamConnector.name, AmfOamConnector)
     registry.register(StoriConnector.name, StoriConnector)

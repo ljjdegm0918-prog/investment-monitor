@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
 import unittest
 from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 
 from investment_monitor.dedupe import annotate_feed_items, dedupe_key
 from investment_monitor.models import MARKET_CN, MARKET_HK, CollectionRequest
@@ -204,6 +207,11 @@ class XueqiuConnectorTests(unittest.TestCase):
         self.assertIsNotNone(registry.factory_for("xueqiu"))
         connector = registry.factory_for("xueqiu")()
         self.assertEqual(connector.name, "xueqiu")
+        fields = registry.secret_fields_for("xueqiu")
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(fields[0].env, "XUEQIU_COOKIE")
+        # Missing cookie must NOT mark the source unavailable (stub is valid).
+        self.assertIsNone(registry.configuration_error_for("xueqiu"))
 
     def test_community_soft_dedupe_uses_status_id(self) -> None:
         published = "2026-02-17T02:39:00+00:00"
@@ -235,6 +243,194 @@ class XueqiuConnectorTests(unittest.TestCase):
             ["Xueqiu (CN/HK)"],
         )
 
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake_token_for_testing"})
+    def test_collect_live_via_cookie(self) -> None:
+        """When XUEQIU_COOKIE is set, collect should attempt the JSON API path."""
+        connector = XueqiuConnector()
+        with patch.object(
+            connector, "_fetch_via_cookie", return_value=[]
+        ):
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+            self.assertEqual(items, [])
+            self.assertIn("LIVE", connector.status)
 
-if __name__ == "__main__":
-    unittest.main()
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=invalid_token"})
+    def test_collect_cookie_rejected_falls_to_stub(self) -> None:
+        """Invalid cookie → _fetch_via_cookie None → honest stub."""
+        connector = XueqiuConnector()
+        with patch.object(
+            connector, "_fetch_via_cookie", return_value=None
+        ):
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+            self.assertEqual(items, [])
+            self.assertEqual(connector.status, "stub")
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "   "}, clear=False)
+    def test_blank_cookie_stays_stub(self) -> None:
+        """Whitespace-only cookie must not enter the live path."""
+        connector = XueqiuConnector()
+        with patch.object(
+            connector, "_fetch_via_cookie", return_value=[]
+        ) as mocked:
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+            mocked.assert_not_called()
+            self.assertEqual(items, [])
+            self.assertEqual(connector.status, "stub")
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"})
+    def test_collect_live_filters_day_and_multi_ticker(self) -> None:
+        """LIVE path aggregates all tickers (day filter covered in fetch test)."""
+        connector = XueqiuConnector()
+        from investment_monitor.models import InformationItem
+        from datetime import timezone as tz
+
+        def _item(ext: str, ticker: str) -> InformationItem:
+            moment = datetime(2026, 2, 17, 4, 0, tzinfo=tz.utc)
+            return InformationItem(
+                source="xueqiu",
+                source_type="community",
+                external_id=ext,
+                tickers=(ticker,),
+                issuer=ticker,
+                published_at=moment,
+                title=ext,
+                document_type="community_post",
+                url=f"https://xueqiu.com/1/{ext}",
+                collected_at=moment,
+                raw_metadata={},
+                market="cn",
+            )
+
+        def fake_fetch(ticker: str, market: str, *, start_date, end_date):
+            code = normalize_xq_symbol(ticker, market=market)
+            if code == "SH600519":
+                return [_item("a", code), _item("b", code)]
+            if code == "SZ000001":
+                return [_item("c", code)]
+            return []
+
+        with patch.object(connector, "_fetch_via_cookie", side_effect=fake_fetch):
+            request = CollectionRequest(
+                tickers=("600519", "000001"),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn", "000001": "cn"},
+            )
+            items = connector.collect(request)
+            self.assertEqual(len(items), 3)
+            self.assertEqual(
+                {i.external_id for i in items},
+                {"a", "b", "c"},
+            )
+            self.assertIn("LIVE", connector.status)
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"})
+    def test_fetch_via_cookie_applies_day_filter(self) -> None:
+        """JSON posts outside the requested local day are dropped."""
+        connector = XueqiuConnector()
+        payload = {
+            "error_code": 0,
+            "list": [
+                {
+                    "id": 111,
+                    "user_id": 9,
+                    "title": "in range",
+                    "created_at": int(datetime(2026, 2, 17, 8, 0, tzinfo=SHANGHAI).timestamp() * 1000),
+                    "description": "ok",
+                },
+                {
+                    "id": 222,
+                    "user_id": 9,
+                    "title": "out of range",
+                    "created_at": int(datetime(2026, 2, 16, 8, 0, tzinfo=SHANGHAI).timestamp() * 1000),
+                    "description": "nope",
+                },
+            ],
+        }
+
+        class _Resp:
+            def read(self) -> bytes:
+                return json.dumps(payload).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch(
+            "investment_monitor.sources.xueqiu.connector.urlopen",
+            return_value=_Resp(),
+        ):
+            items = connector._fetch_via_cookie(
+                "600519",
+                "cn",
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+            )
+        self.assertIsNotNone(items)
+        assert items is not None
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "xueqiu-111")
+        self.assertEqual(items[0].title, "in range")
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"})
+    def test_fetch_via_cookie_skips_posts_without_timestamp(self) -> None:
+        """Posts without a real timestamp must be skipped, not backdated to now."""
+        connector = XueqiuConnector()
+        payload = {
+            "error_code": 0,
+            "list": [
+                {"id": 333, "user_id": 9, "title": "no timestamp", "description": "skip me"},
+                {
+                    "id": 444,
+                    "user_id": 9,
+                    "title": "has timestamp",
+                    "created_at": int(datetime(2026, 2, 17, 8, 0, tzinfo=SHANGHAI).timestamp() * 1000),
+                    "description": "ok",
+                },
+            ],
+        }
+
+        class _Resp:
+            def read(self) -> bytes:
+                return json.dumps(payload).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch(
+            "investment_monitor.sources.xueqiu.connector.urlopen",
+            return_value=_Resp(),
+        ):
+            items = connector._fetch_via_cookie(
+                "600519",
+                "cn",
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+            )
+        self.assertIsNotNone(items)
+        assert items is not None
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "xueqiu-444")
