@@ -423,6 +423,28 @@ only** and never queried for AQ.
 
 AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
 
+### Cboe Europe (CXE) - Alternative European Equities, first venue
+
+The IBKR "Alternative European Equities" package is a multi-venue bundle.
+This track lands **one venue only**: Cboe Europe equities (CXE and BXE
+order books, MICs `CXEM`/`CXET`/`BXEM`/`BXET`). There is **no** virtual
+`aee` / `eu` / `eu_alt` market code. Deferred venues (not wired in this
+track): Turquoise (LSEG MTF; the old turquoise.com domain is parked and
+the LSEG replacement path is not a stable key-free directory) and other
+alternative European books. `market=cxe` companies use canonical
+uppercased Cboe symbols (`AZNl` → `AZNL`; `.CXE`/`.BXE` suffixes are
+stripped at add time; pan-European ISINs kept as-is) and remain unmapped.
+Finnhub is **US only** and never queried for CXE.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `cxe_disclosure` | Filings | none | **Not wired (AEE-1 spike A3, 2026-08-10)**: Cboe Europe (BXE/CXE) is an MTF whose official symbol/trade-data surfaces (`cboe.com/europe/equities/market_statistics/symbol_data/...`, `.../trade_data/`) are venue quote/trade data, not issuer announcements. Issuers' official disclosures live at their primary listing venue (LSE/Xetra/…) and are deliberately **not** re-mapped onto `market=cxe`; no key-free Cboe Europe issuer OAM feed exists and no paid Cboe/LSEG data product is wired. |
+| `cxe_second_disclosure` | Filings | none | **Not wired (AEE-4 re-verified 2026-08-10)**: no stable key-free second Cboe Europe disclosure source appeared. The official `trade_data/` page (HTTP 200) is MiFID venue trade data, not issuer disclosures; Turquoise is unreachable as a stable directory (`turquoise.com` parked; `lseg.com/en/turquoise` 404; `turquoise.eu` Cloudflare 403), and no paid MTF/LSEG/Cboe Data Vantage feed is wired. This track remains first-venue only. |
+| `cxe_universe` | Universe | none | **Wired (AEE-2)**: `refresh_cxe_universe()` fetches the key-free official Cboe Europe Symbol Data CSVs for both order books (`.../market_statistics/symbol_data/csv/?mkt=cxe` and `?mkt=bxe`; live 2026-08-10: CXE 5,305 rows / BXE 6,469 rows, including zero-volume rows). CSV columns are `Name` (case-sensitive Cboe symbol, e.g. `AZNl`) + `Company Name / Description`; there is **no ISIN or instrument-type column**, so entries carry an empty ISIN honestly and keep the raw `symbol` plus `venue`/`venues` (CXE/BXE). Duplicate symbols on both books merge into one entry. Breadth only; never enters the feed; backfills name/exchange/venue on add-company. First Alternative European Equities venue only - Turquoise and other MTFs are deferred. |
+| `google_news_cxe` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10. Query = exact company name from the CXE universe when available (quoted; ~100 items for `"AstraZeneca PLC"`), otherwise the Cboe symbol (bare `AZNl` query returns ~2 items). **No `yahoo_cxe` connector exists** because Yahoo Finance has no suffix for Cboe Europe symbols (Yahoo only covers primary listings). Results may be loosely related; public RSS may break without notice. |
+
+CXE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no CXE disclosure connector is wired (AEE-1 A3 / AEE-4). News: `google_news_cxe` pairs on ticker + London day (`Europe/London`) + normalized title (only one CXE news source exists, so pairs are same-source).
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
