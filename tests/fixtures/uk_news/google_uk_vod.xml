@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>"VOD.L" - Google News</title>
+    <item>
+      <title>Vodafone posts strong quarter</title>
+      <link>https://news.google.com/rss/articles/CBMiV09EL</link>
+      <guid isPermaLink="false">CBMiV09EL</guid>
+      <pubDate>Wed, 05 Aug 2026 06:00:00 GMT</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second VOD.L headline</title>
+      <link>https://news.google.com/rss/articles/CBMiV09EL2</link>
+      <guid isPermaLink="false">CBMiV09EL2</guid>
+      <pubDate>Thu, 06 Aug 2026 07:00:00 GMT</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

@@ -20,8 +20,8 @@ lists does not duplicate the filing.
 | Information type | Provider | Production status |
 | --- | --- | --- |
 | Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
-| News | Finnhub company news | Connected after a successful sync; needs `FINNHUB_API_KEY` |
-| Community | CEO.ca (CA) LIVE; Seeking Alpha (US) LIVE RSS; Substack (US) LIVE publication-whitelist RSS; Yellowbrick Investing (US) stub; HotCopper (AU) stub; LSE Share Chat (UK) stub; Xueqiu (CN/HK) stub | CA/US community connected (SA is public article/news RSS, not forum; Substack is LIVE publication-whitelist article/news metadata, no structured ticker binding); Yellowbrick is stub (no stable public surface); AU/UK/CN/HK are stubs |
+| News | Finnhub company news + Yahoo Finance US + Google News US | Finnhub needs `FINNHUB_API_KEY`; Yahoo/Google are key-free RSS |
+| Community | CEO.ca (CA) LIVE; Seeking Alpha (US) LIVE RSS; Substack (US) LIVE publication-whitelist RSS; Stockhead (AU) LIVE RSS; Yellowbrick Investing (US) stub; HotCopper (AU) stub; LSE Share Chat (UK) stub; Xueqiu (CN/HK) stub | CA/US community connected (SA is public article/news RSS, not forum; Substack is LIVE publication-whitelist article/news metadata, no structured ticker binding); Stockhead is LIVE ASX news/analysis RSS; Yellowbrick is stub (no stable public surface); HotCopper/LSE/Xueqiu are stubs |
 | Research | None | Not connected |
 
 The repository still contains mock connectors for automated extensibility
@@ -45,7 +45,9 @@ source-scoped title fallback on the same source). Substack pairs on its
 stable post id (`external_id` = `substack-{guid}`), or on a source-scoped
 title fallback (ticker + New York day + normalized title). Yellowbrick, X,
 and VIC are stubs: `collect()` returns no rows, so they never contribute
-duplicate keys.
+duplicate keys. News soft-dedupe (display only): `yahoo_us` / `google_news_us` /
+Finnhub (`news`, market=us) pair on ticker + New York day + normalized title;
+SEC filings are never cross-annotated.
 
 ## Beginner setup
 
@@ -130,12 +132,17 @@ A-share or HK resolution.
 - Naver Finance (`naver_news`): key-free stock news scrape; fragile, may be
   empty from non-KR networks. Hankyung/TheBell are implemented but disabled
   until their endpoints are reachable.
+- Yahoo Finance KR (`yahoo_kr`) / Google News KR (`google_news_kr`): key-free
+  RSS; `.KS`/`.KQ` suffix at request time only; may be loosely related and
+  break without notice.
 - Tradeable universe: cached from the OpenDART corpCode listing; ETF/ETN
   coverage is partial. FSC/data.go.kr is skipped because registration
   requires Korean identity.
 - Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
   sharing a 14-digit receipt number are annotated in the feed with an
-  "Also seen on" label; every row stays (totals unchanged).
+  "Also seen on" label; every row stays (totals unchanged). News:
+  `naver_news` / `yahoo_kr` / `google_news_kr` / Finnhub (`news`, market=kr)
+  pair across sources on ticker + Seoul day + normalized title.
 
 ### UK sources (UK)
 | Source | Type | Key | Boundaries |
@@ -144,12 +151,14 @@ A-share or HK resolution.
 | investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
 | uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
+| google_news_uk | news | none | Key-free Google News RSS search (`hl=en-GB&gl=GB&ceid=GB:en`); may be loosely related and break without notice |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
 UK feed soft-dedupe (display only, all rows kept): filings annotate on RNS ids
 (Investegate) or Companies House transaction ids; title fallback is
 same-source only, so Companies House and Investegate are never cross-annotated
-by title. News pairs on ticker + London day + normalized title.
+by title. News: `yahoo_uk` / `google_news_uk` pair across sources on ticker +
+London day + normalized title.
 
 ### Hong Kong sources (HK)
 
@@ -158,11 +167,13 @@ by title. News pairs on ticker + London day + normalized title.
 | hkexnews | filings | none | Unofficial HKEXnews title-search JSON; may change without notice |
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
+| google_news_hk | news | none | Key-free Google News RSS search (`hl=zh-HK&gl=HK&ceid=HK:zh-Hant`); may be loosely related and break without notice |
 | hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
 
 HK tickers are canonical five-digit codes (`700` / `0700` / `00700.HK` →
 `00700`). Finnhub is **US only**. Soft-dedupe: hkexnews on NEWS_ID, hkex_di on
-form serial (never cross-paired by title); yahoo_hk on ticker + Hong Kong day.
+form serial (never cross-paired by title); `yahoo_hk` / `google_news_hk` news
+pair across sources on ticker + Hong Kong day + normalized title.
 
 ### Canada sources (CA)
 
@@ -216,13 +227,14 @@ day + normalized title.
 | yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
 | google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
 | hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
+| stockhead_au | community | none | Stockhead.com.au ASX news/analysis. **LIVE** (spike 2026-08-12): WordPress search RSS `/?s={TICKER}&feed=rss2` returns ticker-tagged articles. 50-item rolling window; URL slug as external ID. Independent source — not a substitute label for HotCopper. |
 
 `market=au` uses canonical root tickers (`BHP` / `BHP.AX` → `BHP`). Finnhub
 is **US only**. Soft-dedupe: ASX filings pair on document key (or same-source
 title fallback); news pairs on ticker + Sydney day + normalized title.
-Community soft-dedupe uses the HotCopper thread id (or a source-scoped title
-fallback); with only `hotcopper_au` wired there is no cross-source community
-pairing — same-source duplicates can still show "Also seen on".
+Community: `stockhead_au` pairs on article slug (independent of the
+`hotcopper_au` stub); HotCopper thread id soft-dedupe applies only to
+same-source duplicates.
 
 ### France sources (FR)
 
@@ -610,6 +622,20 @@ These defaults can be adjusted in `.env`.
   coverage region, enabled state, latest attempt and success, and persisted
   failure summary.
 - Official links open in a new tab with `noopener` and `noreferrer`.
+
+### Japan sources (JP)
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| tdnet_public_web | filings | none | Official JPX TDnet public list; fail-closed completeness checks |
+| edinet | filings | `EDINET_API_KEY` | Official EDINET API v2 metadata (see below) |
+| yahoo_jp | news | none | Yahoo Finance JP public RSS; `.T` suffix at request time only |
+| google_news_jp | news | none | Key-free Google News RSS search (`hl=ja&gl=JP&ceid=JP:ja`); may be loosely related and break without notice |
+
+`market=jp` companies are added as unmapped local codes (e.g. `7203`). Finnhub
+is **US only**. News soft-dedupe (display only): `yahoo_jp` / `google_news_jp`
+pair across sources on ticker + Tokyo day + normalized title. TDnet/EDINET
+filings have no cross-source soft-dedupe key yet.
 
 ## Official EDINET connector
 

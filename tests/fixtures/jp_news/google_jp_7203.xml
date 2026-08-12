@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>"7203.T" - Google News</title>
+    <item>
+      <title>トヨタ自動車が決算発表</title>
+      <link>https://news.google.com/rss/articles/CBMiNzIwMy5U</link>
+      <guid isPermaLink="false">CBMiNzIwMy5U</guid>
+      <pubDate>Wed, 05 Aug 2026 06:00:00 GMT</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second 7203.T headline</title>
+      <link>https://news.google.com/rss/articles/CBMiNzIwMy5U2</link>
+      <guid isPermaLink="false">CBMiNzIwMy5U2</guid>
+      <pubDate>Thu, 06 Aug 2026 07:00:00 GMT</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

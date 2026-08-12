@@ -1,16 +1,16 @@
-"""ASX company announcements connector for market=au companies."""
+"""Yahoo Finance US news connector for market=us companies."""
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Mapping, Optional, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Tuple
 
-from ...models import CollectionRequest, InformationItem, MARKET_AU
-from ...web_repository import normalize_au_ticker
+from ....models import CollectionRequest, InformationItem, MARKET_US
+from ...seeking_alpha.connector import normalize_us_ticker
 from .client import (
-    AsxAnnouncementsClient,
-    AsxAnnouncementsRequestError,
+    YahooUsNewsClient,
+    YahooUsNewsRequestError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -18,18 +18,20 @@ LOGGER = logging.getLogger(__name__)
 MAX_LOOKBACK_DAYS = 30
 
 
-class AsxAnnouncementsConnector:
-    """Collect ASX company announcements for market=au companies."""
+class YahooUsNewsConnector:
+    """Collect Yahoo Finance US stock news for market=us companies."""
 
-    name = "asx_announcements"
-    provider = "ASX Market Announcements"
+    name = "yahoo_us"
+    provider = "Yahoo Finance US"
     max_lookback_days = MAX_LOOKBACK_DAYS
 
     def __init__(
         self,
-        client: Optional[AsxAnnouncementsClient] = None,
+        client: Optional[YahooUsNewsClient] = None,
+        symbol_for: Optional[Callable[[str], str]] = None,
     ) -> None:
-        self._client = client or AsxAnnouncementsClient.from_environment()
+        self._client = client or YahooUsNewsClient.from_environment()
+        self._symbol_for = symbol_for or _default_symbol_for
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 
     @property
@@ -42,22 +44,23 @@ class AsxAnnouncementsConnector:
         collected_at = datetime.now(timezone.utc)
         for ticker in request.tickers:
             market = request.market_for(ticker)
-            if market != MARKET_AU:
+            if market != MARKET_US:
                 LOGGER.info(
-                    "asx_announcements ticker=%s market=%s skipped not_au",
+                    "yahoo_us ticker=%s market=%s skipped not_us_market",
                     ticker,
                     market,
                 )
                 continue
-            code = normalize_au_ticker(ticker)
+            code = normalize_us_ticker(ticker)
+            symbol = self._symbol_for(code)
             try:
-                records = self._client.fetch_announcements(
-                    code,
+                records = self._client.fetch_news(
+                    symbol,
                     request.start_date,
                     request.end_date,
                 )
                 items.extend(
-                    _map_announcements(
+                    _map_news(
                         records,
                         code=code,
                         collected_at=collected_at,
@@ -67,17 +70,21 @@ class AsxAnnouncementsConnector:
                 message = str(error) or error.__class__.__name__
                 failures.append((ticker, message))
                 LOGGER.warning(
-                    "asx_announcements ticker=%s status=failure error=%s",
+                    "yahoo_us ticker=%s status=failure error=%s",
                     ticker,
                     message,
                 )
         self._last_errors = tuple(failures)
         if len(request.tickers) == 1 and failures:
-            raise AsxAnnouncementsRequestError(failures[0][1])
+            raise YahooUsNewsRequestError(failures[0][1])
         return items
 
 
-def _map_announcements(
+def _default_symbol_for(ticker: str) -> str:
+    return normalize_us_ticker(ticker)
+
+
+def _map_news(
     records: List[Mapping[str, Any]],
     *,
     code: str,
@@ -87,34 +94,23 @@ def _map_announcements(
     for record in records:
         items.append(
             InformationItem(
-                source="asx_announcements",
-                source_type="regulatory_filing",
+                source="yahoo_us",
+                source_type="news",
                 external_id=str(record["external_id"]),
                 tickers=(code,),
                 issuer=code,
                 published_at=record["published"],
                 title=str(record["title"]),
-                document_type=str(
-                    record.get("announcement_type") or "announcement"
-                ),
+                document_type="news",
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
-                    "provider": "asx_markitdigital_research_api",
+                    "provider": "yahoo_finance_rss",
                     "stock_code": code,
-                    "api_max_items_per_company": 5,
-                    "document_key": str(record["external_id"]),
-                    "announcement_type": str(
-                        record.get("announcement_type") or ""
-                    ),
-                    "file_size": str(record.get("file_size") or ""),
-                    "is_price_sensitive": bool(
-                        record.get("is_price_sensitive")
-                    ),
-                    "api_url": str(record["url"]),
+                    "scraped": True,
                 },
-                market=MARKET_AU,
-                summary=None,
+                market=MARKET_US,
+                summary=record.get("summary"),
                 effective_at=record["published"],
             )
         )

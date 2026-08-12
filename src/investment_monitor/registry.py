@@ -20,9 +20,12 @@ from .sources.kr_news import (
     NaverNewsConnector,
     TheBellConnector,
 )
+from .sources.kr_news.google.connector import GoogleKrNewsConnector
+from .sources.kr_news.yahoo.connector import YahooKrNewsConnector
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.uk_news.google.connector import GoogleUkNewsConnector
 from .sources.ca_news import (
     GoogleCaNewsConnector,
     YahooCaNewsConnector,
@@ -63,6 +66,15 @@ from .sources.de_news import (
 from .sources.hkexnews import HkexNewsConnector
 from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
+from .sources.hk_news.google.connector import GoogleHkNewsConnector
+from .sources.jp_news import (
+    GoogleJpNewsConnector,
+    YahooJpNewsConnector,
+)
+from .sources.us_news import (
+    GoogleUsNewsConnector,
+    YahooUsNewsConnector,
+)
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 from .sources.eqs_dgap import EqsDgapConnector
@@ -271,7 +283,15 @@ def create_default_registry() -> SourceRegistry:
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(GoogleUkNewsConnector.name, GoogleUkNewsConnector)
     registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
+    registry.register(GoogleHkNewsConnector.name, GoogleHkNewsConnector)
+    registry.register(YahooKrNewsConnector.name, YahooKrNewsConnector)
+    registry.register(GoogleKrNewsConnector.name, GoogleKrNewsConnector)
+    registry.register(YahooJpNewsConnector.name, YahooJpNewsConnector)
+    registry.register(GoogleJpNewsConnector.name, GoogleJpNewsConnector)
+    registry.register(YahooUsNewsConnector.name, YahooUsNewsConnector)
+    registry.register(GoogleUsNewsConnector.name, GoogleUsNewsConnector)
     registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
     registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
     registry.register(TwseMaterialConnector.name, TwseMaterialConnector)

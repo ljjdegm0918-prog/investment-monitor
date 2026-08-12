@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: AAPL News</title>
+    <item>
+      <title>Apple shares rise on earnings</title>
+      <link>https://finance.yahoo.com/news/230000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second AAPL headline</title>
+      <link>https://finance.yahoo.com/news/230000601002.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

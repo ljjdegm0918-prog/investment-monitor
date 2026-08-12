@@ -24,3 +24,6 @@ investment_monitor = ["migrations/*.sql", "web_static/*.html", "web_static/*.css
 [tool.mypy]
 python_version = "3.9"
 strict = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

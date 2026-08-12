@@ -1,16 +1,17 @@
-"""ASX company announcements connector for market=au companies."""
+"""Google News (KR) connector for market=kr companies."""
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Mapping, Optional, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Tuple
 
-from ...models import CollectionRequest, InformationItem, MARKET_AU
-from ...web_repository import normalize_au_ticker
+from ....models import CollectionRequest, InformationItem, MARKET_KR
+from ..common import normalize_kr_ticker
+from ..symbols import kr_yahoo_symbol
 from .client import (
-    AsxAnnouncementsClient,
-    AsxAnnouncementsRequestError,
+    GoogleKrNewsClient,
+    GoogleKrNewsRequestError,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -18,18 +19,20 @@ LOGGER = logging.getLogger(__name__)
 MAX_LOOKBACK_DAYS = 30
 
 
-class AsxAnnouncementsConnector:
-    """Collect ASX company announcements for market=au companies."""
+class GoogleKrNewsConnector:
+    """Collect Google News RSS items for market=kr companies."""
 
-    name = "asx_announcements"
-    provider = "ASX Market Announcements"
+    name = "google_news_kr"
+    provider = "Google News (KR)"
     max_lookback_days = MAX_LOOKBACK_DAYS
 
     def __init__(
         self,
-        client: Optional[AsxAnnouncementsClient] = None,
+        client: Optional[GoogleKrNewsClient] = None,
+        symbol_for: Optional[Callable[[str], str]] = None,
     ) -> None:
-        self._client = client or AsxAnnouncementsClient.from_environment()
+        self._client = client or GoogleKrNewsClient.from_environment()
+        self._symbol_for = symbol_for or _default_symbol_for
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
 
     @property
@@ -42,22 +45,18 @@ class AsxAnnouncementsConnector:
         collected_at = datetime.now(timezone.utc)
         for ticker in request.tickers:
             market = request.market_for(ticker)
-            if market != MARKET_AU:
-                LOGGER.info(
-                    "asx_announcements ticker=%s market=%s skipped not_au",
-                    ticker,
-                    market,
-                )
+            if market != MARKET_KR:
                 continue
-            code = normalize_au_ticker(ticker)
+            code = normalize_kr_ticker(ticker)
+            symbol = self._symbol_for(code)
             try:
-                records = self._client.fetch_announcements(
-                    code,
+                records = self._client.fetch_news(
+                    symbol,
                     request.start_date,
                     request.end_date,
                 )
                 items.extend(
-                    _map_announcements(
+                    _map_news(
                         records,
                         code=code,
                         collected_at=collected_at,
@@ -67,17 +66,21 @@ class AsxAnnouncementsConnector:
                 message = str(error) or error.__class__.__name__
                 failures.append((ticker, message))
                 LOGGER.warning(
-                    "asx_announcements ticker=%s status=failure error=%s",
+                    "google_news_kr ticker=%s status=failure error=%s",
                     ticker,
                     message,
                 )
         self._last_errors = tuple(failures)
         if len(request.tickers) == 1 and failures:
-            raise AsxAnnouncementsRequestError(failures[0][1])
+            raise GoogleKrNewsRequestError(failures[0][1])
         return items
 
 
-def _map_announcements(
+def _default_symbol_for(ticker: str) -> str:
+    return kr_yahoo_symbol(ticker)
+
+
+def _map_news(
     records: List[Mapping[str, Any]],
     *,
     code: str,
@@ -87,34 +90,24 @@ def _map_announcements(
     for record in records:
         items.append(
             InformationItem(
-                source="asx_announcements",
-                source_type="regulatory_filing",
+                source="google_news_kr",
+                source_type="news",
                 external_id=str(record["external_id"]),
                 tickers=(code,),
                 issuer=code,
                 published_at=record["published"],
                 title=str(record["title"]),
-                document_type=str(
-                    record.get("announcement_type") or "announcement"
-                ),
+                document_type="news",
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
-                    "provider": "asx_markitdigital_research_api",
+                    "provider": "google_news_rss",
                     "stock_code": code,
-                    "api_max_items_per_company": 5,
-                    "document_key": str(record["external_id"]),
-                    "announcement_type": str(
-                        record.get("announcement_type") or ""
-                    ),
-                    "file_size": str(record.get("file_size") or ""),
-                    "is_price_sensitive": bool(
-                        record.get("is_price_sensitive")
-                    ),
-                    "api_url": str(record["url"]),
+                    "langs": "ko",
+                    "scraped": True,
                 },
-                market=MARKET_AU,
-                summary=None,
+                market=MARKET_KR,
+                summary=record.get("summary"),
                 effective_at=record["published"],
             )
         )

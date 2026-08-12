@@ -115,6 +115,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
+TOKYO = ZoneInfo("Asia/Tokyo")
 LONDON = ZoneInfo("Europe/London")
 HKT = ZoneInfo("Asia/Hong_Kong")
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -195,10 +196,19 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_emf": 35,
     "google_news_trq": 36,
     "google_news_eux": 37,
+    "google_news_uk": 38,
+    "google_news_hk": 39,
+    "yahoo_kr": 40,
+    "google_news_kr": 41,
+    "yahoo_jp": 42,
+    "google_news_jp": 43,
+    "yahoo_us": 44,
+    "google_news_us": 45,
 }
 COMMUNITY_SOURCE_PRIORITY = {
     "ceoca_ca": 0,
     "hotcopper_au": 0,
+    "stockhead_au": 0,
     "lse_share_chat": 0,
     "xueqiu": 0,
     "seeking_alpha": 0,
@@ -265,6 +275,14 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_emf": "Google News (EMF)",
     "google_news_trq": "Google News (TRQ)",
     "google_news_eux": "Google News (EUX)",
+    "google_news_uk": "Google News (UK)",
+    "google_news_hk": "Google News (HK)",
+    "yahoo_kr": "Yahoo Finance KR",
+    "google_news_kr": "Google News (KR)",
+    "yahoo_jp": "Yahoo Finance JP",
+    "google_news_jp": "Google News (JP)",
+    "yahoo_us": "Yahoo Finance US",
+    "google_news_us": "Google News (US)",
     "ceoca_ca": "CEO.ca (CA)",
     "hotcopper_au": "HotCopper (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -279,6 +297,18 @@ SOURCE_DISPLAY_LABELS = {
 _FULLWIDTH_SPACE = "\u3000"
 _NBSP = "\u00a0"
 _TRAILING_ETC = re.compile(r"\s+등\s*$")
+_US_NEWS_SOURCES = frozenset({"news", "yahoo_us", "google_news_us"})
+_JP_NEWS_SOURCES = frozenset({"yahoo_jp", "google_news_jp"})
+_KR_NEWS_SOURCES = frozenset(
+    {
+        "news",
+        "naver_news",
+        "hankyung",
+        "thebell",
+        "yahoo_kr",
+        "google_news_kr",
+    }
+)
 
 
 def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
@@ -287,7 +317,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
         "sg", "be", "ch", "pl", "se", "aq", "cxe", "emf", "trq", "eux",
-        "cn", "us",
+        "cn", "us", "jp",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -371,6 +401,13 @@ def normalize_title(value: Any) -> str:
 
 
 def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
+    if market == "us":
+        # SEC-only filings; no cross-source filing pairing on the US feed.
+        return None
+    if market == "jp":
+        # TDnet/EDINET pairing is source-scoped elsewhere; no cross-source
+        # filing title pairing on the JP feed yet.
+        return None
     if market == "kr":
         return _kr_filing_key(item)
     if market == "hk":
@@ -731,9 +768,12 @@ def _tw_filing_key(item: Mapping[str, Any]) -> Optional[str]:
 
 
 def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
-    if market == "us":
-        # No US news source is wired yet (yahoo_us / google_news_us arrive in
-        # a later change); US news rows must never be cross-annotated.
+    source = str(item.get("source") or "")
+    if market == "us" and source not in _US_NEWS_SOURCES:
+        return None
+    if market == "jp" and source not in _JP_NEWS_SOURCES:
+        return None
+    if market == "kr" and source not in _KR_NEWS_SOURCES:
         return None
     zone = (
         KST
@@ -776,6 +816,12 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "trq"
         else BERLIN
         if market == "eux"
+        else NEW_YORK
+        if market == "us"
+        else TOKYO
+        if market == "jp"
+        else LONDON
+        if market == "uk"
         else LONDON
     )
     title = normalize_title(item.get("title"))
@@ -798,6 +844,9 @@ def _community_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         thread_id = str(metadata.get("thread_id") or "").strip()
         if thread_id and source == "hotcopper_au":
             return f"au:community:hotcopper:{thread_id}"
+        article_slug = str(metadata.get("article_slug") or "").strip()
+        if article_slug and source == "stockhead_au":
+            return f"au:community:stockhead:{article_slug}"
         title = normalize_title(item.get("title"))
         day = _local_day(item, SYDNEY)
         if title and day:
