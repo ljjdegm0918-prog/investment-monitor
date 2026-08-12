@@ -43,6 +43,7 @@ from .models import (
     MARKET_SE,
     MARKET_AQ,
     MARKET_CXE,
+    MARKET_EMF,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -62,6 +63,7 @@ from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.se_universe import se_universe_name_map
 from .universe.aq_universe import aq_universe_name_map
 from .universe.cxe_universe import cxe_universe_name_map
+from .universe.emf_universe import emf_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -364,6 +366,8 @@ class WebApplication:
                     name_fallback = aq_universe_name_map()
                 elif market == MARKET_CXE:
                     name_fallback = cxe_universe_name_map()
+                elif market == MARKET_EMF:
+                    name_fallback = emf_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -725,6 +729,10 @@ class WebApplication:
         if market == MARKET_CXE:
             # CXE stays unmapped via SEC; never let SEC map a Cboe Europe
             # symbol to a same-named US company.
+            return None
+        if market == MARKET_EMF:
+            # EMF stays unmapped via SEC; funds are identified by ISIN,
+            # never by pretending an SEC CIK exists.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

@@ -445,6 +445,25 @@ Finnhub is **US only** and never queried for CXE.
 
 CXE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no CXE disclosure connector is wired (AEE-1 A3 / AEE-4). News: `google_news_cxe` pairs on ticker + London day (`Europe/London`) + normalized title (only one CXE news source exists, so pairs are same-source).
 
+### European Mutual Funds (EMF)
+
+The "European Mutual Funds" track covers European open-end mutual funds /
+UCITS (ISIN-first identifiers), **not** German ETF/ETN/ETC (market=de),
+not Cboe Europe equities (market=cxe), and not Eurex derivatives. The
+market short code is `emf`; no over-broad `fund`/`mf`/`ucits` code is
+used. Fund ISINs (e.g. `LU0171254561`) are the canonical identifier;
+fund-data suffixes (`.F` / `.MF`) are stripped at add time. Funds are
+added as unmapped. Finnhub is **US only** and never queried for EMF.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `emf_disclosure` | Filings | none | **Not wired (EMF-1 spike A3, 2026-08-10)**: the ESMA registers public SOLR surface exposes a funds core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD fund reports + marketing notifications; legal frameworks AIF/EuVECA/ELTIF/EuSEF) and a MiFID firms core (`esma_registers_upreg`), but **no UCITS register and no ISIN field** is exposed; KIID/PRIIPs documents live on manager sites with no central key-free feed. No stock OAM (eqs_dgap / investegate / etc.) is re-mapped onto `market=emf`, and no paid fund data product (Morningstar/Lipper) is wired. |
+| `emf_second_disclosure` | Filings | none | **Not wired (EMF-4 re-verified 2026-08-10)**: no stable key-free second European fund document source appeared. ESMA registers remain reachable (funds core HTTP 200, AIFMD-only, no ISINs; UCITS core absent), national fund registers still have no stable key-free ISIN export (BaFin 404, Bundesanzeiger session wall), and paid products (Morningstar, Lipper, fund terminals) and Eurex fund products are deliberately not wired. This is a fund/UCITS track - not the German ETF or Cboe Europe packages. |
+| `emf_universe` | Universe | none | **Boundary stub (EMF-2 spike B2, 2026-08-10)**: no stable key-free ISIN-bearing European mutual fund directory exists. ESMA registers expose a funds SOLR core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD `funds_report` docs; legal frameworks AIF/EuVECA/ELTIF/EuSEF; fund name/country/manager only) and a MiFID firms core, but **no UCITS register and no ISIN field**; national fund registers have no stable key-free ISIN export (BaFin 404, Bundesanzeiger session wall), Morningstar/Lipper are paid. `refresh_emf_universe()` raises `EmfUniverseError`; `load/name_map/search` read a manually placed cache if one ever exists. No hand-written fund seed. |
+| `google_news_emf` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10: a quoted fund name returns items (~26 for `"BlackRock Global Allocation Fund"`), while a bare fund ISIN returns zero. Query = fund name from an injectable resolver / a manually placed EMF universe cache when available, otherwise the typed fund ISIN (usually sparse - honest). **No `yahoo_emf` connector exists** because Yahoo Finance has no stable symbol suffix for European mutual funds (a guessed fund symbol returns an empty feed). Results may be loosely related; public RSS may break without notice. |
+
+EMF feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no EMF disclosure connector is wired (EMF-1 A3 / EMF-4). News: `google_news_emf` pairs on fund ISIN + Luxembourg day (`Europe/Luxembourg`) + normalized title (only one EMF news source exists, so pairs are same-source).
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
