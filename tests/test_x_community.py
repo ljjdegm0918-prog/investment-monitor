@@ -11,10 +11,12 @@ from datetime import date
 import os
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from investment_monitor import CollectionRequest, create_default_registry
 from investment_monitor.connectors.base import ConnectorUnavailableError
 from investment_monitor.sources.x_community import XCommunityConnector
+from investment_monitor.sources.x_community.connector import XCommunityAPIError
 
 
 class XCommunityTests(unittest.TestCase):
@@ -108,6 +110,51 @@ class XCommunityTests(unittest.TestCase):
 
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+
+    def test_missing_created_at_entry_is_skipped_not_fatal(self) -> None:
+        payload = {
+            "data": [
+                {"id": "300", "text": "$AAPL no timestamp"},
+                {
+                    "id": "301",
+                    "created_at": "2026-08-11T13:30:00Z",
+                    "text": "$AAPL valid item",
+                    "entities": {"cashtags": [{"tag": "AAPL"}]},
+                },
+            ],
+        }
+        connector = XCommunityConnector(
+            bearer_token="test-token",
+            fetch_json=lambda url: payload,
+        )
+        request = CollectionRequest(
+            tickers=("aapl",),
+            start_date=date(2026, 8, 11),
+            end_date=date(2026, 8, 11),
+            markets={"aapl": "us"},
+        )
+
+        items = connector.collect(request)
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "x-301")
+        self.assertEqual(connector.last_errors, ())
+
+    def test_fetch_search_http_error_raises_x_community_api_error(self) -> None:
+        connector = XCommunityConnector(bearer_token="test-token")
+        with patch(
+            "investment_monitor.sources.x_community.connector.urlopen",
+            side_effect=HTTPError(
+                "https://api.x.com/2/tweets/search/recent",
+                500,
+                "Internal Server Error",
+                None,
+                None,
+            ),
+        ):
+            with self.assertRaises(XCommunityAPIError) as ctx:
+                connector._fetch_search("https://api.x.com/2/tweets/search/recent")
+        self.assertIn("HTTP 500", str(ctx.exception))
 
 
 if __name__ == "__main__":

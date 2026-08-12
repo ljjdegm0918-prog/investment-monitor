@@ -27,7 +27,6 @@ SEARCH_URL = "https://x.com/search?q=%24TICKER&f=live"
 COMMUNITIES_URL = "https://x.com/i/communities"
 
 
-@dataclass(frozen=True)
 class XCommunityAPIError(RuntimeError):
     """Raised when the official X API cannot satisfy a request."""
 
@@ -180,6 +179,8 @@ class XCommunityConnector:
             if not isinstance(entry, Mapping):
                 continue
             created_at = self._parse_created_at(str(entry.get("created_at", "")))
+            if created_at is None:
+                continue
             if _new_york_day(created_at) < start_date or _new_york_day(created_at) > end_date:
                 continue
             entities = entry.get("entities") or {}
@@ -254,10 +255,13 @@ class XCommunityConnector:
         )
 
     @staticmethod
-    def _parse_created_at(value: str) -> datetime:
+    def _parse_created_at(value: str) -> Optional[datetime]:
         if not value:
-            raise XCommunityAPIError("X API response missing created_at.")
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
 
     @staticmethod
     def _community_id_from_includes(includes: Mapping[str, Any]) -> Optional[str]:

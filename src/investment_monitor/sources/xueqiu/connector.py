@@ -150,6 +150,8 @@ class XueqiuConnector:
             if not title:
                 title = str(post.get("text") or f"Xueqiu status {status_id}").strip()[:500]
             published_at = self._parse_published_at(post)
+            if published_at is None:
+                continue
             day = local_day(published_at, market)
             if day < start_date or day > end_date:
                 continue
@@ -192,7 +194,7 @@ class XueqiuConnector:
         return items
 
     @staticmethod
-    def _parse_published_at(post: dict) -> datetime:
+    def _parse_published_at(post: dict) -> Optional[datetime]:
         """Parse Xueqiu timestamps (ISO string or epoch ms/seconds)."""
         for key in ("created_at", "timestamp", "time"):
             raw = post.get(key)
@@ -213,7 +215,7 @@ class XueqiuConnector:
                 return datetime.fromisoformat(text.replace("Z", "+00:00"))
             except ValueError:
                 continue
-        return datetime.now(timezone.utc)
+        return None
 
     def collect(self, request: CollectionRequest) -> List[InformationItem]:
         """Collect Xueqiu posts for all CN/HK tickers in the request."""

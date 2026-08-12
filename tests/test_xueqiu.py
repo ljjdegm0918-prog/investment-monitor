@@ -391,3 +391,46 @@ class XueqiuConnectorTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].external_id, "xueqiu-111")
         self.assertEqual(items[0].title, "in range")
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"})
+    def test_fetch_via_cookie_skips_posts_without_timestamp(self) -> None:
+        """Posts without a real timestamp must be skipped, not backdated to now."""
+        connector = XueqiuConnector()
+        payload = {
+            "error_code": 0,
+            "list": [
+                {"id": 333, "user_id": 9, "title": "no timestamp", "description": "skip me"},
+                {
+                    "id": 444,
+                    "user_id": 9,
+                    "title": "has timestamp",
+                    "created_at": int(datetime(2026, 2, 17, 8, 0, tzinfo=SHANGHAI).timestamp() * 1000),
+                    "description": "ok",
+                },
+            ],
+        }
+
+        class _Resp:
+            def read(self) -> bytes:
+                return json.dumps(payload).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch(
+            "investment_monitor.sources.xueqiu.connector.urlopen",
+            return_value=_Resp(),
+        ):
+            items = connector._fetch_via_cookie(
+                "600519",
+                "cn",
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+            )
+        self.assertIsNotNone(items)
+        assert items is not None
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "xueqiu-444")
