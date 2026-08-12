@@ -1,9 +1,310 @@
 "use strict";
 
+const SUPPORTED_LANGS = ["en", "zh-CN"];
+const LANG_STORAGE_KEY = "im-lang";
+
+const MESSAGES = {
+  en: {
+    "nav.daily_info": "Daily information",
+    "nav.lists_sources": "Lists & sources",
+    "skip.content": "Skip to content",
+    "loading.workspace": "Loading workspace…",
+    "lang.switch": "中文",
+    "daily.eyebrow": "DAILY REPORTS",
+    "daily.subtitle": "One report per Asia/Shanghai calendar day, limited to filings, news, and community updates.",
+    "daily.print": "Print / Save PDF",
+    "daily.from": "From",
+    "daily.to": "To",
+    "daily.list": "List",
+    "daily.all_lists": "All lists",
+    "daily.generate": "Generate reports",
+    "daily.loading": "Loading information…",
+    "daily.start_before_end": "The start date must be on or before the end date.",
+    "daily.no_info": "No information for this date",
+    "daily.no_info_desc": "No filing, news, or community updates were published in the selected day.",
+    "daily.range_summary": "Range summary",
+    "daily.updates": "updates",
+    "daily.daily_report_one": "daily report",
+    "daily.daily_report_many": "daily reports",
+    "daily.day_report": "DAILY REPORT",
+    "daily.update_counts": "Update counts",
+    "daily.no_updates": "No updates for this day.",
+    "common.also_seen_on": "Also seen on",
+    "common.unavailable": "Unavailable",
+    "common.update_one": "update",
+    "common.update_many": "updates",
+    "common.request_failed": "Request failed",
+    "common.workspace_failed": "Workspace request failed",
+    "common.request_failed_status": "Request failed ({status})",
+    "common.asia_shanghai": "Asia/Shanghai",
+    "cat.filings": "Filings",
+    "cat.news": "News",
+    "cat.community": "Community",
+    "cat.official_filings": "Official filings",
+    "manage.eyebrow": "MANAGEMENT",
+    "manage.heading": "Lists, companies & sources",
+    "manage.subtitle": "Organize monitored companies and review collection health.",
+    "manage.lists": "Lists",
+    "manage.lists_desc": "Create, rename, delete, and select a list.",
+    "manage.new_list_name": "New list name",
+    "manage.create": "Create",
+    "manage.companies": "Companies",
+    "manage.search_by": "Search by company name or ticker",
+    "manage.market": "Market",
+    "manage.search": "Search",
+    "manage.add_ticker": "Add ticker",
+    "manage.information_sources": "Information sources",
+    "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
+    "manage.loading_sources": "Loading sources…",
+    "manage.companies_count": "{count} companies",
+    "manage.rename": "Rename",
+    "manage.delete": "Delete",
+    "manage.create_list_first": "Create a list to start monitoring companies.",
+    "manage.list_name": "List name",
+    "manage.list_created": "List created.",
+    "manage.list_renamed": "List renamed.",
+    "manage.list_deleted": "List deleted.",
+    "manage.delete_confirm": "Delete “{name}”? Companies in other lists and stored information will be preserved.",
+    "manage.company": "Company",
+    "manage.ticker": "Ticker",
+    "manage.exchange": "Exchange",
+    "manage.region": "Region",
+    "manage.remove": "Remove",
+    "manage.no_companies": "No companies in this list.",
+    "manage.create_or_select_first": "Create or select a list first.",
+    "manage.non_us_markets": "Non-US markets: use Add ticker (SEC search is US-only).",
+    "manage.searching_candidates": "Searching candidates…",
+    "manage.confirm_add": "Confirm & add",
+    "manage.no_matching_candidates": "No matching official candidates.",
+    "manage.search_no_results": "Search returned no results",
+    "manage.enter_ticker_first": "Enter a ticker first.",
+    "manage.added_market": "{tickers} added ({market}).",
+    "manage.added": "{ticker} added.",
+    "manage.removed": "{ticker} removed from this list.",
+    "manage.coverage_not_provided": "Coverage not provided",
+    "manage.enabled": "Enabled",
+    "manage.yes": "Yes",
+    "manage.no": "No",
+    "manage.latest_success": "Latest success",
+    "manage.latest_attempt": "Latest attempt",
+    "manage.none_recorded": "None recorded",
+    "manage.failure_details": "Failure details",
+    "status.connected": "Connected",
+    "status.data_stale": "Data stale",
+    "status.not_connected": "Not connected",
+    "status.failed": "Failed",
+    "status.waiting_for_data": "Waiting for data",
+    "region.us": "United States",
+    "region.jp": "Japan",
+    "region.hk": "Hong Kong",
+    "region.cn": "China",
+    "region.kr": "Korea",
+    "region.uk": "United Kingdom",
+    "region.tw": "Taiwan",
+    "region.ca": "Canada",
+    "region.au": "Australia",
+    "region.be": "Belgium",
+    "region.fr": "France",
+    "region.de": "Germany",
+    "region.nl": "Netherlands",
+    "region.it": "Italy",
+    "region.es": "Spain",
+    "region.sg": "Singapore",
+    "region.ch": "Switzerland",
+    "region.pl": "Poland",
+    "region.se": "Sweden",
+    "region.aq": "Aquis (AQSE)",
+    "region.cxe": "Cboe Europe (CXE)",
+    "region.emf": "Europe (Funds)",
+    "region.trq": "Turquoise (TRQ)",
+    "region.eux": "Europe (Eurex)",
+  },
+  "zh-CN": {
+    "nav.daily_info": "每日信息",
+    "nav.lists_sources": "列表与来源",
+    "skip.content": "跳到内容",
+    "loading.workspace": "正在加载工作区…",
+    "lang.switch": "English",
+    "daily.eyebrow": "每日报告",
+    "daily.subtitle": "每个上海自然日一份报告，仅限申报、新闻和社区更新。",
+    "daily.print": "打印 / 保存 PDF",
+    "daily.from": "从",
+    "daily.to": "到",
+    "daily.list": "列表",
+    "daily.all_lists": "全部列表",
+    "daily.generate": "生成报告",
+    "daily.loading": "正在加载信息…",
+    "daily.start_before_end": "开始日期必须早于或等于结束日期。",
+    "daily.no_info": "此日期没有信息",
+    "daily.no_info_desc": "所选当天没有发布申报、新闻或社区更新。",
+    "daily.range_summary": "范围摘要",
+    "daily.updates": "更新",
+    "daily.daily_report_one": "日报",
+    "daily.daily_report_many": "日报",
+    "daily.day_report": "每日报告",
+    "daily.update_counts": "更新计数",
+    "daily.no_updates": "当天没有更新。",
+    "common.also_seen_on": "也见于",
+    "common.unavailable": "不可用",
+    "common.update_one": "更新",
+    "common.update_many": "更新",
+    "common.request_failed": "请求失败",
+    "common.workspace_failed": "工作区请求失败",
+    "common.request_failed_status": "请求失败（{status}）",
+    "common.asia_shanghai": "上海时间",
+    "cat.filings": "申报",
+    "cat.news": "新闻",
+    "cat.community": "社区",
+    "cat.official_filings": "官方披露",
+    "manage.eyebrow": "管理",
+    "manage.heading": "列表、公司与来源",
+    "manage.subtitle": "整理监控的公司并查看采集健康状态。",
+    "manage.lists": "列表",
+    "manage.lists_desc": "创建、重命名、删除和选择列表。",
+    "manage.new_list_name": "新列表名称",
+    "manage.create": "创建",
+    "manage.companies": "公司",
+    "manage.search_by": "按公司名称或代码搜索",
+    "manage.market": "市场",
+    "manage.search": "搜索",
+    "manage.add_ticker": "添加代码",
+    "manage.information_sources": "信息来源",
+    "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
+    "manage.loading_sources": "正在加载来源…",
+    "manage.companies_count": "{count} 家公司",
+    "manage.rename": "重命名",
+    "manage.delete": "删除",
+    "manage.create_list_first": "创建列表以开始监控公司。",
+    "manage.list_name": "列表名称",
+    "manage.list_created": "列表已创建。",
+    "manage.list_renamed": "列表已重命名。",
+    "manage.list_deleted": "列表已删除。",
+    "manage.delete_confirm": "删除“{name}”？其他列表中的公司和已存储的信息将被保留。",
+    "manage.company": "公司",
+    "manage.ticker": "代码",
+    "manage.exchange": "交易所",
+    "manage.region": "地区",
+    "manage.remove": "移除",
+    "manage.no_companies": "此列表中没有公司。",
+    "manage.create_or_select_first": "请先创建或选择列表。",
+    "manage.non_us_markets": "非美国市场：请使用“添加代码”（SEC 搜索仅限美国）。",
+    "manage.searching_candidates": "正在搜索候选项…",
+    "manage.confirm_add": "确认并添加",
+    "manage.no_matching_candidates": "没有匹配的官方候选项。",
+    "manage.search_no_results": "搜索无结果",
+    "manage.enter_ticker_first": "请先输入代码。",
+    "manage.added_market": "{tickers} 已添加（{market}）。",
+    "manage.added": "{ticker} 已添加。",
+    "manage.removed": "{ticker} 已从此列表移除。",
+    "manage.coverage_not_provided": "未提供覆盖范围",
+    "manage.enabled": "已启用",
+    "manage.yes": "是",
+    "manage.no": "否",
+    "manage.latest_success": "最近成功",
+    "manage.latest_attempt": "最近尝试",
+    "manage.none_recorded": "无记录",
+    "manage.failure_details": "失败详情",
+    "status.connected": "已连接",
+    "status.data_stale": "数据过期",
+    "status.not_connected": "未连接",
+    "status.failed": "失败",
+    "status.waiting_for_data": "等待数据",
+    "region.us": "美国",
+    "region.jp": "日本",
+    "region.hk": "香港",
+    "region.cn": "中国",
+    "region.kr": "韩国",
+    "region.uk": "英国",
+    "region.tw": "台湾",
+    "region.ca": "加拿大",
+    "region.au": "澳大利亚",
+    "region.be": "比利时",
+    "region.fr": "法国",
+    "region.de": "德国",
+    "region.nl": "荷兰",
+    "region.it": "意大利",
+    "region.es": "西班牙",
+    "region.sg": "新加坡",
+    "region.ch": "瑞士",
+    "region.pl": "波兰",
+    "region.se": "瑞典",
+    "region.aq": "Aquis (AQSE)",
+    "region.cxe": "Cboe Europe (CXE)",
+    "region.emf": "欧洲（基金）",
+    "region.trq": "Turquoise (TRQ)",
+    "region.eux": "欧洲（Eurex）",
+  },
+};
+
+let lang = detectLang();
+
+function detectLang() {
+  const param = new URLSearchParams(location.search).get("lang");
+  if (SUPPORTED_LANGS.includes(param)) return param;
+  try {
+    const stored = localStorage.getItem(LANG_STORAGE_KEY);
+    if (SUPPORTED_LANGS.includes(stored)) return stored;
+  } catch (_) { /* localStorage unavailable */ }
+  return "en";
+}
+
+function t(key, params) {
+  const table = MESSAGES[lang] || MESSAGES.en;
+  let text = table[key] ?? MESSAGES.en[key] ?? key;
+  if (params) {
+    for (const [name, value] of Object.entries(params)) {
+      text = text.split(`{${name}}`).join(String(value));
+    }
+  }
+  return text;
+}
+
+function localeFor() {
+  return lang === "zh-CN" ? "zh-CN" : "en-US";
+}
+
+function toggleLang() {
+  const next = lang === "en" ? "zh-CN" : "en";
+  try { localStorage.setItem(LANG_STORAGE_KEY, next); } catch (_) { /* ignore */ }
+  const params = new URLSearchParams(location.search);
+  params.set("lang", next);
+  location.href = `${location.pathname}?${params}`;
+}
+
+function withLang(query) {
+  const next = new URLSearchParams(query);
+  if (lang !== "en") next.set("lang", lang);
+  return next;
+}
+
+function applyStaticLabels() {
+  document.documentElement.lang = lang;
+  const dailyNav = document.querySelector('[data-nav="today"]');
+  if (dailyNav) dailyNav.textContent = t("nav.daily_info");
+  const manageNav = document.querySelector('[data-nav="manage"]');
+  if (manageNav) manageNav.textContent = t("nav.lists_sources");
+  const skip = document.querySelector(".skip-link");
+  if (skip) skip.textContent = t("skip.content");
+  const initialLoading = document.querySelector("#page .loading");
+  if (initialLoading) initialLoading.textContent = t("loading.workspace");
+  const header = document.querySelector(".site-header nav");
+  if (header && !document.getElementById("lang-toggle")) {
+    const button = document.createElement("button");
+    button.id = "lang-toggle";
+    button.className = "lang-toggle";
+    button.type = "button";
+    button.setAttribute("aria-label", "Switch language");
+    button.textContent = t("lang.switch");
+    button.addEventListener("click", toggleLang);
+    header.appendChild(button);
+  }
+}
+
 const state = { bootstrap: null, selectedList: "" };
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
+  applyStaticLabels();
   const view = document.body.dataset.view === "manage" ? "manage" : "today";
   document.querySelector(`[data-nav="${view}"]`)?.classList.add("active");
   try {
@@ -21,34 +322,34 @@ async function renderDaily() {
   const selectedList = params.get("list") || "";
   document.getElementById("page").innerHTML = `
     <section class="daily-head">
-      <div><p class="eyebrow">DAILY REPORTS</p><h1>${formatRange(startDate, endDate)}</h1><p>One report per Asia/Shanghai calendar day, limited to filings, news, and community updates.</p></div>
-      <div class="daily-actions"><button class="button" id="print-page" type="button">Print / Save PDF</button></div>
+      <div><p class="eyebrow">${t("daily.eyebrow")}</p><h1>${formatRange(startDate, endDate)}</h1><p>${t("daily.subtitle")}</p></div>
+      <div class="daily-actions"><button class="button" id="print-page" type="button">${t("daily.print")}</button></div>
     </section>
     <form class="toolbar range-toolbar" id="daily-filter">
-      <label>From<input type="date" id="daily-start-date" value="${escAttr(startDate)}" required></label>
-      <label>To<input type="date" id="daily-end-date" value="${escAttr(endDate)}" required></label>
-      <label>List<select id="daily-list"><option value="">All lists</option>${listOptions(selectedList)}</select></label>
-      <button class="button primary" type="submit">Generate reports</button>
+      <label>${t("daily.from")}<input type="date" id="daily-start-date" value="${escAttr(startDate)}" required></label>
+      <label>${t("daily.to")}<input type="date" id="daily-end-date" value="${escAttr(endDate)}" required></label>
+      <label>${t("daily.list")}<select id="daily-list"><option value="">${t("daily.all_lists")}</option>${listOptions(selectedList)}</select></label>
+      <button class="button primary" type="submit">${t("daily.generate")}</button>
     </form>
-    <div id="daily-content"><p class="loading">Loading information…</p></div>`;
+    <div id="daily-content"><p class="loading">${t("daily.loading")}</p></div>`;
   document.getElementById("print-page").addEventListener("click", () => window.print());
   document.getElementById("daily-filter").addEventListener("submit", event => {
     event.preventDefault();
     const start = document.getElementById("daily-start-date").value;
     const end = document.getElementById("daily-end-date").value;
-    if (start > end) { toast("The start date must be on or before the end date.", true); return; }
-    const next = new URLSearchParams({start_date: start, end_date: end});
+    if (start > end) { toast(t("daily.start_before_end"), true); return; }
+    const next = withLang(new URLSearchParams({start_date: start, end_date: end}));
     const list = document.getElementById("daily-list").value;
     if (list) next.set("list", list);
     location.href = `/today?${next}`;
   });
   try {
-    const query = new URLSearchParams({start_date: startDate, end_date: endDate});
+    const query = withLang(new URLSearchParams({start_date: startDate, end_date: endDate}));
     if (selectedList) query.set("list", selectedList);
     const data = await api(`/api/daily-range?${query}`);
     document.getElementById("daily-content").innerHTML = dailyContent(data);
   } catch (error) {
-    document.getElementById("daily-content").innerHTML = errorState("Request failed", error.message);
+    document.getElementById("daily-content").innerHTML = errorState(t("common.request_failed"), error.message);
   }
 }
 
@@ -59,8 +360,9 @@ function dailyContent(data) {
   const perfBanner = perf?.warnings?.length
     ? `<aside class="range-performance-warn" role="status">${perf.warnings.map(w => `<p>${esc(w)}</p>`).join("")}</aside>`
     : "";
-  if (!total && days.length === 1) return `${perfBanner}<div class="empty"><h2>No information for this date</h2><p>No filing, news, or community updates were published in the selected day.</p></div>`;
-  return `${perfBanner}<section class="range-summary" aria-label="Range summary"><div><strong>${total}</strong><span>updates</span></div><p>${days.length} daily report${days.length === 1 ? "" : "s"} · Asia/Shanghai</p></section>
+  if (!total && days.length === 1) return `${perfBanner}<div class="empty"><h2>${t("daily.no_info")}</h2><p>${t("daily.no_info_desc")}</p></div>`;
+  const reportLabel = days.length === 1 ? t("daily.daily_report_one") : t("daily.daily_report_many");
+  return `${perfBanner}<section class="range-summary" aria-label="${t("daily.range_summary")}"><div><strong>${total}</strong><span>${t("daily.updates")}</span></div><p>${days.length} ${reportLabel} · ${t("common.asia_shanghai")}</p></section>
     <div class="daily-range">${days.map(day => dailyDay(day)).join("")}</div>`;
 }
 
@@ -68,14 +370,14 @@ function dailyDay(day) {
   const counts = day.counts || {filings: 0, news: 0, community: 0};
   return `<section class="daily-document day-report" id="day-${escAttr(day.date)}">
     <header class="day-report-head">
-      <div><p class="eyebrow">DAILY REPORT</p><h2>${formatDay(day.date)}</h2></div>
-      <div class="category-counts" aria-label="Update counts">
-        <span><strong>${counts.filings || 0}</strong> Filings</span>
-        <span><strong>${counts.news || 0}</strong> News</span>
-        <span><strong>${counts.community || 0}</strong> Community</span>
+      <div><p class="eyebrow">${t("daily.day_report")}</p><h2>${formatDay(day.date)}</h2></div>
+      <div class="category-counts" aria-label="${t("daily.update_counts")}">
+        <span><strong>${counts.filings || 0}</strong> ${t("cat.filings")}</span>
+        <span><strong>${counts.news || 0}</strong> ${t("cat.news")}</span>
+        <span><strong>${counts.community || 0}</strong> ${t("cat.community")}</span>
       </div>
     </header>
-    ${day.companies.length ? day.companies.map(company => dailyCompany(company)).join("") : `<div class="day-empty"><p>No updates for this day.</p></div>`}
+    ${day.companies.length ? day.companies.map(company => dailyCompany(company)).join("") : `<div class="day-empty"><p>${t("daily.no_updates")}</p></div>`}
   </section>`;
 }
 
@@ -84,7 +386,7 @@ function dailyCompany(company) {
   let groups = "";
   let lastType = null;
   for (const item of items) {
-    const label = CATEGORY_LABELS[item.type] || item.type;
+    const label = categoryLabel(item.type);
     if (label !== lastType) {
       groups += `<h3 class="category-title">${esc(label)}</h3>`;
       lastType = label;
@@ -94,31 +396,32 @@ function dailyCompany(company) {
       <article class="information-row">
         <time datetime="${escAttr(item.time)}">${formatTime(item.time)}</time>
         <span class="type type-${escAttr(String(item.type).toLowerCase())}">${esc(item.type)}</span>
-        <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · Also seen on ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
+        <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · ${t("common.also_seen_on")} ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
         <a class="title" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
         <a class="raw-url" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>
       </article>`;
   }
+  const updateLabel = items.length === 1 ? t("common.update_one") : t("common.update_many");
   return `<section class="company-section">
-    <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(company.exchange || "Unavailable")}${company.market ? ` · ${esc(String(company.market).toUpperCase())}` : ""}</p></div><span>${items.length} update${items.length === 1 ? "" : "s"}</span></header>
+    <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(exchangeLabel(company.exchange))}${company.market ? ` · ${esc(String(company.market).toUpperCase())}` : ""}</p></div><span>${items.length} ${updateLabel}</span></header>
     <div class="information-list">${groups}</div>
   </section>`;
 }
 
 async function renderManage() {
   document.getElementById("page").innerHTML = `
-    <section class="page-heading"><p class="eyebrow">MANAGEMENT</p><h1>Lists, companies &amp; sources</h1><p>Organize monitored companies and review collection health.</p></section>
+    <section class="page-heading"><p class="eyebrow">${t("manage.eyebrow")}</p><h1>${t("manage.heading")}</h1><p>${t("manage.subtitle")}</p></section>
     <section class="management-section" aria-labelledby="lists-title">
-      <div class="section-heading"><div><h2 id="lists-title">Lists</h2><p>Create, rename, delete, and select a list.</p></div>
-        <form id="create-list" class="inline-form"><label class="sr-only" for="new-list-name">New list name</label><input id="new-list-name" maxlength="80" placeholder="New list name" required><button class="button primary">Create</button></form>
+      <div class="section-heading"><div><h2 id="lists-title">${t("manage.lists")}</h2><p>${t("manage.lists_desc")}</p></div>
+        <form id="create-list" class="inline-form"><label class="sr-only" for="new-list-name">${t("manage.new_list_name")}</label><input id="new-list-name" maxlength="80" placeholder="${t("manage.new_list_name")}" required><button class="button primary">${t("manage.create")}</button></form>
       </div><div id="list-strip" class="list-strip"></div>
     </section>
     <section class="management-section" aria-labelledby="companies-title">
-      <div class="section-heading"><div><h2 id="companies-title">Companies</h2><p id="company-context"></p></div></div>
+      <div class="section-heading"><div><h2 id="companies-title">${t("manage.companies")}</h2><p id="company-context"></p></div></div>
       <form id="company-search" class="search-form">
-        <label for="company-query">Search by company name or ticker</label>
+        <label for="company-query">${t("manage.search_by")}</label>
         <div>
-          <select id="market-select" aria-label="Market">
+          <select id="market-select" aria-label="${t("manage.market")}">
             <option value="us" selected>US</option>
             <option value="jp">JP</option>
             <option value="hk">HK</option>
@@ -145,16 +448,16 @@ async function renderManage() {
             <option value="eux">Eurex Core (EUX)</option>
           </select>
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
-          <button class="button primary" type="submit">Search</button>
-          <button class="button" id="add-ticker-direct" type="button">Add ticker</button>
+          <button class="button primary" type="submit">${t("manage.search")}</button>
+          <button class="button" id="add-ticker-direct" type="button">${t("manage.add_ticker")}</button>
         </div>
-        <small id="market-hint">US candidates come from the local official SEC mapping. Non-US markets are added as unmapped.</small>
+        <small id="market-hint">${marketHint("us")}</small>
       </form>
       <div id="candidate-results"></div><div id="company-table"></div>
     </section>
     <section class="management-section" aria-labelledby="sources-title">
-      <div class="section-heading"><div><h2 id="sources-title">Information sources</h2><p>Configured connectors, coverage, latest run, and failure summary.</p></div></div>
-      <div id="source-grid"><p class="loading">Loading sources…</p></div>
+      <div class="section-heading"><div><h2 id="sources-title">${t("manage.information_sources")}</h2><p>${t("manage.sources_desc")}</p></div></div>
+      <div id="source-grid"><p class="loading">${t("manage.loading_sources")}</p></div>
     </section>`;
   bindManagement();
   await refreshManagement();
@@ -165,7 +468,7 @@ function bindManagement() {
     event.preventDefault();
     try {
       const result = await api("/api/lists", {method:"POST", body:JSON.stringify({name:document.getElementById("new-list-name").value})});
-      state.selectedList = result.list.slug; toast("List created."); await reloadBootstrap(); await refreshManagement();
+      state.selectedList = result.list.slug; toast(t("manage.list_created")); await reloadBootstrap(); await refreshManagement();
     } catch (error) { toast(error.message, true); }
   });
   document.getElementById("company-search").addEventListener("submit", searchCompanies);
@@ -174,7 +477,7 @@ function bindManagement() {
   updateMarketHint();
 }
 
-const MARKET_HINTS = {
+const MARKET_HINTS_EN = {
   us: "US candidates come from the local official SEC mapping. News: Finnhub (needs FINNHUB_API_KEY) + Yahoo Finance US + Google News US (key-free RSS). Community: Seeking Alpha (seeking_alpha) LIVE via public combined RSS (/api/sa/combined/{SYMBOL}.xml) — article/news metadata with NY day filter; HTML symbol/forum/comments pages return PerimeterX 403 and are out of scope. Substack (substack) LIVE publication-whitelist RSS (https://{publication}/feed) — newsletter article/news metadata, NY day filter, no structured ticker binding; whitelist: noahpinion.blog, notboring.co, astralcodexten.com, paulkrugman.substack.com, oneusefulthing.org. Yellowbrick Investing (yellowbrick) registered stub — ybrick.co dead, joinyellowbrick.com 404 (spike 2026-08-11); collect() empty. X (x_community) registered stub — no public login-free ticker surface; official API needs paid Bearer (not wired); HTML/syndication scrape out of scope (spike 2026-08-11); collect() empty. Value Investors Club (vic) registered stub — no public RSS/JSON; /ideas?symbol= does not filter; guest access is 45-day delayed only; membership/HTML scrape out of scope (spike 2026-08-11); collect() empty.",
   jp: "Japan companies are added as unmapped. Use Add ticker with the local code; EDINET/TDnet collect by market=jp. News: Yahoo Finance JP + Google News JP (key-free RSS).",
   hk: "HKEXnews announcement search is connected (unofficial page API; may change). HKEX DI is available but disabled by default (legacy archive 2003-2017). Yahoo Finance HK + Google News HK via key-free RSS. Universe cache can backfill names. Community: Xueqiu (xueqiu) registered stub — xueqiu.com HTML is an Aliyun WAF JS-challenge shell and JSON APIs require xq_a_token (spike 2026-08-11); collect() empty until a stable public feed exists. Finnhub is US-only.",
@@ -201,15 +504,47 @@ const MARKET_HINTS = {
   eux: "EUX market (Eurex Core, derivatives exchange): futures/options product codes are kept uppercased (FDAX stays FDAX); .EUX suffixes stripped at add time; ISINs kept as-is. Products are added as unmapped (no SEC mapping). This is NOT Xetra stocks/ETFs (market=de), NOT AEE (cxe/trq), NOT AQSE/Mutual Funds/Display Bundle. Disclosure is NOT wired (EUX-1 A3 / EUX-4: Eurex circulars are a JS search surface without per-product rows/JSON; derivatives have no issuer OAM; no stock OAM re-mapped; no second source; Display Bundle not wired). Universe: official Eurex product list CSV backfills product name/ISIN/group (~2,997 products live 2026-08-11; product-level; never in feed; TLS intermittent). News: Google News (EUX) via key-free RSS (product name from universe, else Eurex product code; hl=de&gl=DE; no Yahoo suffix exists for Eurex derivatives, so no yahoo_eux). Feed soft-dedupe is display-only (Also seen on; all rows kept; KR_FEED_SOFT_DEDUPE; news pairs on Berlin day + title; filings never annotated - no disclosure source). Finnhub is US-only and never queried for EUX.",
 };
 
+const MARKET_HINTS_ZH = {
+  us: "美国候选公司来自本地官方 SEC 映射。新闻：Finnhub（需要 FINNHUB_API_KEY）+ Yahoo Finance US + Google News US（免 key RSS）。社区：Seeking Alpha（seeking_alpha）通过公开 combined RSS（/api/sa/combined/{SYMBOL}.xml）LIVE —— 文章/快讯元数据，按纽约日过滤；HTML 代码/论坛/评论页返回 PerimeterX 403，超出范围。Substack（substack）LIVE 刊物白名单 RSS（https://{publication}/feed）—— 通讯稿文章/快讯元数据，纽约日过滤，无结构化 ticker 绑定；白名单：noahpinion.blog、notboring.co、astralcodexten.com、paulkrugman.substack.com、oneusefulthing.org。Yellowbrick Investing（yellowbrick）注册 stub —— ybrick.co 死链，joinyellowbrick.com 404（spike 2026-08-11）；collect() 为空。X（x_community）注册 stub —— 无公开免登录 ticker 接口；官方 API 需要付费 Bearer（未接线）；HTML/聚合抓取超出范围（spike 2026-08-11）；collect() 为空。Value Investors Club（vic）注册 stub —— 无公开 RSS/JSON；/ideas?symbol= 不过滤；访客访问仅限 45 天延迟；会员/HTML 抓取超出范围（spike 2026-08-11）；collect() 为空。",
+  jp: "日本公司以未映射方式添加。使用“添加代码”输入本地代码；EDINET/TDnet 按 market=jp 采集。新闻：Yahoo Finance JP + Google News JP（免 key RSS）。",
+  hk: "HKEXnews 公告搜索已连接（非官方页面 API；可能变更）。HKEX DI 可用但默认禁用（旧归档 2003-2017）。Yahoo Finance HK + Google News HK 走免 key RSS。宇宙缓存可回填名称。社区：雪球（xueqiu）注册 stub —— xueqiu.com HTML 是阿里云 WAF JS 挑战壳，JSON API 需要 xq_a_token（spike 2026-08-11）；在稳定公开 feed 出现前 collect() 为空。Finnhub 仅限美国。",
+  cn: "A 股公司以未映射方式添加（无 SEC 映射）。社区：雪球（xueqiu）注册 stub —— xueqiu.com HTML 是阿里云 WAF JS 挑战壳，JSON API 需要 xq_a_token（spike 2026-08-11）；在稳定公开 feed 出现前 collect() 为空。",
+  kr: "韩国公司配置 OpenDART 时解析；否则以未映射方式添加。新闻：Naver Finance + Yahoo Finance KR + Google News KR（免 key RSS）。",
+  uk: "英国公司配置 Companies House 时解析。新闻：Yahoo Finance UK + Google News UK（免 key RSS）。",
+  tw: "TWSE（上市）与 TPEx（上柜）OpenAPI 重大信息已连接（免 key；不是付费 MOPS 推送）。興櫃披露未接线。Yahoo Finance TW 和 Google News (TW) 走免 key RSS。宇宙缓存可回填名称/板别。Finnhub 仅限美国。",
+  ca: "CA 市场（部分，非完整加拿大栈）：根代码去除 .TO/.TSX/.V/.TSXV/.CN/.NE/.NEO；板别在缓存为空时从 ca_universe（TSX/TSXV）或输入后缀回填。宇宙不覆盖 CSE/NEO 目录。披露未接线：SEDAR+/CSE/NEO 申报未接线。新闻：Yahoo Finance CA + Google News CA。社区：CEO.ca（ceoca_ca）走免 key JSON API（多伦多日过滤；仅频道页 URL；约 50 条/页）。Finnhub 仅限美国。",
+  au: "AU 市场：根代码去除 .AX/.ASX。ASX 公告走免 key 研究 API（每公司最近 5 条；可能变更）。宇宙回填名称/板别。新闻：Yahoo Finance AU + Google News AU。社区：Stockhead（stockhead_au）LIVE WordPress 搜索 RSS；HotCopper（hotcopper_au）注册 stub —— 公开板块对机器人返回 HTTP 403 Cloudflare；在稳定公开 feed 出现前 collect() 为空。Finnhub 仅限美国。",
+  be: "BE 市场（Euronext Brussels）：根代码去除 .BR/.BRU/.EBR；比利时 ISIN 保持原样。披露：FSMA STORI（官方免 key 比利时受监管信息集中存储）已接线，按 BE ISIN 或公司名匹配 —— 助记代码在 BE 宇宙缓存（BE-2）刷新后获取 ISIN/名称，或直接输入 BE ISIN；无身份信息的代码被诚实跳过。第二个披露源未接线（BE-4 于 2026-08-10 复核）：Euronext Brussels 公告是仅 HTML 页面、按公司节点 id 索引（无 RSS/JSON 导出），免 key EQS News API 返回零条比利时记录；付费订阅（Euronext Web Services、FinancialReports.eu）被排除。宇宙：be_universe 缓存免 key Euronext Brussels 目录并回填名称/板别/ISIN。新闻：Yahoo Finance BE（region=BE，fr-BE + en-US 合并；相同标题保持单语言；请求时 .BR）和 Google News BE（hl=en-BE&gl=BE&ceid=BE:en）走免 key RSS；可能松散相关且可能无预警失效。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE）：FSMA STORI 申报按稳定 STORI 文档 id 配对；Yahoo BE 与 Google News BE 按 ticker + 布鲁塞尔日 + 归一化标题配对。BE 公司以未映射方式添加。Finnhub 仅限美国且从不查询 BE。",
+  fr: "FR 市场（Euronext Paris）：根代码去除 .PA/.PAR；法国 ISIN 保持原样。AMF OAM 披露 + Euronext Paris/Growth/Access 宇宙缓存 + Yahoo/Google FR 新闻。公司保持未映射。Finnhub 仅限美国。",
+  de: "DE 市场（Xetra / Deutsche Börse Cash Market）：德国 ETF 的深化保持在 market=de（无单独 etf 市场代码；非 Eurex 衍生品）。根代码去除 .DE/.XETRA/.XE/.F；德国 ISIN 保持原样。EQS News (DGAP) 披露走免 key JSON（需要来自宇宙或输入的 ISIN；EQS 对抽样 Xetra ETF ISIN 返回零记录 —— ETF 披露未深化）。宇宙缓存包含 Xetra CS + ETF + ETN + ETC（记录 instrument_type；实时约 1,422 CS / 3,082 ETF / 385 ETN / 205 ETC）并回填名称/板别/ISIN。新闻：Yahoo DE + Google News DE 由股票和 ETF 共享（请求时 .DE；ETF feed 可能为空/松散相关）。Unternehmensregister/BaFin HTML 未接线。公司保持未映射。Finnhub 仅限美国。",
+  nl: "NL 市场（Euronext Amsterdam）：根代码去除 .AS/.AMS/.AEA；荷兰 ISIN 保持原样。EQS News (NL) 披露走免 key JSON 按荷兰 ISIN（部分覆盖；非 AFM 官方；第二个披露源未接线 —— AFM/Euronext 无免费 JSON）。宇宙缓存回填名称/板别/ISIN。新闻：Yahoo Finance NL + Google News NL。公司保持未映射。Finnhub 仅限美国且从不查询 NL。",
+  it: "IT 市场（Euronext Milan）：根代码去除 .MI/.MIL/.BIT；意大利 ISIN 保持原样。EQS News (IT) 披露走免 key JSON 按意大利 ISIN（部分覆盖；非 Consob 官方；第二个披露源未接线 —— Consob 验证码/Borsa Italiana/Euronext 无免费 JSON）。宇宙缓存回填名称/板别/ISIN。新闻：Yahoo Finance IT + Google News IT。公司保持未映射。Finnhub 仅限美国且从不查询 IT。",
+  es: "ES 市场（BME / Bolsa de Madrid）：根代码去除 .MC/.MAD/.BME；西班牙 ISIN 保持原样。披露：CNMV 官方 RSS（IP + OIR）加 BME 重大事实 JSON（官方、免 key、同一 CNMV 注册号；约 31 天范围上限）。ES 宇宙缓存（BME 官方 API：SIBE/Floor/Latibex + BME Growth/ScaleUp 股票；基金排除）回填名称/板别/ISIN 并驱动披露匹配。新闻：Yahoo Finance ES + Google News ES（免 key RSS；可能松散相关；请求时 .MC）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE）。ES 公司以未映射方式添加。Finnhub 仅限美国且从不查询 ES。",
+  sg: "SG 市场（SGX）：根代码去除 .SI/.SG；新加坡 ISIN 保持原样；SGX 代码长度不一（无固定宽度）。披露未接线（SG-1/SG-4 spikes：SGX 公告是 JS SPA；api.sgx.com 返回 403；旧 infopub SGXNet JSON 已退役；links.sgx.com 只有深链接；无付费 SGX DataLink）。SG 宇宙是边界 stub（无稳定免费 SGX 目录；refresh 抛错；缓存形态预留）。新闻：Yahoo Finance SG + Google News SG（免 key RSS；可能松散相关；请求时 .SI）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；无披露源故 filing 不标注）。SG 公司以未映射方式添加。Finnhub 仅限美国且从不查询 SG。",
+  ch: "CH 市场（SIX Swiss Exchange）：根代码去除 .SW/.SWX/.S；瑞士 ISIN 保持原样。披露：EQS News (CH) 走免 key JSON 按瑞士 ISIN（非官方；部分覆盖 —— Roche/UBS 有，部分 ISIN 为空；非 SIX/FINMA 官方；SIX 官方公告是 JS SPA，股票发行人新闻是付费 Exfeed）。需要来自 CH 宇宙缓存或输入的瑞士 ISIN。CH 宇宙是边界 stub（无稳定免费 SIX 目录；refresh 抛错；缓存形态预留）。新闻：Yahoo Finance CH + Google News CH（免 key RSS；德语区；可能松散相关；请求时 .SW）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；eqs_ch 申报按 EQS id 配对）。CH 公司以未映射方式添加。Finnhub 仅限美国且从不查询 CH。",
+  pl: "PL 市场（GPW / Warsaw）：根代码去除 .WA/.WSE/.GPW；波兰 ISIN 保持原样。披露：官方 GPW ESPI/EBI 报告页（www.gpw.pl/komunikaty；免 key HTML 列表，按来自 PL 宇宙的波兰 ISIN 过滤；稳定 geru_id；espi.gpw.pl 本身不可达；EQS 对 PL ISIN 为空；KNF 无逐发行人 feed；无付费 GPW 数据产品）。宇宙：官方 GPW HTML 目录（GPW 主板约 400 + NewConnect 约 350；仅广度，从不进入 feed；添加公司时回填名称/板别/ISIN；GPW 主机间歇性 TLS 中断，刷新可能需要重试）。新闻：Yahoo Finance PL + Google News PL（免 key RSS；请求时 .WA；可能松散相关 —— PKO.WA 的 Google 查询可能包含足球条目）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；gpw_espi 按 geru_id 配对；新闻按华沙日 + 标题配对）。PL 公司以未映射方式添加。Finnhub 仅限美国且从不查询 PL。",
+  se: "SE 市场（Nasdaq Stockholm / First North Sweden）：根代码去除 .ST/.STO/.OMX；份额类后缀如 -B/-A 保留（ERIC-B 保持 ERIC-B）；瑞典 ISIN 保持原样。披露未接线（SE-1 spike + SE-4 复核：FI publiceringsklient 仅限内幕交易；Nasdaq Nordic 公司新闻是 Drupal SPA 无公开 JSON；旧 OMX 披露搜索 HTTP 500；EQS 对抽样瑞典 ISIN 为空；旧 Hugin 主机无稳定公开 API；无付费 Nasdaq 数据产品）。宇宙：边界 stub（SE-2 spike B2：Nasdaq Stockholm/First North 目录是无可达公开 JSON 路径的 JS 筛选 SPA；refresh 抛 SeUniverseError；无 OMXS30 种子）。新闻：Yahoo Finance SE + Google News SE（免 key RSS；请求时 .ST；可能松散相关 —— ERIC-B.ST 的 Google 查询可能包含足球条目）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按斯德哥尔摩日 + 标题配对；无披露源故 filing 从不标注）。SE 公司以未映射方式添加。Finnhub 仅限美国且从不查询 SE。",
+  aq: "AQ 市场（Aquis Stock Exchange, AQSE）：根代码去除 .AQ；AQSE 助记码保持原样；ISIN（GB/IE/其他）保持原样。公司以未映射方式添加（无 SEC 映射）。披露未接线（AQ-1 A3 / AQ-4 D2：官方 aquis.eu 页面位于 Vercel 机器人挑战之后，非浏览器客户端无法访问；无免 key 官方 JSON/RSS；无第二源；LSE/Investegate/Companies House 不作为 Aquis 替代）。宇宙：非官方 ticker.app AQSE 部分镜像回填名称/交易所/ISIN（未验证完整）。新闻：Yahoo Finance AQ + Google News AQ（免 key RSS；请求时 .AQ；可能松散相关）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按伦敦日 + 标题配对；无披露源故 filing 从不标注）。Finnhub 仅限美国且从不查询 AQ。",
+  cxe: "CXE 市场（Cboe Europe 股票，CXE/BXE 订单簿）：仅第一个 Alternative European Equities 场所 —— 不是完整套餐（Turquoise 和其他 MTF 推迟；无虚拟 aee/eu 代码）。Cboe 代码保持大写（AZNl -> AZNL）；添加时去除 .CXE/.BXE 后缀；ISIN 保持原样。公司以未映射方式添加（无 SEC 映射）。披露未接线（AEE-1 A3 / AEE-4：Cboe Europe 是无独立发行人 OAM 的 MTF；场所代码/交易页不是发行人披露；无第二源）。宇宙：官方 Cboe Europe Symbol Data CSV 回填 CXE+BXE 名称/交易所/场所（实时约 5.3k + 6.5k 代码，2026-08-10；无 ISIN 列）。新闻：Google News (CXE) 走免 key RSS（查询来自宇宙的公司名，否则 Cboe 代码；Cboe Europe 无 Yahoo 后缀，故无 yahoo_cxe）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按伦敦日 + 标题配对；无披露源故 filing 从不标注）。Finnhub 仅限美国且从不查询 CXE。",
+  emf: "EMF 市场（欧洲共同基金 / UCITS）：ISIN 优先标识（12 字符基金 ISIN 保持原样；添加时去除 .F/.MF 基金数据后缀）。基金以未映射方式添加（无 SEC 映射）。这不是德国 ETF（market=de）或 Cboe Europe（market=cxe）宇宙，也不是 Eurex 衍生品。披露未接线（EMF-1 A3 / EMF-4：ESMA 仅公开无 ISIN 的 AIFMD 基金报告且无 UCITS 登记；KIID/PRIIPs 在管理人站点；无股票 OAM 重映射；无第二源）。宇宙：边界 stub（EMF-2 B2：无稳定免费带 ISIN 的欧洲基金目录；refresh 抛 EmfUniverseError；无基金种子）。新闻：Google News (EMF) 走免 key RSS（基金名来自手工放置的缓存，否则输入 ISIN —— 通常稀疏；欧洲基金无 Yahoo 后缀，故无 yahoo_emf）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按卢森堡日 + 标题配对；无披露源故 filing 从不标注）。Finnhub 仅限美国且从不查询 EMF。",
+  trq: "TRQ 市场（Turquoise, LSEG MTF）：Cboe Europe（market=cxe）之后的第二个 Alternative European Equities 场所 —— 不是完整套餐（其他 MTF 推迟）且不是 AQSE/LSE/Eurex。常见代码保持大写（AZN 保持 AZN）；添加时去除 .TRQ/.TRQX/.TQEX 后缀；ISIN 保持原样。公司以未映射方式添加（无 SEC 映射）。披露未接线（TRQ-1 A3 / TRQ-4：无发行人 OAM 的 MTF；2026-08-11 复测：turquoise.com 停用，turquoise.eu 是无关公司，tradeturquoise.com 重定向到仅 JS 的 LSE SPA，旧 TRQX/TQEX 参考文件 CSV 404；无股票 OAM 重映射；无第二源）。宇宙：边界 stub（TRQ-2 B2：无稳定免费 Turquoise 目录；refresh 抛 TrqUniverseError；不复用 CXE CSV；无种子）。新闻：Google News (TRQ) 走免 key RSS（公司名来自手工放置的缓存，否则 Turquoise 代码；Turquoise 无 Yahoo 后缀，故无 yahoo_trq）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按伦敦日 + 标题配对；无披露源故 filing 从不标注）。Finnhub 仅限美国且从不查询 TRQ。",
+  eux: "EUX 市场（Eurex Core，衍生品交易所）：期货/期权产品代码保持大写（FDAX 保持 FDAX）；添加时去除 .EUX 后缀；ISIN 保持原样。产品以未映射方式添加（无 SEC 映射）。这不是 Xetra 股票/ETF（market=de），不是 AEE（cxe/trq），不是 AQSE/共同基金/Display Bundle。披露未接线（EUX-1 A3 / EUX-4：Eurex circulars 是无逐产品行/JSON 的 JS 搜索界面；衍生品无发行人 OAM；无股票 OAM 重映射；无第二源；Display Bundle 未接线）。宇宙：官方 Eurex 产品列表 CSV 回填产品名/ISIN/组（实时约 2,997 产品，2026-08-11；产品级；从不进入 feed；TLS 间歇性）。新闻：Google News (EUX) 走免 key RSS（产品名来自宇宙，否则 Eurex 产品代码；hl=de&gl=DE；Eurex 衍生品无 Yahoo 后缀，故无 yahoo_eux）。Feed 软去重仅用于展示（Also seen on；保留所有行；KR_FEED_SOFT_DEDUPE；新闻按柏林日 + 标题配对；无披露源故 filing 从不标注）。Finnhub 仅限美国且从不查询 EUX。",
+};
+
+function marketHint(market) {
+  const table = lang === "zh-CN" ? MARKET_HINTS_ZH : MARKET_HINTS_EN;
+  return table[market] || table.us;
+}
+
 function updateMarketHint() {
   const market = document.getElementById("market-select").value;
-  document.getElementById("market-hint").textContent = MARKET_HINTS[market] || MARKET_HINTS.us;
+  document.getElementById("market-hint").textContent = marketHint(market);
 }
 
 async function refreshManagement() {
   renderLists(); renderCompanies();
   try { renderSources((await api("/api/sources")).sources); }
-  catch (error) { document.getElementById("source-grid").innerHTML = errorState("Request failed", error.message); }
+  catch (error) { document.getElementById("source-grid").innerHTML = errorState(t("common.request_failed"), error.message); }
 }
 
 function renderLists() {
@@ -218,9 +553,9 @@ function renderLists() {
   if (state.selectedList && !lists.some(list => list.slug === state.selectedList)) state.selectedList = lists[0]?.slug || "";
   document.getElementById("list-strip").innerHTML = lists.length ? lists.map(list => `
     <article class="list-card ${list.slug === state.selectedList ? "selected" : ""}" data-slug="${escAttr(list.slug)}">
-      <button class="list-select" type="button"><strong>${esc(list.name)}</strong><span>${list.company_count} companies</span></button>
-      <div><button class="text-button rename-list" type="button">Rename</button><button class="text-button danger delete-list" type="button">Delete</button></div>
-    </article>`).join("") : `<div class="empty compact"><p>Create a list to start monitoring companies.</p></div>`;
+      <button class="list-select" type="button"><strong>${esc(list.name)}</strong><span>${t("manage.companies_count", {count: list.company_count})}</span></button>
+      <div><button class="text-button rename-list" type="button">${t("manage.rename")}</button><button class="text-button danger delete-list" type="button">${t("manage.delete")}</button></div>
+    </article>`).join("") : `<div class="empty compact"><p>${t("manage.create_list_first")}</p></div>`;
   document.querySelectorAll(".list-select").forEach(button => button.addEventListener("click", () => { state.selectedList = button.closest(".list-card").dataset.slug; renderLists(); renderCompanies(); }));
   document.querySelectorAll(".rename-list").forEach(button => button.addEventListener("click", () => renameList(button.closest(".list-card").dataset.slug)));
   document.querySelectorAll(".delete-list").forEach(button => button.addEventListener("click", () => deleteList(button.closest(".list-card").dataset.slug)));
@@ -228,52 +563,52 @@ function renderLists() {
 
 async function renameList(slug) {
   const current = state.bootstrap.lists.find(list => list.slug === slug);
-  const name = prompt("List name", current.name);
+  const name = prompt(t("manage.list_name"), current.name);
   if (name === null || !name.trim()) return;
-  try { await api("/api/lists/rename", {method:"POST", body:JSON.stringify({slug,name})}); toast("List renamed."); await reloadBootstrap(); await refreshManagement(); }
+  try { await api("/api/lists/rename", {method:"POST", body:JSON.stringify({slug,name})}); toast(t("manage.list_renamed")); await reloadBootstrap(); await refreshManagement(); }
   catch (error) { toast(error.message, true); }
 }
 
 async function deleteList(slug) {
   const current = state.bootstrap.lists.find(list => list.slug === slug);
-  if (!confirm(`Delete “${current.name}”? Companies in other lists and stored information will be preserved.`)) return;
-  try { await api("/api/lists/delete", {method:"POST", body:JSON.stringify({slug})}); toast("List deleted."); await reloadBootstrap(); await refreshManagement(); }
+  if (!confirm(t("manage.delete_confirm", {name: current.name}))) return;
+  try { await api("/api/lists/delete", {method:"POST", body:JSON.stringify({slug})}); toast(t("manage.list_deleted")); await reloadBootstrap(); await refreshManagement(); }
   catch (error) { toast(error.message, true); }
 }
 
 function renderCompanies() {
   const list = state.bootstrap.lists.find(item => item.slug === state.selectedList);
   const companies = state.bootstrap.companies.filter(company => company.list_slugs.includes(state.selectedList));
-  document.getElementById("company-context").textContent = list ? `${list.name} · ${companies.length} companies` : "Create or select a list first.";
-  document.getElementById("company-table").innerHTML = companies.length ? `<div class="table-wrap"><table><thead><tr><th>Company</th><th>Ticker</th><th>Exchange</th><th>Region</th><th></th></tr></thead><tbody>${companies.map(company => `<tr><td>${esc(company.name)}</td><td>${esc(company.ticker)}</td><td>${esc(company.exchange || "Unavailable")}</td><td>${regionForMarket(company.market)}</td><td><button class="text-button danger remove-company" data-ticker="${escAttr(company.ticker)}" data-market="${escAttr(company.market)}">Remove</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty compact"><p>No companies in this list.</p></div>`;
+  document.getElementById("company-context").textContent = list ? `${list.name} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
+  document.getElementById("company-table").innerHTML = companies.length ? `<div class="table-wrap"><table><thead><tr><th>${t("manage.company")}</th><th>${t("manage.ticker")}</th><th>${t("manage.exchange")}</th><th>${t("manage.region")}</th><th></th></tr></thead><tbody>${companies.map(company => `<tr><td>${esc(company.name)}</td><td>${esc(company.ticker)}</td><td>${esc(exchangeLabel(company.exchange))}</td><td>${regionForMarket(company.market)}</td><td><button class="text-button danger remove-company" data-ticker="${escAttr(company.ticker)}" data-market="${escAttr(company.market)}">${t("manage.remove")}</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty compact"><p>${t("manage.no_companies")}</p></div>`;
   document.querySelectorAll(".remove-company").forEach(button => button.addEventListener("click", () => removeCompany(button.dataset.ticker, button.dataset.market)));
 }
 
 async function searchCompanies(event) {
   event.preventDefault();
-  if (!state.selectedList) { toast("Create or select a list first.", true); return; }
+  if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
   const market = document.getElementById("market-select").value;
   if (market !== "us") {
-    toast("Non-US markets: use Add ticker (SEC search is US-only).", true);
+    toast(t("manage.non_us_markets"), true);
     return;
   }
-  const target = document.getElementById("candidate-results"); target.innerHTML = `<p class="loading">Searching candidates…</p>`;
+  const target = document.getElementById("candidate-results"); target.innerHTML = `<p class="loading">${t("manage.searching_candidates")}</p>`;
   try {
     const data = await api(`/api/companies/search?q=${encodeURIComponent(document.getElementById("company-query").value.trim())}`);
-    target.innerHTML = data.candidates.length ? `<div class="candidate-list">${data.candidates.map(candidate => `<article><div><strong>${esc(candidate.name)}</strong><p>${esc(candidate.ticker)} · ${esc(candidate.exchange)} · ${esc(candidate.region)}</p></div><button class="button add-candidate" data-ticker="${escAttr(candidate.ticker)}" data-market="${escAttr(candidate.market)}">Confirm &amp; add</button></article>`).join("")}</div>` : `<div class="empty compact"><p>No matching official candidates.</p></div>`;
+    target.innerHTML = data.candidates.length ? `<div class="candidate-list">${data.candidates.map(candidate => `<article><div><strong>${esc(candidate.name)}</strong><p>${esc(candidate.ticker)} · ${esc(candidate.exchange)} · ${esc(candidate.region)}</p></div><button class="button add-candidate" data-ticker="${escAttr(candidate.ticker)}" data-market="${escAttr(candidate.market)}">${t("manage.confirm_add")}</button></article>`).join("")}</div>` : `<div class="empty compact"><p>${t("manage.no_matching_candidates")}</p></div>`;
     document.querySelectorAll(".add-candidate").forEach(button => button.addEventListener("click", () => addCandidate(button.dataset.ticker, button.dataset.market)));
-  } catch (error) { target.innerHTML = errorState("Search returned no results", error.message); }
+  } catch (error) { target.innerHTML = errorState(t("manage.search_no_results"), error.message); }
 }
 
 async function addTickerDirect() {
-  if (!state.selectedList) { toast("Create or select a list first.", true); return; }
+  if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
   const tickers = document.getElementById("company-query").value.trim();
-  if (!tickers) { toast("Enter a ticker first.", true); return; }
+  if (!tickers) { toast(t("manage.enter_ticker_first"), true); return; }
   const market = document.getElementById("market-select").value;
   try {
     const result = await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers, lists:[state.selectedList], market})});
     const added = (result.added || []).map(row => row.ticker).join(", ") || tickers;
-    toast(`${added} added (${market}).`);
+    toast(t("manage.added_market", {tickers: added, market}));
     document.getElementById("candidate-results").innerHTML = "";
     await reloadBootstrap();
     await refreshManagement();
@@ -283,33 +618,34 @@ async function addTickerDirect() {
 async function addCandidate(ticker, market) {
   try {
     await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers:ticker, lists:[state.selectedList], market})});
-    toast(`${ticker} added.`); document.getElementById("candidate-results").innerHTML = ""; await reloadBootstrap(); await refreshManagement();
+    toast(t("manage.added", {ticker})); document.getElementById("candidate-results").innerHTML = ""; await reloadBootstrap(); await refreshManagement();
   } catch (error) { toast(error.message, true); }
 }
 
 async function removeCompany(ticker, market) {
-  try { await api("/api/memberships/remove", {method:"POST", body:JSON.stringify({ticker, market, list:state.selectedList})}); toast(`${ticker} removed from this list.`); await reloadBootstrap(); await refreshManagement(); }
+  try { await api("/api/memberships/remove", {method:"POST", body:JSON.stringify({ticker, market, list:state.selectedList})}); toast(t("manage.removed", {ticker})); await reloadBootstrap(); await refreshManagement(); }
   catch (error) { toast(error.message, true); }
 }
 
 function renderSources(sources) {
-  document.getElementById("source-grid").innerHTML = `<div class="source-grid">${sources.map(source => `<article class="source-card"><div class="source-card-head"><div><h3>${esc(source.provider)}</h3><p>${esc(source.type)} · ${source.regions.length ? source.regions.map(esc).join(", ") : "Coverage not provided"}</p></div><span class="status ${escAttr(source.status)}">${statusLabel(source.status)}</span></div><dl><div><dt>Enabled</dt><dd>${source.enabled ? "Yes" : "No"}</dd></div><div><dt>Latest success</dt><dd>${source.latest_success ? formatDateTime(source.latest_success) : "None recorded"}</dd></div><div><dt>Latest attempt</dt><dd>${source.latest_attempt ? formatDateTime(source.latest_attempt) : "None recorded"}</dd></div></dl>${source.last_failure ? `<details><summary>Failure details</summary><p>${esc(source.last_failure)}</p></details>` : ""}</article>`).join("")}</div>`;
+  document.getElementById("source-grid").innerHTML = `<div class="source-grid">${sources.map(source => `<article class="source-card"><div class="source-card-head"><div><h3>${esc(source.provider)}</h3><p>${esc(source.type)} · ${source.regions.length ? source.regions.map(esc).join(", ") : t("manage.coverage_not_provided")}</p></div><span class="status ${escAttr(source.status)}">${statusLabel(source.status)}</span></div><dl><div><dt>${t("manage.enabled")}</dt><dd>${source.enabled ? t("manage.yes") : t("manage.no")}</dd></div><div><dt>${t("manage.latest_success")}</dt><dd>${source.latest_success ? formatDateTime(source.latest_success) : t("manage.none_recorded")}</dd></div><div><dt>${t("manage.latest_attempt")}</dt><dd>${source.latest_attempt ? formatDateTime(source.latest_attempt) : t("manage.none_recorded")}</dd></div></dl>${source.last_failure ? `<details><summary>${t("manage.failure_details")}</summary><p>${esc(source.last_failure)}</p></details>` : ""}</article>`).join("")}</div>`;
 }
 
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
-function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
-function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore",ch:"Switzerland",pl:"Poland",se:"Sweden",aq:"Aquis (AQSE)",cxe:"Cboe Europe (CXE)",emf:"Europe (Funds)",trq:"Turquoise (TRQ)",eux:"Europe (Eurex)"})[market] || "Unavailable"; }
-const CATEGORY_LABELS = {Filing: "Official filings", News: "News", Community: "Community"};
-function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
-function formatShortDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
+function statusLabel(status) { const key = {connected:"status.connected", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
+function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
+function categoryLabel(type) { const key = {Filing:"cat.official_filings", News:"cat.news", Community:"cat.community"}[type]; return key ? t(key) : type; }
+function exchangeLabel(exchange) { return exchange && exchange !== "Unavailable" ? exchange : t("common.unavailable"); }
+function formatDay(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
+function formatShortDay(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"medium", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
 function formatRange(start, end) { return start === end ? formatDay(start) : `${formatShortDay(start)} – ${formatShortDay(end)}`; }
-function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
-function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
+function formatTime(value) { return new Intl.DateTimeFormat(localeFor(), {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
+function formatDateTime(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
-async function api(url, options={}) { const response = await fetch(url, {headers:{"Content-Type":"application/json"}, ...options}); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`); return payload; }
+async function api(url, options={}) { const response = await fetch(url, {headers:{"Content-Type":"application/json"}, ...options}); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || t("common.request_failed_status", {status: response.status})); return payload; }
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
 function safeUrl(value) { try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : "#"; } catch (_) { return "#"; } }
-function renderFatal(error) { document.getElementById("page").innerHTML = errorState("Workspace request failed", error.message); }
+function renderFatal(error) { document.getElementById("page").innerHTML = errorState(t("common.workspace_failed"), error.message); }
