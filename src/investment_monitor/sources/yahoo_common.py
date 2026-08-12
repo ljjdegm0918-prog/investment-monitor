@@ -14,6 +14,7 @@ import re
 from datetime import date, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any, List, Mapping, Optional
+from zoneinfo import ZoneInfo
 import xml.etree.ElementTree as ElementTree
 
 
@@ -27,6 +28,7 @@ def _parse_rss(
     start_date: date,
     end_date: date,
     data_error: type = RssDataError,
+    zone: Optional[ZoneInfo] = None,
 ) -> List[Mapping[str, Any]]:
     try:
         root = ElementTree.fromstring(body)
@@ -45,7 +47,8 @@ def _parse_rss(
         published = _parse_rfc822(_child_text(item, "pubDate"))
         if published is None:
             continue
-        if not start_date <= published.date() <= end_date:
+        day = published.astimezone(zone).date() if zone is not None else published.date()
+        if not start_date <= day <= end_date:
             continue
         description = _child_text(item, "description")
         records.append(

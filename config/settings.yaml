@@ -48,10 +48,42 @@ sources:
     label: Yahoo Finance UK
     source_type: news
     enabled: true          # key-free public RSS; may break without notice
+  - name: google_news_uk
+    label: Google News (UK)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-GB, gl=GB); may be loosely related / break without notice
   - name: yahoo_hk
     label: Yahoo Finance HK
     source_type: news
     enabled: true          # key-free public RSS mirror; may be loosely related / break without notice
+  - name: google_news_hk
+    label: Google News (HK)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-HK, gl=HK); may be loosely related / break without notice
+  - name: yahoo_kr
+    label: Yahoo Finance KR
+    source_type: news
+    enabled: true          # key-free public RSS mirror (ko-KR + en-US); may be loosely related / break without notice
+  - name: google_news_kr
+    label: Google News (KR)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=ko, gl=KR); may be loosely related / break without notice
+  - name: yahoo_jp
+    label: Yahoo Finance JP
+    source_type: news
+    enabled: true          # key-free public RSS mirror (region=JP); may be loosely related / break without notice
+  - name: google_news_jp
+    label: Google News (JP)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=ja, gl=JP); may be loosely related / break without notice
+  - name: yahoo_us
+    label: Yahoo Finance US
+    source_type: news
+    enabled: true          # key-free public RSS mirror (region=US); may be loosely related / break without notice
+  - name: google_news_us
+    label: Google News (US)
+    source_type: news
+    enabled: true          # key-free Google News RSS search (hl=en-US, gl=US); may be loosely related / break without notice
   - name: yahoo_ca
     label: Yahoo Finance CA
     source_type: news
@@ -112,6 +144,10 @@ sources:
     label: HotCopper (AU)
     source_type: community
     enabled: true          # registered stub: public HotCopper boards return HTTP 403 Cloudflare to bots (spike 2026-08-11); collect() returns []; login/paywall out of scope
+  - name: stockhead_au
+    label: Stockhead (AU)
+    source_type: community
+    enabled: true          # LIVE WordPress search RSS for ASX tickers; may change without notice
   - name: lse_share_chat
     label: LSE Share Chat (UK)
     source_type: community

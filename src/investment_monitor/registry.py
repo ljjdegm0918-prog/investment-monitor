@@ -20,9 +20,12 @@ from .sources.kr_news import (
     NaverNewsConnector,
     TheBellConnector,
 )
+from .sources.kr_news.google.connector import GoogleKrNewsConnector
+from .sources.kr_news.yahoo.connector import YahooKrNewsConnector
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
 from .sources.uk_news import YahooNewsConnector
+from .sources.uk_news.google.connector import GoogleUkNewsConnector
 from .sources.ca_news import (
     GoogleCaNewsConnector,
     YahooCaNewsConnector,
@@ -63,6 +66,15 @@ from .sources.de_news import (
 from .sources.hkexnews import HkexNewsConnector
 from .sources.hkex_di import HkexDiConnector
 from .sources.hk_news import YahooHkNewsConnector
+from .sources.hk_news.google.connector import GoogleHkNewsConnector
+from .sources.jp_news import (
+    GoogleJpNewsConnector,
+    YahooJpNewsConnector,
+)
+from .sources.us_news import (
+    GoogleUsNewsConnector,
+    YahooUsNewsConnector,
+)
 from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 from .sources.eqs_dgap import EqsDgapConnector
@@ -117,13 +129,21 @@ SOURCE_MARKETS = {
     "sec": "us", "news": "us",
     "dart": "kr", "kind": "kr", "naver_news": "kr",
     "hankyung": "kr", "thebell": "kr",
+    "yahoo_kr": "kr", "google_news_kr": "kr",
     "companies_house": "uk", "investegate": "uk", "yahoo_uk": "uk",
+    "google_news_uk": "uk", "lse_share_chat": "uk",
     "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
-    "yahoo_ca": "ca", "google_news_ca": "ca", "sedar_plus": "ca",
-    "cse_filings": "ca", "neo_filings": "ca",
+    "google_news_hk": "hk",
+    "yahoo_ca": "ca", "google_news_ca": "ca", "ceoca_ca": "ca",
+    "sedar_plus": "ca", "cse_filings": "ca", "neo_filings": "ca",
     "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
     "google_news_tw": "tw",
     "asx_announcements": "au", "yahoo_au": "au", "google_news_au": "au",
+    "hotcopper_au": "au", "stockhead_au": "au",
+    "seeking_alpha": "us", "substack": "us", "yellowbrick": "us",
+    "x_community": "us", "vic": "us",
+    "yahoo_us": "us", "google_news_us": "us",
+    "yahoo_jp": "jp", "google_news_jp": "jp",
     "amf_oam": "fr", "yahoo_fr": "fr", "google_news_fr": "fr",
     "eqs_dgap": "de", "de_community": "de", "yahoo_de": "de",
     "google_news_de": "de",
@@ -271,7 +291,15 @@ def create_default_registry() -> SourceRegistry:
     registry.register(HankyungConnector.name, HankyungConnector)
     registry.register(TheBellConnector.name, TheBellConnector)
     registry.register(YahooNewsConnector.name, YahooNewsConnector)
+    registry.register(GoogleUkNewsConnector.name, GoogleUkNewsConnector)
     registry.register(YahooHkNewsConnector.name, YahooHkNewsConnector)
+    registry.register(GoogleHkNewsConnector.name, GoogleHkNewsConnector)
+    registry.register(YahooKrNewsConnector.name, YahooKrNewsConnector)
+    registry.register(GoogleKrNewsConnector.name, GoogleKrNewsConnector)
+    registry.register(YahooJpNewsConnector.name, YahooJpNewsConnector)
+    registry.register(GoogleJpNewsConnector.name, GoogleJpNewsConnector)
+    registry.register(YahooUsNewsConnector.name, YahooUsNewsConnector)
+    registry.register(GoogleUsNewsConnector.name, GoogleUsNewsConnector)
     registry.register(YahooCaNewsConnector.name, YahooCaNewsConnector)
     registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
     registry.register(TwseMaterialConnector.name, TwseMaterialConnector)

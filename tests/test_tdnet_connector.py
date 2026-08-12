@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from io import BytesIO
+import gc
 import json
 from pathlib import Path
 import sqlite3
@@ -550,8 +551,10 @@ class TDnetConnectorTests(unittest.TestCase):
             self.assertEqual(client.calls, [])
 
     def test_title_change_keeps_logical_id_and_stores_two_immutable_versions(self):
-        with TemporaryDirectory() as directory:
-            database_path = Path(directory) / "items.sqlite3"
+        temporary_directory = TemporaryDirectory()
+        repository = None
+        try:
+            database_path = Path(temporary_directory.name) / "items.sqlite3"
             repository = SQLiteInformationRepository(database_path)
             first, _ = connector_for(
                 page(1, row(title="初回タイトル", suffix="stable")),
@@ -575,15 +578,22 @@ class TDnetConnectorTests(unittest.TestCase):
                 second_item.raw_metadata["raw_content_hash"],
             )
             self.assertEqual(repository.count(), 1)
-            with sqlite3.connect(str(database_path)) as connection:
+            connection = sqlite3.connect(str(database_path))
+            try:
                 versions = connection.execute(
                     "SELECT payload FROM information_item_versions ORDER BY id"
                 ).fetchall()
+            finally:
+                connection.close()
             self.assertEqual(len(versions), 2)
             self.assertEqual(
                 [json.loads(payload)["title"] for payload, in versions],
                 ["初回タイトル", "訂正タイトル"],
             )
+        finally:
+            repository = None
+            gc.collect()
+            temporary_directory.cleanup()
 
     def test_current_japanese_day_never_writes_complete_checkpoint(self):
         with TemporaryDirectory() as directory:

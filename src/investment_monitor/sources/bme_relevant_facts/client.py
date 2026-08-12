@@ -24,7 +24,7 @@ import os
 import re
 import threading
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, List, Mapping, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
@@ -118,29 +118,46 @@ class BmeRelevantFactsClient:
         end_date: date,
         *,
         max_pages: int = 5,
+        max_chunk_days: int = 31,
     ) -> List[Mapping[str, Any]]:
-        """Fetch and parse relevant facts for a BME company key."""
+        """Fetch and parse relevant facts for a BME company key.
+
+        The BME API clamps each request to at most ~31 calendar days, so
+        longer windows are fetched in consecutive chunks and merged.
+        """
         records: List[Mapping[str, Any]] = []
-        for page in range(1, max_pages + 1):
-            url = (
-                f"{self._base_url}?companyKey={quote(company_key)}"
-                f"&from={start_date:%Y%m%d}&to={end_date:%Y%m%d}"
-                f"&page={page}&pageSize=50"
-            )
-            payload = self._get_json(url)
-            page_records = _parse_payload(
-                payload,
-                start_date=start_date,
-                end_date=end_date,
-            )
-            records.extend({**record, "retrieval_url": url} for record in page_records)
-            if not _has_more(payload):
-                break
-            if page == max_pages:
-                raise BmeRelevantFactsDataError(
-                    "BME relevant-facts results exceed "
-                    f"max_pages={max_pages} for companyKey={company_key}."
+        seen: set[str] = set()
+        for chunk_start, chunk_end in _date_chunks(
+            start_date,
+            end_date,
+            max_chunk_days=max_chunk_days,
+        ):
+            for page in range(1, max_pages + 1):
+                url = (
+                    f"{self._base_url}?companyKey={quote(company_key)}"
+                    f"&from={chunk_start:%Y%m%d}&to={chunk_end:%Y%m%d}"
+                    f"&page={page}&pageSize=50"
                 )
+                payload = self._get_json(url)
+                page_records = _parse_payload(
+                    payload,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                for record in page_records:
+                    key = str(record.get("external_id") or "")
+                    if key and key in seen:
+                        continue
+                    if key:
+                        seen.add(key)
+                    records.append({**record, "retrieval_url": url})
+                if not _has_more(payload):
+                    break
+                if page == max_pages:
+                    raise BmeRelevantFactsDataError(
+                        "BME relevant-facts results exceed "
+                        f"max_pages={max_pages} for companyKey={company_key}."
+                    )
         return records
 
     def _get_json(self, url: str) -> Any:
@@ -203,6 +220,25 @@ class BmeRelevantFactsClient:
                     self._sleeper(remaining)
                     now = self._clock()
             self._last_request_at = now
+
+
+def _date_chunks(
+    start_date: date,
+    end_date: date,
+    *,
+    max_chunk_days: int,
+) -> List[tuple[date, date]]:
+    """Split an inclusive date range into BME-sized chunks."""
+    if max_chunk_days <= 0:
+        raise ValueError("max_chunk_days must be positive.")
+    chunks: List[tuple[date, date]] = []
+    cursor = start_date
+    step = timedelta(days=max_chunk_days - 1)
+    while cursor <= end_date:
+        chunk_end = min(end_date, cursor + step)
+        chunks.append((cursor, chunk_end))
+        cursor = chunk_end + timedelta(days=1)
+    return chunks
 
 
 def _parse_payload(

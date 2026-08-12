@@ -102,6 +102,7 @@ def _map_announcements(
                 raw_metadata={
                     "provider": "asx_markitdigital_research_api",
                     "stock_code": code,
+                    "api_max_items_per_company": 5,
                     "document_key": str(record["external_id"]),
                     "announcement_type": str(
                         record.get("announcement_type") or ""

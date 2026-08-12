@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>"005930.KS" - Google News</title>
+    <item>
+      <title>삼성전자 실적 발표</title>
+      <link>https://news.google.com/rss/articles/CBMiMDA1OTMwS1M</link>
+      <guid isPermaLink="false">CBMiMDA1OTMwS1M</guid>
+      <pubDate>Wed, 05 Aug 2026 06:00:00 GMT</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second 005930.KS headline</title>
+      <link>https://news.google.com/rss/articles/CBMiMDA1OTMwS1M2</link>
+      <guid isPermaLink="false">CBMiMDA1OTMwS1M2</guid>
+      <pubDate>Thu, 06 Aug 2026 07:00:00 GMT</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

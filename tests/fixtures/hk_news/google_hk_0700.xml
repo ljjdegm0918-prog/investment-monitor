@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>"0700.HK" - Google News</title>
+    <item>
+      <title>Tencent reports earnings beat</title>
+      <link>https://news.google.com/rss/articles/CBMiMDcwMEhL</link>
+      <guid isPermaLink="false">CBMiMDcwMEhL</guid>
+      <pubDate>Wed, 05 Aug 2026 06:00:00 GMT</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second 0700.HK headline</title>
+      <link>https://news.google.com/rss/articles/CBMiMDcwMEhL2</link>
+      <guid isPermaLink="false">CBMiMDcwMEhL2</guid>
+      <pubDate>Thu, 06 Aug 2026 07:00:00 GMT</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

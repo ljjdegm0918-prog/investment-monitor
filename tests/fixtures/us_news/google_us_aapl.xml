@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>"AAPL" - Google News</title>
+    <item>
+      <title>Apple beats earnings estimates</title>
+      <link>https://news.google.com/rss/articles/CBMiQVBQT</link>
+      <guid isPermaLink="false">CBMiQVBQT</guid>
+      <pubDate>Wed, 05 Aug 2026 06:00:00 GMT</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second AAPL headline</title>
+      <link>https://news.google.com/rss/articles/CBMiQVBQT2</link>
+      <guid isPermaLink="false">CBMiQVBQT2</guid>
+      <pubDate>Thu, 06 Aug 2026 07:00:00 GMT</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>

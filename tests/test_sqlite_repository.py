@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import gc
 import unittest
 import sqlite3
 
@@ -46,6 +47,8 @@ class SQLiteInformationRepositoryTests(unittest.TestCase):
         self.repository = SQLiteInformationRepository(database_path)
 
     def tearDown(self) -> None:
+        self.repository = None  # type: ignore[assignment]
+        gc.collect()
         self.temporary_directory.cleanup()
 
     def test_implements_repository_interface_and_queries_all_filters(self) -> None:

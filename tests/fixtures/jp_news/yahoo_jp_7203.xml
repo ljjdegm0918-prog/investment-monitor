@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: 7203.T News</title>
+    <item>
+      <title>トヨタ決算が市場予想上回る</title>
+      <link>https://finance.yahoo.com/news/220000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Fixture item for tests.</description>
+    </item>
+    <item>
+      <title>Second 7203.T headline</title>
+      <link>https://finance.yahoo.com/news/220000601002.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Another fixture item.</description>
+    </item>
+  </channel>
+</rss>
