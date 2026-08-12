@@ -58,6 +58,15 @@ SOURCE_LABELS = {
     "asx_announcements": "ASX Market Announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
+    "ceoca_ca": "CEO.ca (CA)",
+    "hotcopper_au": "HotCopper (AU)",
+    "lse_share_chat": "LSE Share Chat (UK)",
+    "xueqiu": "Xueqiu (CN/HK)",
+    "seeking_alpha": "Seeking Alpha (US)",
+    "yellowbrick": "Yellowbrick Investing (US)",
+    "substack": "Substack (US)",
+    "x_community": "X (US)",
+    "vic": "Value Investors Club (US)",
     "amf_oam": "AMF OAM",
     "fsma_stori": "FSMA STORI",
     "be_second_disclosure": "BE second disclosure (not wired)",
@@ -88,6 +97,9 @@ SOURCE_LABELS = {
     "edinet": "EDINET",
 }
 PROVIDER_LABELS = {
+    "yellowbrick": "Yellowbrick Investing (US)",
+    "x_community": "X (US)",
+    "vic": "Value Investors Club (US)",
     "news": "Finnhub News",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
@@ -109,6 +121,12 @@ PROVIDER_LABELS = {
     "asx_announcements": "ASX Market Announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
+    "ceoca_ca": "CEO.ca (CA)",
+    "hotcopper_au": "HotCopper (AU)",
+    "lse_share_chat": "LSE Share Chat (UK)",
+    "xueqiu": "Xueqiu (CN/HK)",
+    "seeking_alpha": "Seeking Alpha (US)",
+    "substack": "Substack (US)",
     "amf_oam": "AMF OAM",
     "fsma_stori": "FSMA STORI",
     "yahoo_be": "Yahoo Finance BE",
@@ -2303,6 +2321,56 @@ def normalize_tw_ticker(ticker: str) -> str:
     return cleaned
 
 
+def normalize_cn_ticker(ticker: str) -> str:
+    """Normalize a China A-share symbol to the Xueqiu SH/SZ form.
+
+    Accepts ``600519``, ``600519.SS``, ``600519.SH``, ``SH600519``
+    (Shanghai) and ``000001``, ``000001.SZ``, ``SZ000001`` (Shenzhen) and
+    returns the Xueqiu symbol form ``SH600519`` / ``SZ000001``. Shanghai
+    codes start with 6 (or carry a ``.SS`` / ``.SH`` suffix); everything
+    else maps to Shenzhen. Non-numeric input is preserved unchanged rather
+    than silently dropped.
+    """
+    cleaned = str(ticker).strip().upper()
+    # 剥掉常见交易所后缀（.SS/.SH/.SZ，空格或横线分隔也容忍）。
+    changed = True
+    while changed:
+        changed = False
+        for separator in (".", " ", "-"):
+            for suffix in ("SH", "SS", "SZ"):
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    # 已带 Xueqiu 前缀（SH600519 / SZ000001 本身）时直接校验并返回。
+    if cleaned.startswith("SH") or cleaned.startswith("SZ"):
+        prefix, digits = cleaned[:2], cleaned[2:]
+        if digits.isdigit():
+            return prefix + digits
+    if not cleaned.isdigit():
+        return cleaned or str(ticker).strip().upper()
+    exchange = "SH" if cleaned.startswith("6") else "SZ"
+    return exchange + cleaned
+
+
+def normalize_xq_symbol(ticker: str, market: str) -> str:
+    """Normalize a CN/HK ticker to its Xueqiu symbol form.
+
+    CN symbols map to ``SH600519`` / ``SZ000001`` (see
+    ``normalize_cn_ticker``); HK symbols map to ``HK`` + the five-digit
+    HKEX code, e.g. ``0700`` → ``HK00700`` (via ``normalize_hk_ticker``).
+    Any other market is preserved unchanged (uppercased).
+    """
+    if str(market or "").lower() == "cn":
+        return normalize_cn_ticker(ticker)
+    if str(market or "").lower() == "hk":
+        return "HK" + normalize_hk_ticker(ticker)
+    return str(ticker).strip().upper()
+
+
 _CA_TICKER_SUFFIXES = ("TSXV", "TSX", "NEO", "TO", "CN", "NE", "V")
 _CA_TICKER_SEPARATORS = (".", " ", "-")
 
@@ -2358,6 +2426,19 @@ def normalize_ca_ticker(ticker: str) -> str:
             if changed:
                 break
     return cleaned
+
+
+def normalize_uk_ticker(ticker: str) -> str:
+    """Normalize a London Stock Exchange symbol to its canonical root form.
+
+    Accepts plain symbols (``VOD``) and common LSE suffix forms (``VOD.L``,
+    ``BP.``; trailing dots are stripped, and stacked suffixes like
+    ``VOD.L.L`` collapse to ``VOD``). The root symbol is uppercased.
+    """
+    cleaned = str(ticker).strip().upper()
+    while cleaned.endswith(".L") or cleaned.endswith("."):
+        cleaned = cleaned[:-2] if cleaned.endswith(".L") else cleaned[:-1]
+    return cleaned.strip()
 
 
 _FR_TICKER_SUFFIXES = ("PAR", "PA")

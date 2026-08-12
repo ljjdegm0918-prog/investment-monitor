@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<rss xmlns:sa="https://seekingalpha.com/api/1.0" version="2.0">
+  <channel>
+    <title>Apple Inc. - News and Analysis on Seeking Alpha</title>
+    <link>https://seekingalpha.com</link>
+    <item>
+      <title>Apple glass iPhone stays on track</title>
+      <link>https://seekingalpha.com/symbol/AAPL/news?source=feed_symbol_AAPL</link>
+      <guid isPermaLink="false">https://seekingalpha.com/MarketCurrent:4630410</guid>
+      <pubDate>Tue, 11 Aug 2026 00:48:04 -0400</pubDate>
+      <description>Short market current blurb.</description>
+    </item>
+    <item>
+      <title>Apple analysis deep dive</title>
+      <link>https://seekingalpha.com/article/4932193-apple-analysis?source=feed_symbol_AAPL</link>
+      <guid isPermaLink="false">https://seekingalpha.com/Article:4932193</guid>
+      <pubDate>Tue, 11 Aug 2026 10:15:00 -0400</pubDate>
+    </item>
+    <item>
+      <title>Older Apple item filtered out</title>
+      <link>https://seekingalpha.com/article/4000001-older</link>
+      <guid isPermaLink="false">https://seekingalpha.com/Article:4000001</guid>
+      <pubDate>Mon, 10 Aug 2026 23:50:00 -0400</pubDate>
+    </item>
+  </channel>
+</rss>

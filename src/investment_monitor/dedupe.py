@@ -16,11 +16,21 @@ ticker + Taipei day + normalized title. TW news (yahoo_tw / google_news_tw)
 pairs across sources on ticker + Taipei day + normalized title. For CA, no
 disclosure connector is wired (SEDAR+ A3 spike), so regulatory filings never
 get a key and are never annotated; CA news (yahoo_ca / google_news_ca)
-pairs across sources on ticker + Toronto day + normalized title. For AU,
+pairs across sources on ticker + Toronto day + normalized title. CA
+community currently has a single source (`ceoca_ca`); soft-dedupe uses the
+CEO.ca spiel id, or a source-scoped title fallback (ticker + Toronto day +
+normalized title). With only one community source wired there is no
+cross-source community pairing — same-source duplicate rows can still
+annotate. For AU,
 the only wired disclosure source is asx_announcements, which pairs on its
 stable ASX document key, or on a source-scoped title fallback (ticker +
 Sydney day + normalized title); AU news (yahoo_au / google_news_au) pairs
-across sources on ticker + Sydney day + normalized title. For FR,
+across sources on ticker + Sydney day + normalized title. AU community
+currently has a single source (`hotcopper_au`); soft-dedupe uses the
+HotCopper thread id, or a source-scoped title fallback (ticker + Sydney
+day + normalized title). With only one community source wired there is no
+cross-source "Also seen on" pairing for community — same-source duplicate
+rows can still annotate. For FR,
 the only wired disclosure source is amf_oam, which pairs on its stable OAM
 document id, or on a source-scoped title fallback (ticker + Paris day +
 normalized title); FR news (yahoo_fr / google_news_fr) pairs across sources
@@ -85,6 +95,16 @@ For EUX (Eurex Core derivatives), no disclosure connector is wired
 (circular A3 spike), so regulatory filings never get a key and are never
 annotated; EUX news (google_news_eux only - no Yahoo suffix exists for
 Eurex derivatives) pairs on product code + Berlin day + normalized title.
+For Substack (US newsletter platform, no structured ticker forum), the
+only wired community source is `substack`, which pairs on its stable
+post id (`external_id` = `substack-{guid}`), or on a source-scoped title
+fallback (ticker + New York day + normalized title). With only one
+Substack community source wired there is no cross-source community
+pairing — same-source duplicate rows can still annotate. Substack
+connector is a LIVE publication-whitelist RSS connector (spike
+2026-08-11); category is newsletter article/news metadata, not
+forum/discussion posts. No structured ticker binding: coverage depends
+on whitelist quality and optional client-side keyword match quality.
 """
 
 from __future__ import annotations
@@ -97,8 +117,10 @@ from zoneinfo import ZoneInfo
 KST = ZoneInfo("Asia/Seoul")
 LONDON = ZoneInfo("Europe/London")
 HKT = ZoneInfo("Asia/Hong_Kong")
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 TAIPEI = ZoneInfo("Asia/Taipei")
 TORONTO = ZoneInfo("America/Toronto")
+NEW_YORK = ZoneInfo("America/New_York")
 SYDNEY = ZoneInfo("Australia/Sydney")
 PARIS = ZoneInfo("Europe/Paris")
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -174,6 +196,17 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_trq": 36,
     "google_news_eux": 37,
 }
+COMMUNITY_SOURCE_PRIORITY = {
+    "ceoca_ca": 0,
+    "hotcopper_au": 0,
+    "lse_share_chat": 0,
+    "xueqiu": 0,
+    "seeking_alpha": 0,
+    "yellowbrick": 0,
+    "substack": 0,
+    "x_community": 0,
+    "vic": 0,
+}
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
     "investegate": "Investegate",
@@ -232,6 +265,15 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_emf": "Google News (EMF)",
     "google_news_trq": "Google News (TRQ)",
     "google_news_eux": "Google News (EUX)",
+    "ceoca_ca": "CEO.ca (CA)",
+    "hotcopper_au": "HotCopper (AU)",
+    "lse_share_chat": "LSE Share Chat (UK)",
+    "xueqiu": "Xueqiu (CN/HK)",
+    "seeking_alpha": "Seeking Alpha (US)",
+    "yellowbrick": "Yellowbrick Investing (US)",
+    "substack": "Substack (US)",
+    "x_community": "X (US)",
+    "vic": "Value Investors Club (US)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -245,6 +287,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
         "sg", "be", "ch", "pl", "se", "aq", "cxe", "emf", "trq", "eux",
+        "cn", "us",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -252,6 +295,8 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
         return _filing_key(item, market)
     if source_type == "news":
         return _news_key(item, market)
+    if source_type == "community":
+        return _community_key(item, market)
     return None
 
 
@@ -686,6 +731,10 @@ def _tw_filing_key(item: Mapping[str, Any]) -> Optional[str]:
 
 
 def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
+    if market == "us":
+        # No US news source is wired yet (yahoo_us / google_news_us arrive in
+        # a later change); US news rows must never be cross-annotated.
+        return None
     zone = (
         KST
         if market == "kr"
@@ -736,6 +785,92 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     return None
 
 
+def _community_key(item: Mapping[str, Any], market: str) -> Optional[str]:
+    """Community soft-dedupe key (display-only; never drops rows).
+
+    Prefer stable provider ids (HotCopper thread id, CEO.ca spiel id,
+    Xueqiu status id); otherwise use a source-scoped title fallback so a
+    future second community connector is never paired by title alone.
+    """
+    source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    if market == "au":
+        thread_id = str(metadata.get("thread_id") or "").strip()
+        if thread_id and source == "hotcopper_au":
+            return f"au:community:hotcopper:{thread_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, SYDNEY)
+        if title and day:
+            return (
+                f"au:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    if market == "ca":
+        spiel_id = str(metadata.get("spiel_id") or "").strip()
+        if spiel_id and source == "ceoca_ca":
+            return f"ca:community:ceoca:{spiel_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, TORONTO)
+        if title and day:
+            return (
+                f"ca:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    if market == "uk":
+        thread_id = str(metadata.get("thread_id") or "").strip()
+        if thread_id and source == "lse_share_chat":
+            return f"uk:community:lse_share_chat:{thread_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, LONDON)
+        if title and day:
+            return (
+                f"uk:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    if market == "cn":
+        status_id = str(metadata.get("status_id") or "").strip()
+        if status_id and source == "xueqiu":
+            return f"cn:community:xueqiu:{status_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, SHANGHAI)
+        if title and day:
+            return (
+                f"cn:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    if market == "hk":
+        status_id = str(metadata.get("status_id") or "").strip()
+        if status_id and source == "xueqiu":
+            return f"hk:community:xueqiu:{status_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, HKT)
+        if title and day:
+            return (
+                f"hk:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    if market == "us":
+        content_id = str(metadata.get("content_id") or "").strip()
+        content_kind = str(metadata.get("content_kind") or "").strip()
+        if content_id and source == "seeking_alpha":
+            kind = content_kind or "item"
+            return f"us:community:seeking_alpha:{kind}:{content_id}"
+        title = normalize_title(item.get("title"))
+        day = _local_day(item, NEW_YORK)
+        if title and day:
+            return (
+                f"us:community:title:{source}:"
+                f"{item.get('ticker')}:{day}:{title}"
+            )
+        return None
+    return None
+
+
 def _receipt_number(item: Mapping[str, Any]) -> Optional[str]:
     metadata = item.get("raw_metadata") or {}
     raw = (
@@ -765,11 +900,12 @@ def _local_day(
 
 def _pick_primary(group: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
     source_type = str(group[0].get("source_type") or "")
-    priority = (
-        FILING_SOURCE_PRIORITY
-        if source_type == "regulatory_filing"
-        else NEWS_SOURCE_PRIORITY
-    )
+    if source_type == "regulatory_filing":
+        priority = FILING_SOURCE_PRIORITY
+    elif source_type == "community":
+        priority = COMMUNITY_SOURCE_PRIORITY
+    else:
+        priority = NEWS_SOURCE_PRIORITY
 
     def rank(item: Mapping[str, Any]) -> Tuple[int, int]:
         return (

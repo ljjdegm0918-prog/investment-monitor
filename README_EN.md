@@ -1,64 +1,99 @@
 # Investment Monitor
 
-中文 · [English](README_EN.md)
+Investment Monitor is a local, list-centered workspace for monitoring financial
+information. The first web MVP uses the SEC EDGAR connector already in this
+project and leaves clear source boundaries for future News and Community
+connectors.
 
-> **说明：** Web 界面目前仍为英文。
+The web interface is in English. It has three fixed lists:
 
-Investment Monitor 是一个以列表为中心的本地金融信息监控工作区。首个 Web MVP 使用本项目已有的 SEC EDGAR 连接器，并为 News 与 Community 连接器预留清晰的数据源边界。
+- Holdings
+- Planned Purchases
+- Watchlist
 
-Web 界面为英文，包含三个固定列表：
+One company may belong to any combination of these lists. One SEC filing is
+stored once and shown with every applicable list badge, so belonging to several
+lists does not duplicate the filing.
 
-- Holdings（持仓）
-- Planned Purchases（计划买入）
-- Watchlist（观察列表）
+## What is connected
 
-同一家公司可属于上述任意组合。一份 SEC 申报只存储一次，并在所有适用列表徽章下展示，因此属于多个列表不会重复存储申报记录。
-
-## 已接入能力
-
-| 信息类型 | Provider | 生产状态 |
+| Information type | Provider | Production status |
 | --- | --- | --- |
-| Filings | SEC EDGAR | 近期同步后为最新；超过 36 小时视为过期 |
-| News | Finnhub company news | 成功同步后已接入；需配置 `FINNHUB_API_KEY` |
-| Community | CEO.ca (CA) LIVE；Seeking Alpha (US) LIVE RSS；Substack (US) LIVE publication-whitelist RSS；Yellowbrick Investing (US) stub；X (US) stub；HotCopper (AU) stub；LSE Share Chat (UK) stub；Xueqiu (CN/HK) stub | CA/US 社区已接入（SA 为公开 article/news RSS，非论坛；Substack 为 LIVE publication-whitelist article/news 元数据，无结构化 ticker 绑定）；Yellowbrick / X 为 stub（无稳定公开 login-free surface；X 官方 API 需付费 Bearer，本连接器未接线 key 路径）；AU/UK/CN/HK 为 stub |
-| Research | None | 未接入 |
+| Filings | SEC EDGAR | Up to date after a recent sync; stale after 36 hours |
+| News | Finnhub company news | Connected after a successful sync; needs `FINNHUB_API_KEY` |
+| Community | CEO.ca (CA) LIVE; Seeking Alpha (US) LIVE RSS; Substack (US) LIVE publication-whitelist RSS; Yellowbrick Investing (US) stub; HotCopper (AU) stub; LSE Share Chat (UK) stub; Xueqiu (CN/HK) stub | CA/US community connected (SA is public article/news RSS, not forum; Substack is LIVE publication-whitelist article/news metadata, no structured ticker binding); Yellowbrick is stub (no stable public surface); AU/UK/CN/HK are stubs |
+| Research | None | Not connected |
 
-仓库中仍保留用于自动化可扩展性测试的 mock 连接器。它们未在 `config/settings.yaml` 中启用，生成的 mock 数据也不会进入生产 Web 信息流。未来的真实 community 连接器将使用独立的 `source` 名称与 `source_type="community"`，不会被标注为 SEC。
+The repository still contains mock connectors for automated extensibility
+tests. They are not enabled in `config/settings.yaml`, and generated mock data
+is excluded from the production web feed. A future real community connector
+would use its own `source` name and `source_type="community"`; it would not be
+labelled as SEC.
 
-## 新手入门
+## US Community sources
 
-打开 Terminal 并进入项目：
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| seeking_alpha | community | none | **LIVE** public combined RSS `https://seekingalpha.com/api/sa/combined/{SYMBOL}.xml` (spike 2026-08-11; `tests/fixtures/seeking_alpha/SPIKE.md`). Article/news metadata only (`MarketCurrent` + `Article`); ~30-item rolling window; America/New_York day filter; stdlib urllib, no cookie. HTML symbol/forum/comments pages return PerimeterX 403 — out of scope. **Not** forum discussion posts. |
+| yellowbrick | community | none | Yellowbrick Investing (US) social stock-pitch community. **Honest stub:** no stable public login-free surface (spike 2026-08-11; `tests/fixtures/yellowbrick/SPIKE.md`): `ybrick.co` dead (DNS/transport error); `joinyellowbrick.com/stocks`, `/ideas`, `/pitches` all return HTTP 404; Substack is waitlist-only. `collect()` returns `[]`. Login/Supabase-key scraping out of scope. |
+| substack | community | none | **LIVE** publication-whitelist article/news metadata via public RSS (`https://{publication}/feed`; spike 2026-08-11; `tests/fixtures/substack/SPIKE.md`). stdlib urllib, no cookie. Default whitelist: noahpinion.blog, notboring.co, astralcodexten.com, paulkrugman.substack.com, oneusefulthing.org. America/New_York calendar-day filter. **No structured ticker binding:** optional client-side keyword match (best-effort, false positives/negatives). Category is newsletter article/news metadata, **not** forum/discussion posts. Whitelist requires maintenance against off-platform publication migration. |
+| x_community | community | none | X (formerly Twitter) US social post stream. **Honest stub (Stub·STOP):** no stable public login-free surface for ticker discovery (spike 2026-08-11; `tests/fixtures/x_community/SPIKE.md`): `x.com` search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Official X API v2 `search/recent` requires paid Bearer/OAuth2 — **this connector does not wire a key path**. No-key HTML / undocumented syndication scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: social post stream (not forum/article). |
+| vic | community | none | Value Investors Club (US) investment-idea club. **Honest stub (Stub·STOP):** no stable public login-free ticker+day surface (spike 2026-08-11; `tests/fixtures/vic/SPIKE.md`): `/feed` `/rss` `/api/ideas` `/sitemap.xml` return HTML shells (not RSS/JSON); `/ideas?symbol=TICKER` does not filter (identical idea-href set for MSFT/AAPL/bare `/ideas`); homepage free signup only unlocks **45-day delayed** guest ideas; membership/login and HTML catalog scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: club investment-idea write-ups (not forum/article RSS). |
+
+US feed Community soft-dedupe uses the Seeking Alpha `content_id` (or a
+source-scoped title fallback on the same source). Substack pairs on its
+stable post id (`external_id` = `substack-{guid}`), or on a source-scoped
+title fallback (ticker + New York day + normalized title). Yellowbrick, X,
+and VIC are stubs: `collect()` returns no rows, so they never contribute
+duplicate keys.
+
+## Beginner setup
+
+Open Terminal and enter the project:
 
 ```bash
 cd "/Users/jiajunliu/Documents/New project/investment-monitor"
 ```
 
-检查 Python（需 3.9 或更高版本）：
+Check Python (3.9 or newer is required):
 
 ```bash
 python3 --version
 ```
 
-项目无第三方运行时依赖。SEC 要求自动化客户端声明应用名称与真实联系邮箱。一次性创建本地环境文件：
+The project has no third-party runtime dependencies. SEC requires automated
+clients to declare an application name and a real contact address. Create the
+local environment file once:
 
 ```bash
 cp .env.example .env
 ```
 
-打开 `.env`，将 `your-email@example.com` 替换为真实联系地址。Web 服务会自动加载该文件，且不会覆盖托管平台提供的环境变量。SEC 连接器保留超时、重试、缓存及每秒最多五次请求的限制。若映射缓存刷新暂时失败，将使用最后一次有效的本地副本。
+Open `.env` and replace `your-email@example.com` with a real contact address.
+The web service automatically loads this file without overwriting environment
+variables supplied by a hosting platform. The SEC connector keeps its timeout,
+retry, cache, and maximum-five-requests-per-second controls. If a mapping-cache
+refresh temporarily fails, the last valid local copy is used.
 
-## 1. 配置初始标的池
+## 1. Configure the starting universe
 
-编辑 `config/universe.csv`：
+Edit `config/universe.csv`:
 
 ```csv
 ticker,list_type,market
 AAPL,holdings,us
 ```
 
-CSV 仅用于初始导入。接受 1–10 行唯一的 (ticker, market) 组合，`list_type` 必须为 `holdings`、`planned` 或 `watchlist`。可选列 `market` 接受 `us`、`cn`、`hk` 或 `unknown`，默认为 `us`。首次 Web 启动后，SQLite 中的活跃成员关系为集合的权威来源；在 Web 界面添加的公司（如 NVDA）无需再写入 CSV。
+The CSV is an initial import only. It accepts 1-10 unique (ticker, market)
+rows, and `list_type` must be `holdings`, `planned`, or `watchlist`. The
+optional `market` column accepts `us`, `cn`, `hk`, or `unknown` and defaults
+to `us`. After the first web
+startup, active memberships in SQLite are the collection source of truth. A
+company such as NVDA added in the web interface does not need to be added to
+the CSV.
 
-`config/settings.yaml` 声明逻辑数据源（sec、news、community、research）、启用状态，并选择本地 SQLite 文件：
+`config/settings.yaml` declares the logical sources (sec, news, community,
+research), their enabled state, and selects the local SQLite file:
 
 ```yaml
 database_path: ../data/investment_monitor.sqlite3
@@ -81,44 +116,42 @@ sources:
     enabled: false
 ```
 
-News 数据源为 Finnhub 公司新闻。在 `.env` 中设置 `FINNHUB_API_KEY`（见 `.env.example`）以启用；无密钥时该源保持 Not connected 并在采集时跳过。非 US 市场（cn/hk）在可能时映射为 Finnhub 符号（`.HK`、`.SS`/`.SZ`）；绝不使用 SEC 映射来伪造 A 股或港股解析。
+The News source is Finnhub company news. Set `FINNHUB_API_KEY` in `.env` (see
+`.env.example`) to enable it; without a key the source stays Not connected
+and is skipped by collection. Non-US markets (cn/hk) are mapped to Finnhub
+symbols when possible (`.HK`, `.SS`/`.SZ`); SEC mapping is never used to fake
+A-share or HK resolution.
 
-### 美国数据源（US）
+### Korea sources (KR)
+- OpenDART (`DART_API_KEY`): official disclosure API; corp_code mapping and
+  disclosure list.
+- KIND (KRX): key-free exchange disclosure page scrape; may break without
+  notice.
+- Naver Finance (`naver_news`): key-free stock news scrape; fragile, may be
+  empty from non-KR networks. Hankyung/TheBell are implemented but disabled
+  until their endpoints are reachable.
+- Tradeable universe: cached from the OpenDART corpCode listing; ETF/ETN
+  coverage is partial. FSC/data.go.kr is skipped because registration
+  requires Korean identity.
+- Feed soft-dedupe (default on, `KR_FEED_SOFT_DEDUPE`): OpenDART/KIND items
+  sharing a 14-digit receipt number are annotated in the feed with an
+  "Also seen on" label; every row stays (totals unchanged).
 
-| Source | Type | Key | Boundaries |
-|---|---|---|---|
-| sec | filings | none (EDGAR) | Official SEC company filings |
-| news / Finnhub | news | `FINNHUB_API_KEY` | US company news |
-| seeking_alpha | community | none | **LIVE** public combined RSS `https://seekingalpha.com/api/sa/combined/{SYMBOL}.xml` (spike 2026-08-11; `tests/fixtures/seeking_alpha/SPIKE.md`). Article/news metadata only (`MarketCurrent` + `Article`); ~30-item rolling window; America/New_York day filter; stdlib urllib, no cookie. HTML symbol/forum/comments pages return PerimeterX 403 — out of scope. **Not** forum discussion posts. |
-| substack | community | none | **LIVE** publication-whitelist article/news metadata via public RSS (`https://{publication}/feed`; spike 2026-08-11; `tests/fixtures/substack/SPIKE.md`). stdlib urllib, no cookie. Default whitelist: noahpinion.blog, notboring.co, astralcodexten.com, paulkrugman.substack.com, oneusefulthing.org. America/New_York calendar-day filter. **No structured ticker binding:** optional client-side keyword match (best-effort, false positives/negatives). Category is newsletter article/news metadata, **not** forum/discussion posts. Whitelist requires maintenance against off-platform publication migration. |
-| yellowbrick | community | none | Yellowbrick Investing (US) social stock-pitch community. **Honest stub:** no stable public login-free surface (spike 2026-08-11; `tests/fixtures/yellowbrick/SPIKE.md`): `ybrick.co` dead (DNS/transport error); `joinyellowbrick.com/stocks`, `/ideas`, `/pitches` all return HTTP 404; Substack is waitlist-only. `collect()` returns `[]`. Login/Supabase-key scraping out of scope. |
-| x_community | community | none | X (formerly Twitter) US social post stream. **Honest stub (Stub·STOP):** no stable public login-free surface for ticker discovery (spike 2026-08-11; `tests/fixtures/x_community/SPIKE.md`): `x.com` search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Official X API v2 `search/recent` requires paid Bearer/OAuth2 — **this connector does not wire a key path**. No-key HTML / undocumented syndication scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: social post stream (not forum/article). |
-| vic | community | none | Value Investors Club (US) investment-idea club. **Honest stub (Stub·STOP):** no stable public login-free ticker+day surface (spike 2026-08-11; `tests/fixtures/vic/SPIKE.md`): `/feed` `/rss` `/api/ideas` `/sitemap.xml` return HTML shells (not RSS/JSON); `/ideas?symbol=TICKER` does not filter (identical idea-href set for MSFT/AAPL/bare `/ideas`); homepage free signup only unlocks **45-day delayed** guest ideas; membership/login and HTML catalog scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: club investment-idea write-ups (not forum/article RSS). |
-
-US feed Community 软去重：Seeking Alpha 用 `content_id`（或同源 scoped 标题回退）；Substack 用稳定 post id（`external_id` = `substack-{guid}`）或同源 scoped 标题回退（ticker + New York day + normalized title）。Yellowbrick / X / VIC 为 stub，`collect()` 无行，不产生去重键。
-
-### 韩国数据源（KR）
-
-- OpenDART（`DART_API_KEY`）：官方披露 API；corp_code 映射与披露列表。
-- KIND（KRX）：免密钥的交易所披露页抓取；可能随时失效。
-- Naver Finance（`naver_news`）：免密钥的股票新闻抓取；脆弱，非 KR 网络可能为空。Hankyung/TheBell 已实现但暂禁用，直至其端点可访问。
-- 可交易标的池：缓存自 OpenDART corpCode 列表；ETF/ETN 覆盖不完整。FSC/data.go.kr 因注册需韩国身份而跳过。
-- Feed 软去重（默认开启，`KR_FEED_SOFT_DEDUPE`）：共享 14 位受理编号的 OpenDART/KIND 条目在 feed 中标注 "Also seen on"；所有行保留（总数不变）。
-
-### 英国数据源（UK）
-
+### UK sources (UK)
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | companies_house | filings | `COMPANIES_HOUSE_API_KEY` — Test app keys authenticate only against `https://api-sandbox.company-information.service.gov.uk`; Live keys use the default live API | Statutory company filings (accounts, officers), **not RNS** |
 | investegate | filings | none | RNS-class public mirror, not an official LSEG RNS feed; page scrape, may break without notice |
 | uk_universe / FIRDS | breadth cache | none | No ticker mnemonics; ISIN-keyed plus a small blue-chip ticker seed; never enters the feed |
 | yahoo_uk | news | none | Free public RSS mirror; may be loosely related and fragile; `.L` suffix added at request time only |
-| lse_share_chat | community | none | LSE.co.uk Share Chat. **Honest stub:** HTTP 403 to automated clients; londonstockexchange.com discussion URLs are SPA shells (spike 2026-08-11; `tests/fixtures/lse_share_chat/SPIKE.md`). `collect()` returns `[]`. Login/paywall out of scope. |
 | Finnhub | news | existing | **US only** — never queried for UK |
 
-UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Investegate）或 Companies House transaction id 上标注；标题回退仅限同源，Companies House 与 Investegate 不会因标题交叉标注。News 按 ticker + London day + normalized title 配对。Community 软去重使用 LSE Share Chat thread id（或同源 scoped 标题回退）；当前仅 `lse_share_chat` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
+UK feed soft-dedupe (display only, all rows kept): filings annotate on RNS ids
+(Investegate) or Companies House transaction ids; title fallback is
+same-source only, so Companies House and Investegate are never cross-annotated
+by title. News pairs on ticker + London day + normalized title.
 
-### 香港数据源（HK）
+### Hong Kong sources (HK)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -126,21 +159,16 @@ UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Invest
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
 | hkex_di | filings | none | Legacy DI archive 2003–2017; **disabled by default**; fragile |
-| xueqiu | community | none | Xueqiu (雪球) HK statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
 
-HK ticker 规范为五位代码（`700` / `0700` / `00700.HK` → `00700`）；Xueqiu 社区符号为 `HK` + 五位代码（`0700` → `HK00700`）。Finnhub **仅 US**。软去重：hkexnews 按 NEWS_ID，hkex_di 按 form serial（标题永不交叉配对）；yahoo_hk 按 ticker + Hong Kong day；Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
+HK tickers are canonical five-digit codes (`700` / `0700` / `00700.HK` →
+`00700`). Finnhub is **US only**. Soft-dedupe: hkexnews on NEWS_ID, hkex_di on
+form serial (never cross-paired by title); yahoo_hk on ticker + Hong Kong day.
 
-### 中国大陆数据源（CN）
+### Canada sources (CA)
 
-| Source | Type | Key | Boundaries |
-|---|---|---|---|
-| xueqiu | community | none | Xueqiu (雪球) CN statuses. **Honest stub:** xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require `xq_a_token` session cookie (error `400016`) (spike 2026-08-11; `tests/fixtures/xueqiu/SPIKE.md`). `collect()` returns `[]`. Login/WAF bypass out of scope. |
-
-CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `SH`/`SZ` + 六位代码（`600519` / `600519.SS` / `SH600519` → `SH600519`；`000001.SZ` → `SZ000001`）。Finnhub **仅 US**。Community 软去重使用 Xueqiu status id（或同源 scoped 标题回退）。
-
-### 加拿大数据源（CA）
-
-**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存 + Yahoo/Google CA news + 软去重。**未接入：** SEDAR+ 披露、CSE universe/filings、NEO universe/filings（见下方边界说明）。
+**Not a full Canadian market track.** Wired today: TSX/TSXV universe cache +
+Yahoo/Google CA news + soft-dedupe. **Not wired:** SEDAR+ disclosure, CSE
+universe/filings, NEO universe/filings (see boundaries below).
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -150,11 +178,21 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 | ceoca_ca | community | none | CEO.ca channel spiels via key-free JSON API (`new-api.ceo.ca`; spike 2026-08-11). API returns ~50 spiels/page (`limit` ignored); paginate with `until`. Toronto calendar-day filter; channel page URL only — no per-spiel deep link. Undocumented API may change without notice. |
 | sedar_plus / cse_filings / neo_filings | filings | — | Listed in Settings as **Not implemented**. Regulatory disclosure is **deliberately not wired** (CA-1 spike, re-verified CA-4): SEDAR+ has no stable free public API (Radware 403); CSE/NEO filings share the same network blockers as their directories |
 
-`market=ca` 公司使用规范根 ticker（`RY` / `RY.TO` / `RY-TO` 均存为 `RY`）。Board 在 universe 温热时由 `ca_universe_name_map()` 写入 `exchange`，冷启动时从输入后缀推断。公司保持 unmapped。Finnhub **仅 US**，不对 CA 查询。
+`market=ca` companies use canonical root tickers (`RY` / `RY.TO` / `RY-TO`
+all store as `RY`). Board is written into `exchange` from
+`ca_universe_name_map()` when warm, or inferred from the typed suffix when
+cold. Companies remain unmapped. Finnhub is **US only** and never queried for
+CA.
 
-CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。监管 filings 无 CA 披露连接器，永不标注。Community 软去重使用 CEO.ca spiel id（或同源 scoped 标题回退）；仅接入 `ceoca_ca` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
+CA feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch, default on): `yahoo_ca` / `google_news_ca` news pairs across sources
+on ticker + Toronto day (`America/Toronto`) + normalized title. Regulatory
+filings are never annotated because no CA disclosure connector is wired.
+Community soft-dedupe uses the CEO.ca spiel id (or a source-scoped title
+fallback); with only `ceoca_ca` wired there is no cross-source community
+pairing — same-source duplicates can still show "Also seen on".
 
-### 台湾数据源（TW）
+### Taiwan sources (TW)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -164,9 +202,12 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW`/`.TWO` at request time from board; may break without notice |
 | google_news_tw | news | none | Key-free Google News RSS (`q={ticker}.TW`, zh-TW); may break without notice |
 
-`market=tw` 使用规范四位 ticker（`2330` / `02330` / `2330.TW` → `2330`）。Finnhub **仅 US**。软去重：TWSE/TPEx filings 仅同源（标题永不跨板配对）；news 按 ticker + Taipei day + normalized title 配对。
+`market=tw` uses canonical four-digit tickers (`2330` / `02330` / `2330.TW`
+→ `2330`). Finnhub is **US only**. Soft-dedupe: TWSE/TPEx filings are
+same-source only (never cross-board by title); news pairs on ticker + Taipei
+day + normalized title.
 
-### 澳大利亚数据源（AU）
+### Australia sources (AU)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -176,9 +217,14 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
 | hotcopper_au | community | none | HotCopper ASX ticker boards. **Honest stub:** HTTP 403 Cloudflare on public pages (spike 2026-08-11; `tests/fixtures/hotcopper/SPIKE.md`). `collect()` returns `[]` until a stable public day-filter feed exists. Login/paywall out of scope. |
 
-`market=au` 使用规范根 ticker（`BHP` / `BHP.AX` → `BHP`）。Finnhub **仅 US**。软去重：ASX filings 按 document key 配对（或同源标题回退）；news 按 ticker + Sydney day + normalized title 配对。Community 软去重使用 HotCopper thread id（或同源 scoped 标题回退）；仅接入 `hotcopper_au` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
+`market=au` uses canonical root tickers (`BHP` / `BHP.AX` → `BHP`). Finnhub
+is **US only**. Soft-dedupe: ASX filings pair on document key (or same-source
+title fallback); news pairs on ticker + Sydney day + normalized title.
+Community soft-dedupe uses the HotCopper thread id (or a source-scoped title
+fallback); with only `hotcopper_au` wired there is no cross-source community
+pairing — same-source duplicates can still show "Also seen on".
 
-### 法国数据源（FR）
+### France sources (FR)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -187,11 +233,22 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | yahoo_fr | news | none | Yahoo Finance FR public RSS (`region=FR`); `.PA` at request time |
 | google_news_fr | news | none | Key-free Google News RSS (`hl=fr&gl=FR&ceid=FR:fr`) |
 
-`market=fr` 使用规范根 ticker（`MC` / `MC.PA` → `MC`；法国 ISIN 原样保留）。Add-company 在 universe 温热时可从 `fr_universe_name_map()` 回填 name/board。Finnhub **仅 US**。软去重：AMF filings 按 OAM document id 配对（或同源标题回退）；news 按 ticker + Paris day 配对。
+`market=fr` uses canonical root tickers (`MC` / `MC.PA` → `MC`; French ISINs
+kept as-is). Add-company can backfill name/board from `fr_universe_name_map()`
+when warm. Finnhub is **US only**. Soft-dedupe: AMF filings pair on OAM
+document id (or same-source title fallback); news pairs on ticker + Paris day.
 
-### 德国数据源（DE）
+### Germany sources (DE)
 
-「German ETF's」深化沿用现有 `market=de` 代码 — **无** `market=etf` / `de_etf` / `xetra_etf`。目标为 Xetra / Deutsche Börse Cash Market ETF（及同 CSV 的 ETN/ETC）工具，与现有普通股（CS）universe 并存；**非** Eurex 衍生品，**非**付费 Deutsche Börse 数据产品。最终状态：universe 现接受 CSV Instrument Types `CS`、`ETF`、`ETN`、`ETC`（与 IBKR "German ETF's" 包同一交易所家族），每条记录存储 `instrument_type`，CSV 本身为 Cash Market 文件，不含 Eurex 衍生品。
+The "German ETF's" deepening keeps the existing `market=de` code — there is
+**no** `market=etf` / `de_etf` / `xetra_etf`. It targets Xetra / Deutsche
+Börse Cash Market ETF (and same-CSV ETN/ETC) instruments alongside the
+existing common-share (CS) universe; it is **not** Eurex derivatives and
+not a paid Deutsche Börse data product. Final state: the universe now
+accepts the CSV Instrument Types `CS`, `ETF`, `ETN` and `ETC` (the same
+exchange-traded family as the IBKR "German ETF's" package), each entry
+stores its `instrument_type`, and the CSV itself is a Cash Market file
+with no Eurex derivatives.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -201,9 +258,15 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | yahoo_de | news | none | Yahoo Finance DE public RSS (`region=DE`); `.DE` at request time; shared by stocks and ETFs (DETF-3 live 2026-08-10: `EXS1.DE` / `EXSB.DE` return HTTP 200 but usually empty ETF feeds) |
 | google_news_de | news | none | Key-free Google News RSS (`hl=de&gl=DE&ceid=DE:de`); shared by stocks and ETFs (DETF-3 live: `EXS1.DE` returns items; may be loosely related) |
 
-`market=de` 使用规范根 ticker（`SAP` / `SAP.DE` → `SAP`；德国 ISIN 原样保留）。Add-company 在 universe 温热时可从 `de_universe_name_map()` 回填 name/board/ISIN；ETF/ETN/ETC 工具共用同一 market 代码与 ticker 规则（无独立 etf market code），由 universe 缓存中的 `instrument_type` 区分。Finnhub **仅 US**。软去重：EQS filings 按 news id 配对（或同源标题回退）；news 按 ticker + Berlin day 配对。Unternehmensregister / BaFin HTML 门户 **未接入**（无稳定免费 JSON）。
+`market=de` uses canonical root tickers (`SAP` / `SAP.DE` → `SAP`; German ISINs
+kept as-is). Add-company can backfill name/board/ISIN from `de_universe_name_map()`
+when warm; ETF/ETN/ETC instruments share the same market code and ticker
+rules (no separate etf market code), distinguished by `instrument_type` in
+the universe cache. Finnhub is **US only**. Soft-dedupe: EQS filings pair on news id
+(or same-source title fallback); news pairs on ticker + Berlin day.
+Unternehmensregister / BaFin HTML portals are **not** wired (no stable free JSON).
 
-### 荷兰数据源（NL）
+### Netherlands sources (NL)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -212,11 +275,24 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | yahoo_nl | news | none | Yahoo Finance NL public RSS (`region=NL`, `lang=nl-NL` + `en-US` merged); `.AS` at request time; may be loosely related and break without notice |
 | google_news_nl | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=nl&gl=NL&ceid=NL:nl`); may be loosely related and break without notice |
 
-`market=nl` 公司使用规范根 ticker（`ASML` / `ASML.AS` / `ASML-AMS` 均存为 `ASML`；交易所后缀 `.AS` / `.AMS` / `.AEA` 在添加时剥离，荷兰 ISIN 原样保留，board 可用时写入 `exchange`）并保持 unmapped；`nl_universe_name_map()` 为 add-company 回填 name、board 与 ISIN。Finnhub **仅 US**，不对 NL 查询。News 来自 `yahoo_nl` / `google_news_nl`。
+`market=nl` companies use canonical root tickers (`ASML` / `ASML.AS` /
+`ASML-AMS` all store as `ASML`; exchange suffixes `.AS` / `.AMS` / `.AEA`
+are stripped at add time, Dutch ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped;
+`nl_universe_name_map()` backfills names, board and ISIN for add-company.
+Finnhub is **US only** and never queried for NL. News comes from `yahoo_nl`
+/ `google_news_nl`.
 
-NL feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_nl` / `google_news_nl` news 跨源按 ticker + Amsterdam day（`Europe/Amsterdam`）+ normalized title 配对。`eqs_nl` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Amsterdam day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on …"；总数与分页大小永不缩减。
+NL feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_nl` / `google_news_nl` news
+pairs across sources on ticker + Amsterdam day (`Europe/Amsterdam`) +
+normalized title. `eqs_nl` filings pair on the stable EQS news id, or on a
+same-source title fallback (ticker + Amsterdam day + normalized title);
+with only one disclosure source wired there is no cross-source filing
+pairing. Every row stays in the feed with an "Also seen on …" label;
+totals and page sizes are never shrunk.
 
-### 意大利数据源（IT）
+### Italy sources (IT)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -225,11 +301,23 @@ NL feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | yahoo_it | news | none | Yahoo Finance IT public RSS (`region=IT`, `lang=it-IT` + `en-US` merged; identical titles stay single-language); `.MI` at request time; may be loosely related and break without notice |
 | google_news_it | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=it&gl=IT&ceid=IT:it`); may be loosely related and break without notice |
 
-`market=it` 公司使用规范根 ticker（`ENI` / `ENI.MI` / `ENI-MIL` 均存为 `ENI`；交易所后缀 `.MI` / `.MIL` / `.BIT` 在添加时剥离，意大利 ISIN 原样保留，board 可用时写入 `exchange`）并保持 unmapped。Finnhub **仅 US**，不对 IT 查询。`it_universe_name_map()` 为 add-company 回填 name、board 与 ISIN。News 来自 `yahoo_it` / `google_news_it`。
+`market=it` companies use canonical root tickers (`ENI` / `ENI.MI` /
+`ENI-MIL` all store as `ENI`; exchange suffixes `.MI` / `.MIL` / `.BIT`
+are stripped at add time, Italian ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped. Finnhub is **US only** and
+never queried for IT. `it_universe_name_map()` backfills names, board and
+ISIN for add-company. News comes from `yahoo_it` / `google_news_it`.
 
-IT feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_it` / `google_news_it` news 跨源按 ticker + Rome day（`Europe/Rome`）+ normalized title 配对。`eqs_it` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Rome day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on …"；总数与分页大小永不缩减。
+IT feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_it` / `google_news_it` news
+pairs across sources on ticker + Rome day (`Europe/Rome`) + normalized
+title. `eqs_it` filings pair on the stable EQS news id, or on a same-source
+title fallback (ticker + Rome day + normalized title); with only one
+disclosure source wired there is no cross-source filing pairing. Every row
+stays in the feed with an "Also seen on …" label; totals and page sizes are
+never shrunk.
 
-### 西班牙数据源（ES）
+### Spain sources (ES)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -239,11 +327,27 @@ IT feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | yahoo_es | news | none | Yahoo Finance ES public RSS (`region=ES`, `lang=es-ES` + `en-US` merged; identical titles stay single-language); `.MC` at request time; may be loosely related and break without notice |
 | google_news_es | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=es&gl=ES&ceid=ES:es`); may be loosely related (the `.MC` suffix also matches unrelated "MC" text) and break without notice |
 
-`market=es` 公司使用规范根 ticker（`SAN` / `SAN.MC` / `SAN-MAD` 均存为 `SAN`；交易所后缀 `.MC` / `.MAD` / `.BME` 在添加时剥离，西班牙 ISIN 原样保留，board 可用时写入 `exchange`）并保持 unmapped。Finnhub **仅 US**，不对 ES 查询。`es_universe_name_map()` 为 add-company 回填 name、board 与 ISIN；披露匹配使用 universe 身份（CNMV 用 name/ISIN，BME 用 company key）。News 来自 `yahoo_es` / `google_news_es`。
+`market=es` companies use canonical root tickers (`SAN` / `SAN.MC` /
+`SAN-MAD` all store as `SAN`; exchange suffixes `.MC` / `.MAD` / `.BME`
+are stripped at add time, Spanish ISINs are kept as-is, board goes into
+`exchange` when available) and remain unmapped. Finnhub is **US only** and
+never queried for ES. `es_universe_name_map()` backfills names, board and
+ISIN for add-company; disclosure matching uses the universe identity
+(name/ISIN for CNMV, company key for BME). News comes from `yahoo_es` /
+`google_news_es`.
 
-ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_es` / `google_news_es` news 跨源按 ticker + Madrid day（`Europe/Madrid`）+ normalized title 配对。`cnmv_hr` filings 按稳定 CNMV 注册号（`es:filing:cnmv:...`）配对，`bme_relevant_facts` 按 BME JSON 中同一注册号（`es:filing:bme:...`）配对；两源永不交叉标注（独立 API），标题回退为 source-scoped（ticker + Madrid day + normalized title）。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+ES feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_es` / `google_news_es` news
+pairs across sources on ticker + Madrid day (`Europe/Madrid`) + normalized
+title. `cnmv_hr` filings pair on the stable CNMV registration number
+(`es:filing:cnmv:...`) and `bme_relevant_facts` on the same registration
+number read from the BME JSON (`es:filing:bme:...`); the two sources are
+never cross-annotated (independent APIs), and the title fallback is
+source-scoped (ticker + Madrid day + normalized title). Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
 
-### 新加坡数据源（SG）
+### Singapore sources (SG)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -252,9 +356,20 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
 | google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
 
-`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）并保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。SG feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_sg` / `google_news_sg` news 跨源按 ticker + Singapore day（`Asia/Singapore`）+ normalized title 配对。无 SG 披露连接器，监管 filings 永无去重键且永不标注。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+`market=sg` companies use canonical root tickers (`D05` / `D05.SI` /
+`D05-SG` all store as `D05`; exchange suffixes `.SI` / `.SG` are stripped
+at add time, Singapore ISINs are kept as-is; SGX codes vary in length so no
+fixed width is assumed) and remain unmapped. Finnhub is **US only** and
+never queried for SG. News comes from `yahoo_sg` / `google_news_sg`. SG
+feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_sg` / `google_news_sg`
+news pairs across sources on ticker + Singapore day (`Asia/Singapore`) +
+normalized title. No SG disclosure connector is wired, so regulatory
+filings never get a dedupe key and are never annotated. Every row stays in
+the feed with an "Also seen on —" label; totals and page sizes are never
+shrunk.
 
-### 瑞士数据源（CH）
+### Switzerland sources (CH)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -263,11 +378,22 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | yahoo_ch | news | none | Yahoo Finance CH public RSS (`region=CH`, `lang=de-CH` + `en-US` merged; identical titles stay single-language); `.SW` at request time; may be loosely related and break without notice |
 | google_news_ch | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=de&gl=CH&ceid=CH:de`; `de-CH`/`fr-CH`/`en` variants redirect, so the live-locked German-Swiss edition is used); may be loosely related and break without notice |
 
-`market=ch` 公司使用规范根 ticker（`NESN` / `NESN.SW` / `NESN-SWX` 均存为 `NESN`；交易所后缀 `.SW` / `.SWX` / `.S` 在添加时剥离，瑞士 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 CH 查询。News 来自 `yahoo_ch` / `google_news_ch`。
+`market=ch` companies use canonical root tickers (`NESN` / `NESN.SW` /
+`NESN-SWX` all store as `NESN`; exchange suffixes `.SW` / `.SWX` / `.S`
+are stripped at add time, Swiss ISINs are kept as-is) and remain unmapped.
+Finnhub is **US only** and never queried for CH. News comes from `yahoo_ch`
+/ `google_news_ch`.
 
-CH feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ch` / `google_news_ch` news 跨源按 ticker + Zurich day（`Europe/Zurich`）+ normalized title 配对。`eqs_ch` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Zurich day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+CH feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE`
+switch as the other markets, default on): `yahoo_ch` / `google_news_ch`
+news pairs across sources on ticker + Zurich day (`Europe/Zurich`) +
+normalized title. `eqs_ch` filings pair on the stable EQS news id, or on a
+same-source title fallback (ticker + Zurich day + normalized title); with
+only one disclosure source wired there is no cross-source filing pairing.
+Every row stays in the feed with an "Also seen on —" label; totals and page
+sizes are never shrunk.
 
-### 波兰数据源（PL）
+### Poland sources (PL)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -276,9 +402,9 @@ CH feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | `yahoo_pl` | News | None (key-free) | Yahoo Finance PL public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.WA&region=PL&lang=pl-PL`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`PKO`), `.WA` is request-time only. |
 | `google_news_pl` | News | None (key-free) | Google News PL RSS (`news.google.com/rss/search?q={ROOT}.WA&hl=pl&gl=PL&ceid=PL:pl`). Live verified 2026-08-10; results can be loosely related (a `PKO.WA` query can include unrelated PKO BP Ekstraklasa football items); public RSS may break without notice. |
 
-PL feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings：`gpw_espi` 按稳定 GPW report id（`geru_id`）配对；标题回退为 source-scoped（source + ticker + Warsaw day + normalized title），假设的第二 PL 披露源不会因标题交叉标注。News：`yahoo_pl` ↔ `google_news_pl` 跨源按 ticker + Warsaw day + normalized title 配对。
+PL feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings: `gpw_espi` pairs on its stable GPW report id (`geru_id`); the title fallback is source-scoped (source + ticker + Warsaw day + normalized title), so a hypothetical second PL disclosure source would never be cross-annotated by title. News: `yahoo_pl` ↔ `google_news_pl` pair across sources on ticker + Warsaw day + normalized title.
 
-### 瑞典数据源（SE）
+### Sweden sources (SE)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -287,11 +413,11 @@ PL feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 | `yahoo_se` | News | None (key-free) | Yahoo Finance SE public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.ST&region=SE&lang=sv-SE`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ERIC-B.ST`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ERIC-B`), `.ST` is request-time only; share-class mnemonics like `ERIC-B` / `VOLV-B` are kept intact. |
 | `google_news_se` | News | None (key-free) | Google News SE RSS (`news.google.com/rss/search?q={ROOT}.ST&hl=sv&gl=SE&ceid=SE:sv`). Live verified 2026-08-10; results can be loosely related (an `ERIC-B.ST` query can include football items about a player named Eric Smith); public RSS may break without notice. |
 
-`market=se` 公司使用规范根 ticker（`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` 均存为 `ERIC-B`；交易所后缀 `.ST` / `.STO` / `.OMX` / `-ST` 等在添加时剥离，股份类别后缀如 `-B` / `-A` 保留，瑞典 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 SE 查询。
+`market=se` companies use canonical root tickers (`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` all store as `ERIC-B`; exchange suffixes `.ST` / `.STO` / `.OMX` / `-ST` etc. are stripped at add time while share-class suffixes like `-B` / `-A` are preserved, Swedish ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for SE.
 
-SE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 SE 披露连接器（SE-1 A3 / SE-4 D2）。News：`yahoo_se` ↔ `google_news_se` 跨源按 ticker + Stockholm day + normalized title 配对。
+SE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no SE disclosure connector is wired (SE-1 A3 / SE-4 D2). News: `yahoo_se` ↔ `google_news_se` pair across sources on ticker + Stockholm day + normalized title.
 
-### 比利时数据源（BE）
+### Belgium sources (BE)
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -301,11 +427,16 @@ SE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 | yahoo_be | news | none | Yahoo Finance BE public RSS (`region=BE`, `lang=fr-BE` + `en-US` merged; identical titles stay single-language); `.BR` at request time; may be loosely related and break without notice |
 | google_news_be | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-BE&gl=BE&ceid=BE:en`); may be loosely related and break without notice |
 
-`market=be` feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_be` / `google_news_be` news 跨源按 ticker + Brussels day（`Europe/Brussels`）+ normalized title 配对。FSMA STORI filings 按稳定 STORI document id（`external_id` = `requiredReportingTopicId`）配对；无 id 时回退为 source-scoped（source + ticker + Brussels day + normalized title），假设的第二 BE 披露源不会因标题交叉标注。每行保留在 feed 中并标注 "Also seen on"；总数与分页大小永不缩减。
+`market=be` feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE` switch as the other markets, default on): `yahoo_be` / `google_news_be` news pairs across sources on ticker + Brussels day (`Europe/Brussels`) + normalized title. FSMA STORI filings pair on the stable STORI document id (`external_id` = `requiredReportingTopicId`); without an id the fallback is source-scoped (source + ticker + Brussels day + normalized title), so a hypothetical second BE disclosure source is never cross-annotated by title. Every row stays in the feed with an "Also seen on" label; totals and page sizes are never shrunk.
 
-### Aquis 数据源（AQ）
+### Aquis sources (AQ)
 
-`market=aq` 面向 **Aquis Stock Exchange (AQSE)** 发行人，而非 Aquis Exchange MTF 泛欧交易场所。公司使用规范根 ticker（`ADB` / `ADB.AQ` / `adb-aq` 均存为 `ADB`；`.AQ` 交易后缀在添加时剥离，AQSE mnemonic 原样保留，12 位 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 AQ 查询。
+`market=aq` targets **Aquis Stock Exchange (AQSE)** issuers, not the Aquis
+Exchange MTF pan-European trading venue. Companies use canonical root
+tickers (`ADB` / `ADB.AQ` / `adb-aq` all store as `ADB`; the `.AQ` exchange
+suffix is stripped at add time while AQSE mnemonics stay as-is and
+12-character ISINs are kept as-is) and remain unmapped. Finnhub is **US
+only** and never queried for AQ.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -315,11 +446,20 @@ SE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 | `yahoo_aq` | News | None (key-free) | Yahoo Finance AQ public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.AQ&region=GB&lang=en-GB`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ADB.AQ`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ADB`), `.AQ` is request-time only. |
 | `google_news_aq` | News | None (key-free) | Google News AQ RSS (`news.google.com/rss/search?q={ROOT}.AQ&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10; results can be loosely related; public RSS may break without notice. |
 
-AQ feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 AQ 披露连接器（AQ-1 A3 / AQ-4 D2）。News：`yahoo_aq` ↔ `google_news_aq` 跨源按 ticker + London day（`Europe/London`）+ normalized title 配对。
+AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
 
-### Cboe Europe (CXE) — Alternative European Equities，首个场所
+### Cboe Europe (CXE) - Alternative European Equities, first venue
 
-IBKR "Alternative European Equities" 包为多场所 bundle。本轨道仅落地 **一个场所**：Cboe Europe 股票（CXE 与 BXE 订单簿，MIC `CXEM`/`CXET`/`BXEM`/`BXET`）。**无** 虚拟 `aee` / `eu` / `eu_alt` market 代码。延期场所（本轨道未接入）：Turquoise（LSEG MTF；旧 turquoise.com 域名已停放，LSEG 替代路径非稳定免密钥目录）及其他 alternative European 订单簿。`market=cxe` 公司使用规范大写 Cboe 符号（`AZNl` → `AZNL`；`.CXE`/`.BXE` 后缀在添加时剥离；泛欧 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 CXE 查询。
+The IBKR "Alternative European Equities" package is a multi-venue bundle.
+This track lands **one venue only**: Cboe Europe equities (CXE and BXE
+order books, MICs `CXEM`/`CXET`/`BXEM`/`BXET`). There is **no** virtual
+`aee` / `eu` / `eu_alt` market code. Deferred venues (not wired in this
+track): Turquoise (LSEG MTF; the old turquoise.com domain is parked and
+the LSEG replacement path is not a stable key-free directory) and other
+alternative European books. `market=cxe` companies use canonical
+uppercased Cboe symbols (`AZNl` → `AZNL`; `.CXE`/`.BXE` suffixes are
+stripped at add time; pan-European ISINs kept as-is) and remain unmapped.
+Finnhub is **US only** and never queried for CXE.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -328,11 +468,17 @@ IBKR "Alternative European Equities" 包为多场所 bundle。本轨道仅落地
 | `cxe_universe` | Universe | none | **Wired (AEE-2)**: `refresh_cxe_universe()` fetches the key-free official Cboe Europe Symbol Data CSVs for both order books (`.../market_statistics/symbol_data/csv/?mkt=cxe` and `?mkt=bxe`; live 2026-08-10: CXE 5,305 rows / BXE 6,469 rows, including zero-volume rows). CSV columns are `Name` (case-sensitive Cboe symbol, e.g. `AZNl`) + `Company Name / Description`; there is **no ISIN or instrument-type column**, so entries carry an empty ISIN honestly and keep the raw `symbol` plus `venue`/`venues` (CXE/BXE). Duplicate symbols on both books merge into one entry. Breadth only; never enters the feed; backfills name/exchange/venue on add-company. First Alternative European Equities venue only - Turquoise and other MTFs are deferred. |
 | `google_news_cxe` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10. Query = exact company name from the CXE universe when available (quoted; ~100 items for `"AstraZeneca PLC"`), otherwise the Cboe symbol (bare `AZNl` query returns ~2 items). **No `yahoo_cxe` connector exists** because Yahoo Finance has no suffix for Cboe Europe symbols (Yahoo only covers primary listings). Results may be loosely related; public RSS may break without notice. |
 
-CXE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 CXE 披露连接器（AEE-1 A3 / AEE-4）。News：`google_news_cxe` 按 ticker + London day（`Europe/London`）+ normalized title 配对（仅一个 CXE news 源，配对为同源）。
+CXE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no CXE disclosure connector is wired (AEE-1 A3 / AEE-4). News: `google_news_cxe` pairs on ticker + London day (`Europe/London`) + normalized title (only one CXE news source exists, so pairs are same-source).
 
-### 欧洲共同基金（EMF）
+### European Mutual Funds (EMF)
 
-「European Mutual Funds」轨道覆盖欧洲开放式共同基金 / UCITS（以 ISIN 为首要标识），**非** 德国 ETF/ETN/ETC（market=de），**非** Cboe Europe 股票（market=cxe），**非** Eurex 衍生品。market 短码为 `emf`；不使用过宽的 `fund`/`mf`/`ucits` 代码。基金 ISIN（如 `LU0171254561`）为规范标识；fund-data 后缀（`.F` / `.MF`）在添加时剥离。基金以 unmapped 添加。Finnhub **仅 US**，不对 EMF 查询。
+The "European Mutual Funds" track covers European open-end mutual funds /
+UCITS (ISIN-first identifiers), **not** German ETF/ETN/ETC (market=de),
+not Cboe Europe equities (market=cxe), and not Eurex derivatives. The
+market short code is `emf`; no over-broad `fund`/`mf`/`ucits` code is
+used. Fund ISINs (e.g. `LU0171254561`) are the canonical identifier;
+fund-data suffixes (`.F` / `.MF`) are stripped at add time. Funds are
+added as unmapped. Finnhub is **US only** and never queried for EMF.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -341,11 +487,18 @@ CXE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/�
 | `emf_universe` | Universe | none | **Boundary stub (EMF-2 spike B2, 2026-08-10)**: no stable key-free ISIN-bearing European mutual fund directory exists. ESMA registers expose a funds SOLR core (`esma_registers_funds`: ~212k docs = 107,388 AIFMD `funds_report` docs; legal frameworks AIF/EuVECA/ELTIF/EuSEF; fund name/country/manager only) and a MiFID firms core, but **no UCITS register and no ISIN field**; national fund registers have no stable key-free ISIN export (BaFin 404, Bundesanzeiger session wall), Morningstar/Lipper are paid. `refresh_emf_universe()` raises `EmfUniverseError`; `load/name_map/search` read a manually placed cache if one ever exists. No hand-written fund seed. |
 | `google_news_emf` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10: a quoted fund name returns items (~26 for `"BlackRock Global Allocation Fund"`), while a bare fund ISIN returns zero. Query = fund name from an injectable resolver / a manually placed EMF universe cache when available, otherwise the typed fund ISIN (usually sparse - honest). **No `yahoo_emf` connector exists** because Yahoo Finance has no stable symbol suffix for European mutual funds (a guessed fund symbol returns an empty feed). Results may be loosely related; public RSS may break without notice. |
 
-EMF feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 EMF 披露连接器（EMF-1 A3 / EMF-4）。News：`google_news_emf` 按 fund ISIN + Luxembourg day（`Europe/Luxembourg`）+ normalized title 配对（仅一个 EMF news 源，配对为同源）。
+EMF feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no EMF disclosure connector is wired (EMF-1 A3 / EMF-4). News: `google_news_emf` pairs on fund ISIN + Luxembourg day (`Europe/Luxembourg`) + normalized title (only one EMF news source exists, so pairs are same-source).
 
-### Turquoise (TRQ) — Alternative European Equities，第二个场所
+### Turquoise (TRQ) - Alternative European Equities, second venue
 
-Turquoise（LSEG MTF；MIC `TRQX` / `TQEX`）为 Alternative European Equities 包中 **第二个** 场所，次于 Cboe Europe（`market=cxe`）。**无** 虚拟 `aee` / `eu` / `eu_alt` market 代码，`trq` market 非 AQSE（`aq`）、非 LSE（`uk`）、非 Eurex。常见 Turquoise 符号保持大写（`AZN` / `SHEL`）；`.TRQ` / `.TRQX` / `.TQEX` 后缀在添加时剥离；泛欧 ISIN 原样保留。公司以 unmapped 添加。Finnhub **仅 US**，不对 TRQ 查询。
+Turquoise (LSEG MTF; MICs `TRQX` / `TQEX`) is the **second** venue in the
+Alternative European Equities package, after Cboe Europe (`market=cxe`).
+There is **no** virtual `aee` / `eu` / `eu_alt` market code, and the
+`trq` market is not AQSE (`aq`), not LSE (`uk`), not Eurex. Common
+Turquoise symbols are kept uppercased (`AZN` / `SHEL`); `.TRQ` /
+`.TRQX` / `.TQEX` suffixes are stripped at add time; pan-European ISINs
+are kept as-is. Companies are added as unmapped. Finnhub is **US only**
+and never queried for TRQ.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -354,11 +507,19 @@ Turquoise（LSEG MTF；MIC `TRQX` / `TQEX`）为 Alternative European Equities �
 | `trq_universe` | Universe | none | **Boundary stub (TRQ-2 re-spike B2, 2026-08-11)**: no stable key-free Turquoise directory exists. `turquoise.com` parked; `turquoise.eu` hosts an unrelated company; `tradeturquoise.com` / LSEG Turquoise paths redirect to a JS-only LSE SPA; the old LSEG reference files (`lseg.com/turquoise/symbol/YYYYMMDD_TRQX_Instrument.csv` / `..._TQEX_Instrument.csv`) return 404. `refresh_trq_universe()` raises `TrqUniverseError`; `load/name_map/search` read a manually placed cache if one ever exists. No hand-written seed and **no CXE CSV is reused** as a Turquoise directory. |
 | `google_news_trq` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-11: both quoted company names and bare Turquoise common symbols return items (symbols are more loosely related). Query = company name from a manually placed TRQ universe cache when available, otherwise the Turquoise common symbol. **No `yahoo_trq` connector exists** because Yahoo Finance has no Turquoise-specific symbol suffix (Yahoo quotes primary listings, not the TRQX/TQEX books). Results may be loosely related; public RSS may break without notice. |
 
-TRQ feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 TRQ 披露连接器（TRQ-1 A3 / TRQ-4）。News：`google_news_trq` 按 ticker + London day（`Europe/London`）+ normalized title 配对（仅一个 TRQ news 源，配对为同源）。
+TRQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no TRQ disclosure connector is wired (TRQ-1 A3 / TRQ-4). News: `google_news_trq` pairs on ticker + London day (`Europe/London`) + normalized title (only one TRQ news source exists, so pairs are same-source).
 
-### Eurex Core（EUX）
+### Eurex Core (EUX)
 
-「Eurex Core (NP, L1)」轨道为 **衍生品交易所** 轨道（期货/期权产品代码），非股票国家轨道，非 AEE（`cxe`/`trq`），非 AQSE（`aq`），非 Mutual Funds（`emf`），非 Europe Display Value Bundle。market 短码为 `eux`；不使用过宽的 `fut`/`opt`/`deriv` 代码。Eurex 产品代码（`FDAX` / `FGBL` / `ESX5` / `2FE`）为规范标识（根/产品级，非单个到期合约）；`.EUX` 后缀在添加时剥离；产品 ISIN 原样保留。产品以 unmapped 添加。Finnhub **仅 US**，不对 EUX 查询。
+The "Eurex Core (NP, L1)" track is a **derivatives exchange** track
+(futures/options product codes), not a stock country track, not AEE
+(`cxe`/`trq`), not AQSE (`aq`), not Mutual Funds (`emf`), and not the
+Europe Display Value Bundle. The market short code is `eux`; no
+over-broad `fut`/`opt`/`deriv` code is used. Eurex product codes
+(`FDAX` / `FGBL` / `ESX5` / `2FE`) are the canonical identifiers (root /
+product level, not individual expiry contracts); `.EUX` suffixes are
+stripped at add time; product ISINs are kept as-is. Products are added as
+unmapped. Finnhub is **US only** and never queried for EUX.
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -367,13 +528,20 @@ TRQ feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/�
 | `eux_universe` | Universe | none | **Wired (EUX-2)**: `refresh_eux_universe()` fetches the key-free official Eurex product list CSV (linked from `eurex.com/ex-en/markets/productSearch`; live 2026-08-11: ~2,997 product rows, product-level - no individual expiry contracts). Semicolon-delimited with PRODUCT_ID / PRODUCT_TYPE / PRODUCT_NAME / PRODUCT_GROUP / CURRENCY / PRODUCT_ISIN / UNDERLYING_ISIN / COUNTRY_CODE / CASH_MARKET_ID etc.; types include FSTK/OSTK/FINX/OINX/FCUR/FBND/... (single-stock futures/options are Eurex derivatives, not Xetra cash equities). `counts` by product type and `counts_by_group`; backfills name/exchange/ISIN/group on add-company; breadth only, never enters the feed. The Eurex host shows intermittent TLS EOFs (fetch retries); the CSV blob URL may change and `EUX_UNIVERSE_PRODUCT_URL` overrides it. |
 | `google_news_eux` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=de&gl=DE&ceid=DE:de`). Live verified 2026-08-11: quoted product names return items (~71 for `"DAX Futures"`); bare product codes also return items (~19 for `FDAX`) but are more loosely related. Query = product name from the EUX universe cache when available, otherwise the Eurex product code. **No `yahoo_eux` connector exists** because Yahoo Finance does not quote Eurex derivatives with a stable suffix. Results may be loosely related; public RSS may break without notice. |
 
-EUX feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 EUX 披露连接器（EUX-1 A3 / EUX-4）。News：`google_news_eux` 按 product code + Berlin day（`Europe/Berlin`）+ normalized title 配对（仅一个 EUX news 源，配对为同源）。
+EUX feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no EUX disclosure connector is wired (EUX-1 A3 / EUX-4). News: `google_news_eux` pairs on product code + Berlin day (`Europe/Berlin`) + normalized title (only one EUX news source exists, so pairs are same-source).
 
-Web Settings 页面为每个已实现的数据源展示 Provider credentials（各连接器声明自有字段，当前为 `FINNHUB_API_KEY` 与 `SEC_USER_AGENT`）；未实现的源显示为 Not implemented 且不可配置。高级区域允许为显式读取它们的连接器设置额外环境变量。工作区数据库中保存的值优先于 `.env` 作用于运行进程，且任何 API 响应均不会完整返回这些值。
+The web Settings page shows Provider credentials for every implemented source
+The web Settings page shows Provider credentials for every implemented source
+(each connector declares its own fields, currently `FINNHUB_API_KEY` and
+`SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
+cannot be configured. An advanced section allows extra environment variables
+for connectors that explicitly read them. Values saved in the workspace
+database take priority over `.env` for the running process and are never
+returned in full by any API response.
 
-## 2. 可选的手动 SEC 采集
+## 2. Optional manual SEC collection
 
-选择包含起止的申报日期范围：
+Choose an inclusive filing-date range:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
@@ -382,18 +550,22 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
   --end-date 2026-08-02
 ```
 
-该命令仍适用于显式指定初始范围。它读取初始 CSV、运行 SEC 连接器、存储标准化的 `InformationItem` 记录、如实记录采集活动，并更新独立遗留报告 `output/announcements.html`。
+This command remains useful for an explicit initial range. It reads the initial
+CSV, runs the SEC connector, stores standardized `InformationItem` records,
+records truthful collection activity, and also
+updates the legacy standalone report at `output/announcements.html`.
 
-典型成功采集输出包含类似行：
+Typical successful collection output includes lines like:
 
 ```text
 INFO collection source=sec ticker=AAPL status=success items=... inserted=... updated=...
 collected=... failures=0 stored_total=... report=output/announcements.html
 ```
 
-对同一范围重复运行会更新具有相同 `(source, external_id)` 身份的记录，而非插入重复项。
+Re-running the same range updates records with the same `(source,
+external_id)` identity instead of inserting duplicates.
 
-## 3. 启动 Web 界面
+## 3. Start the web interface
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
@@ -402,29 +574,50 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
   --port 8765
 ```
 
-成功启动会打印：
+Successful startup prints:
 
 ```text
 Investment Monitor running at http://127.0.0.1:8765
 ```
 
-在浏览器中打开 [http://127.0.0.1:8765](http://127.0.0.1:8765)。使用期间请保持 Terminal 窗口打开。按 `Control-C` 停止服务。
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765) in a browser. Keep the
+Terminal window open while using the site. Press `Control-C` to stop it.
 
-服务运行期间，每个 Eastern 日历日执行一次增量采集。启动时若当前 ET 日尚未尝试，会先补跑，之后每日 6:00 AM ET 检查。若要在不发起外部采集请求的情况下预览已存数据，可使用 `AUTO_DAILY_COLLECTION=false` 启动。
+While the service is running it performs one incremental collection per
+Eastern calendar day. On startup it catches up if the current ET day has not
+yet been attempted, then checks daily at 6:00 AM ET. To preview the stored data
+without making external collection requests, start it with
+`AUTO_DAILY_COLLECTION=false`.
 
-通过列表页添加公司会立即触发一年 SEC 元数据回填。即使 SEC 暂时不可用，公司仍保留在所选列表中，页面会单独报告回填失败。这些默认值可在 `.env` 中调整。
+Adding a company through a list page immediately performs a one-year SEC
+metadata backfill. The company remains in the selected lists even if SEC is
+temporarily unavailable, and the page reports the backfill failure separately.
+These defaults can be adjusted in `.env`.
 
-## 主要 Web 行为
+## Main web behavior
 
-- **Daily information** 选择一个 Eastern Time 日历日与可选列表，隐藏无更新的公司，将其余条目按公司分组，仅展示时间、类型、source、标题与原始 URL。打印操作使用适合浏览器 PDF 导出的专用布局。
-- **Lists & sources** 创建、重命名、删除与切换列表。一家公司可属于多个列表；移除成员关系永不删除已存信息。
-- 公司候选从本地官方 SEC 映射（按名称或 ticker）及已已知公司（按名称、ticker 或记录的 exchange）搜索。用户确认候选后才添加。
-- Source 卡片分别报告各已配置连接器，包括覆盖区域、启用状态、最近尝试与成功，以及持久化失败摘要。
-- 官方链接在新标签页打开，带 `noopener` 与 `noreferrer`。
+- **Daily information** selects one Eastern Time calendar day and an optional
+  list, hides companies without updates, groups the remaining items by company,
+  and shows only time, type, source, title, and original URL. The print action
+  uses a dedicated layout suitable for browser PDF export.
+- **Lists & sources** creates, renames, deletes, and switches lists. A company
+  may belong to multiple lists; removing a membership never deletes stored
+  information.
+- Company candidates are searched from the local official SEC mapping by name
+  or ticker and from already-known companies by name, ticker, or recorded
+  exchange. The user confirms a candidate before it is added.
+- Source cards report each configured connector separately, including its
+  coverage region, enabled state, latest attempt and success, and persisted
+  failure summary.
+- Official links open in a new tab with `noopener` and `noreferrer`.
 
-## 官方 EDINET 连接器
+## Official EDINET connector
 
-`edinet` 包仅使用 EDINET API v2 获取披露元数据与文档。在 `.env` 中配置 `EDINET_API_KEY`；切勿提交密钥。面向登录的 API 请求与绝对时间窗口相交的每个日本文件日期，按 `submitDateTime` 过滤，并匹配 filer、issuer、subject 与 subsidiary EDINET-code 角色，无 `docTypeCode` 白名单：
+The `edinet` package uses only EDINET API v2 for disclosure metadata and
+documents. Configure `EDINET_API_KEY` in `.env`; never commit the key. The
+login-oriented API requests every Japanese file date intersecting the absolute
+time window, filters by `submitDateTime`, and matches filer, issuer, subject,
+and subsidiary EDINET-code roles without a `docTypeCode` whitelist:
 
 ```python
 result = connector.getWatchlistDisclosuresSince(
@@ -435,9 +628,12 @@ result = connector.getWatchlistDisclosuresSince(
 )
 ```
 
-索引优先实现将日期级完整性存入 SQLite，在回退至官方 API 前使用短缓存。失败的日期通过 `partial` 与 `errors` 报告；成功的日期仍会返回。完整登录钩子见 `examples/edinet_login.py`。
+The indexed-first implementation stores date-level completeness in SQLite and
+uses a short cache before falling back to the official API. A failed date is
+reported through `partial` and `errors`; successful dates are still returned.
+See `examples/edinet_login.py` for a complete login hook.
 
-CLI 示例：
+CLI examples:
 
 ```bash
 PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli refresh-codes
@@ -448,26 +644,38 @@ PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli \
 PYTHONPATH=src python3 -m investment_monitor.sources.edinet.cli sync --incremental
 ```
 
-下载为可选。类型 `1` 至 `5` 透传至官方 v2 端点；存储的 payload 包含 SHA-256、大小、content type 及 ZIP 完整性状态，路径为 `data/downloads/edinet/{fileDate}/{docID}/type-{n}/`。
+Downloads are opt-in. Types `1` through `5` are passed through to the official
+v2 endpoint; stored payloads include SHA-256, size, content type, and ZIP
+integrity state under `data/downloads/edinet/{fileDate}/{docID}/type-{n}/`.
 
-官方 EDINET 代码列表 ZIP 导入同一 SQLite 数据库，用于精确 EDINET code、证券代码、JCN 与 filer 名称解析。模糊或未知输入返回于 `unresolved`，而非静默丢弃。
+The official EDINET code-list ZIP is imported into the same SQLite database for
+exact EDINET code, securities code, JCN, and filer-name resolution. Ambiguous
+or unknown inputs are returned in `unresolved` rather than silently dropped.
 
-## TDnet 运行模式
+## TDnet operating mode
 
-TDnet 采集以官方 JPX 公开列表为权威来源。其官方声明计数、连续分页与解析行数仍为 fail-closed 检查。可选的非官方 Yanoshin 对比默认关闭（`TDNET_YANOSHIN_CROSSCHECK_ENABLED=false`），因此第三方 downtime 不会阻塞原本完整的官方 JPX 采集。
+TDnet collection uses the official JPX public list as its source of truth. Its
+official declared count, contiguous pagination, and parsed-row count remain
+fail-closed checks. The optional non-official Yanoshin comparison is disabled
+by default (`TDNET_YANOSHIN_CROSSCHECK_ENABLED=false`), so third-party downtime
+cannot block otherwise complete official JPX collection.
 
-## 数据模型与安全迁移
+## Data model and safe migration
 
-标准化 item 表现在除原有列外还包含 `market`、可空 `summary` 与 `effective_at`：
+The standardized item tables now carry `market`, nullable `summary`, and
+`effective_at` in addition to the original columns:
 
 ```text
 information_items -- unique (source, external_id)
 information_item_tickers
 ```
 
-`companies` 含 `market` 列与唯一 `(ticker, market)` 身份，因此不同市场的同一代码永不混淆。幂等启动迁移可在不删除已存 SEC 记录的情况下升级现有单市场数据库。
+`companies` has a `market` column and a unique `(ticker, market)` identity, so
+the same code in different markets is never conflated. The idempotent startup
+migration upgrades existing single-market databases without deleting stored
+SEC records.
 
-幂等 Web 迁移新增：
+The idempotent web migration adds:
 
 ```text
 companies
@@ -479,24 +687,30 @@ ingestion_logs
 app_settings
 ```
 
-迁移使用 `CREATE TABLE IF NOT EXISTS` 并幂等插入三个固定列表。不会删除或重写现有 SEC 记录。SQL 位于 `src/investment_monitor/migrations/001_web_mvp.sql`，随应用打包。
+The migration uses `CREATE TABLE IF NOT EXISTS` and inserts the three fixed
+lists idempotently. It does not drop or rewrite existing SEC records. SQL lives
+at `src/investment_monitor/migrations/001_web_mvp.sql` and is packaged with the
+application.
 
-SEC 专用 HTTP 与映射代码仍位于：
+SEC-specific HTTP and mapping code remains under:
 
 ```text
 src/investment_monitor/sources/sec/
 ```
 
-通用采集流水线仍仅依赖 `SourceConnector` 与 `InformationRepository`。Web 查询层从 SQLite 读取标准化记录，渲染页面时不调用 SEC 连接器。
+The generic collection pipeline still depends only on `SourceConnector` and
+`InformationRepository`. The web query layer reads standardized records from
+SQLite and does not call the SEC connector to render pages.
 
-## 运行自动化测试
+## Run automated tests
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
   python3 -m unittest discover -s tests -v
 ```
 
-常规套件使用保存的 SEC fixtures，无需联网。成功运行以如下结尾：
+The normal suite uses saved SEC fixtures and does not require internet. A
+successful run ends with:
 
 ```text
 Ran ... tests in ...s
@@ -504,13 +718,19 @@ Ran ... tests in ...s
 OK (skipped=1)
 ```
 
-跳过的测试为可选 live SEC 集成测试。套件覆盖固定列表幂等、跨列表去重、部分 ticker 解析、移除成员关系但不删历史、Eastern Time 边界、持久化已读状态、范围内批量更新、搜索、稳定分页、生产环境排除 mock、source 状态，以及核心 HTTP/静态路由。
+The skipped test is the optional live SEC integration test. The suite covers
+fixed-list idempotency, cross-list deduplication, partial ticker resolution,
+membership removal without history deletion, Eastern Time boundaries,
+persistent read state, scoped bulk updates, search, stable pagination,
+production exclusion of mocks, source states, and core HTTP/static routes.
 
-## 无需保持电脑开机时如何运行
+## Run without keeping your computer on
 
-生产模式是在常开 Linux 服务器或带持久磁盘的容器托管平台上运行同一服务。随附的 `Dockerfile` 将 Web 服务与每日采集器打包在一起。
+The production pattern is to run this same service on an always-on Linux server
+or a container hosting platform with a persistent disk. The included
+`Dockerfile` packages the web service and its daily collector together.
 
-本地容器快速验证：
+For a quick local container check:
 
 ```bash
 docker build -t investment-monitor .
@@ -523,26 +743,40 @@ docker run -d \
   investment-monitor
 ```
 
-在本机运行该命令仍要求电脑保持开机。若要让他人持续访问，将镜像部署至 VPS 或容器主机，在 `/app/data` 挂载持久卷，设置 `SEC_USER_AGENT`，并在前方配置 HTTPS/访问控制。SQLite 适用于单个小应用实例；勿对同一 SQLite 文件运行多个副本。
+Running this command on your own computer still requires that computer to stay
+on. To make the site continuously available to other people, deploy the image
+to a VPS or a container host, attach a persistent volume at `/app/data`, set
+`SEC_USER_AGENT` there, and place HTTPS/access control in front of it. SQLite is
+appropriate for one small application instance; do not run several replicas
+against the same SQLite file.
 
-## 建议的手动验收测试
+## Suggested manual acceptance test
 
-1. 启动服务器并打开 Today。
-2. 打开 Holdings，将 `AAPL, MSFT BADTICKER` 加入 Holdings 与 Watchlist。
-3. 确认有效映射 ticker 成功添加，未解析 ticker 单独报错，且不回滚已成功添加项。
-4. 确认同时在两个列表的公司显示两个徽章，但每条 filing 只出现一次。
-5. 将一条 filing 标为已读，刷新后确认各处仍为已读。
-6. 使用筛选后的 **Mark all in scope as read**，确认无关列表项仍为未读。
-7. 从 Holdings 移除公司，确认其仍在 Watchlist。
-8. 从所有列表移除，确认操作提示历史信息已保留。
-9. 打开 Data Sources，确认 SEC 为已配置 provider；News 在配置 `FINNHUB_API_KEY` 并成功同步后显示已连接；Community 中 CEO.ca（CA）已上线，HotCopper（AU）、LSE Share Chat（UK）与 Xueqiu（CN/HK）为 stub（Not connected / 空采集）。
+1. Start the server and open Today.
+2. Open Holdings and add `AAPL, MSFT BADTICKER` to Holdings and Watchlist.
+3. Confirm valid mapped tickers succeed and the unresolved ticker has its own
+   error without rolling back successful additions.
+4. Confirm a company in both lists has both badges but each filing appears
+   once.
+5. Mark one filing read, refresh, and confirm it remains read everywhere.
+6. Use filtered **Mark all in scope as read** and verify unrelated list items
+   remain unread.
+7. Remove a company from Holdings and confirm it remains in Watchlist.
+8. Remove it from all lists and confirm the action says historical information
+   is preserved.
+9. Open Data Sources and confirm SEC is the only configured provider; News and
+   Community say Not connected.
 
-## 已知首个 MVP 限制
+## Known first-MVP limitations
 
-- 无认证或多用户已读状态（单用户本地持久化）。
-- News 已接入（Finnhub，需 `FINNHUB_API_KEY`）；Community 部分接入 — CEO.ca（CA）LIVE，Seeking Alpha（US）LIVE 公开 combined RSS（article/news 元数据，非论坛帖；HTML/论坛为 PerimeterX 403），HotCopper（AU）、LSE Share Chat（UK）与 Xueqiu（CN/HK）为 honest stub（bot 拦截 / WAF / SPA 空壳，`collect()` 返回空）。
-- 每日调度在单一 Web 服务进程内运行；生产环境仍需常开主机与持久 `/app/data` 卷。
-- 无完整申报正文下载、全文搜索、XBRL 分析或 AI 功能。
-- 当官方 SEC ticker 映射未提供 exchange 时，显示为 **Unavailable**。
-- 运营日志持久化之前的较早活动不可用。
-- 修订记录按 accession number 独立识别与标注；仅当未来存储的元数据显式提供该关系时才显示 original/amendment 关系。
+- No authentication or multi-user read state (single-user local persistence).
+- No News or real Community connector yet.
+- Daily scheduling runs inside the single web-service process; production still
+  requires an always-on host and a persistent `/app/data` volume.
+- No full filing-text download, full-text search, XBRL analysis, or AI features.
+- Exchange is shown as **Unavailable** when the official SEC ticker mapping does
+  not provide it.
+- Older activity from before operational-log persistence is unavailable.
+- Amendment records are identified and labelled independently by accession
+  number; an original/amendment relationship is shown only if future stored
+  metadata provides that relationship explicitly.

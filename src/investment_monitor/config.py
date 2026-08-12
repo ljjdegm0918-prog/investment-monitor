@@ -31,6 +31,15 @@ DEFAULT_SOURCE_META = {
     "edinet": ("EDINET", "regulatory_disclosure"),
     "mock": ("Mock", "mock"),
     "mock_community": ("Mock Community", "community"),
+    "ceoca_ca": ("CEO.ca (CA)", "community"),
+    "hotcopper_au": ("HotCopper (AU)", "community"),
+    "lse_share_chat": ("LSE Share Chat (UK)", "community"),
+    "xueqiu": ("Xueqiu (CN/HK)", "community"),
+    "seeking_alpha": ("Seeking Alpha (US)", "community"),
+    "yellowbrick": ("Yellowbrick Investing (US)", "community"),
+    "substack": ("Substack (US)", "community"),
+    "x_community": ("X (US)", "community"),
+    "vic": ("Value Investors Club (US)", "community"),
 }
 
 

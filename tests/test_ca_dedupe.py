@@ -113,6 +113,68 @@ class CaDedupeKeyTests(unittest.TestCase):
         self.assertIsNone(dedupe_key(item))
 
 
+class CaCommunityDedupeKeyTests(unittest.TestCase):
+    def test_ca_community_key_uses_spiel_id(self) -> None:
+        published = datetime(2026, 8, 5, 14, 0, tzinfo=timezone.utc)
+        item = {
+            "source": "ceoca_ca",
+            "source_type": "community",
+            "external_id": "ceoca-spiel-aug5-morning",
+            "ticker": "SHOP",
+            "market": "ca",
+            "title": "@bullish_ca: Shopify looks strong",
+            "published_at": published.isoformat(),
+            "effective_at": published.isoformat(),
+            "raw_metadata": {"spiel_id": "spiel-aug5-morning"},
+        }
+
+        self.assertEqual(
+            dedupe_key(item),
+            "ca:community:ceoca:spiel-aug5-morning",
+        )
+
+    def test_ca_community_duplicate_external_id_still_pairs(self) -> None:
+        published = datetime(2026, 8, 5, 14, 0, tzinfo=timezone.utc)
+        first = {
+            "source": "ceoca_ca",
+            "source_type": "community",
+            "external_id": "ceoca-spiel-aug5-morning",
+            "ticker": "SHOP",
+            "market": "ca",
+            "title": "@bullish_ca: Shopify looks strong",
+            "published_at": published.isoformat(),
+            "effective_at": published.isoformat(),
+            "raw_metadata": {"spiel_id": "spiel-aug5-morning"},
+        }
+        second = {**first, "external_id": "ceoca-spiel-aug5-morning-dup"}
+
+        self.assertEqual(dedupe_key(first), dedupe_key(second))
+
+    def test_ca_community_annotates_same_source_duplicates(self) -> None:
+        published = datetime(2026, 8, 5, 14, 0, tzinfo=timezone.utc)
+        first = {
+            "source": "ceoca_ca",
+            "source_type": "community",
+            "external_id": "ceoca-spiel-aug5-morning",
+            "ticker": "SHOP",
+            "market": "ca",
+            "title": "@bullish_ca: Shopify looks strong",
+            "published_at": published.isoformat(),
+            "effective_at": published.isoformat(),
+            "raw_metadata": {"spiel_id": "spiel-aug5-morning"},
+        }
+        second = {**first, "external_id": "ceoca-spiel-aug5-morning-dup"}
+
+        annotated = annotate_feed_items([first, second])
+
+        self.assertEqual(len(annotated), 2)
+        self.assertEqual(annotated[0]["also_seen_on"], ["ceoca_ca"])
+        self.assertEqual(
+            annotated[0]["also_seen_on_labels"],
+            ["CEO.ca (CA)"],
+        )
+
+
 class CaAnnotateTests(unittest.TestCase):
     def test_news_same_key_keeps_both_rows_annotated(self) -> None:
         first = feed_item("yahoo_ca", "y-1")
