@@ -2455,7 +2455,7 @@ _TRQ_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
 
 _EUX_TICKER_SUFFIXES = ("EUX",)
 _EUX_TICKER_SEPARATORS = (".", " ", "-")
-_EUX_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
+_EUX_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 
 
 def normalize_se_ticker(ticker: str) -> str:
