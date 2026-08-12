@@ -80,6 +80,32 @@ class YahooKrNewsClientTests(unittest.TestCase):
         self.assertIn("region=KR", opener.requested[0])
         self.assertIn("lang=ko-KR", opener.requested[0])
 
+    def test_kr_day_boundary_uses_seoul_timezone(self) -> None:
+        from investment_monitor.sources.kr_news.yahoo.client import YahooKrNewsClient
+
+        # 23:30 UTC 是 KST 次日 08:30，必须归入次日（KST），而不是 UTC 当日。
+        body = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<rss version="2.0"><channel><item>'
+            b'<title>Boundary headline</title>'
+            b'<link>https://finance.yahoo.com/news/230000.html</link>'
+            b'<pubDate>Mon, 10 Aug 2026 23:30:00 +0000</pubDate>'
+            b'<description>Boundary fixture.</description>'
+            b'</item></channel></rss>'
+        )
+        client = YahooKrNewsClient(
+            opener=FakeOpener(body),
+            requests_per_second=1000,
+        )
+        next_day = client.fetch_news(
+            "005930.KS", date(2026, 8, 11), date(2026, 8, 11)
+        )
+        self.assertEqual(len(next_day), 1)
+        same_utc_day = client.fetch_news(
+            "005930.KS", date(2026, 8, 10), date(2026, 8, 10)
+        )
+        self.assertEqual(len(same_utc_day), 0)
+
 
 class YahooKrNewsConnectorTests(unittest.TestCase):
     def request(self, tickers, markets):

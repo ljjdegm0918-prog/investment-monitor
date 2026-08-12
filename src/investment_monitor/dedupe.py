@@ -285,6 +285,7 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_us": "Google News (US)",
     "ceoca_ca": "CEO.ca (CA)",
     "hotcopper_au": "HotCopper (AU)",
+    "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
     "xueqiu": "Xueqiu (CN/HK)",
     "seeking_alpha": "Seeking Alpha (US)",

@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any, Callable, List, Mapping, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 from ...yahoo_common import (
     _parse_rss as _parse_rss_common,
@@ -19,6 +20,7 @@ from ...yahoo_common import (
 )
 
 LOGGER = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
 
 DEFAULT_BASE_URL = "https://feeds.finance.yahoo.com/rss/2.0/headline"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
@@ -168,4 +170,5 @@ def _parse_rss(
         start_date=start_date,
         end_date=end_date,
         data_error=YahooKrNewsDataError,
+        zone=KST,
     )
