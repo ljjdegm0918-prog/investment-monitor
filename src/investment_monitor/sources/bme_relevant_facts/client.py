@@ -150,9 +150,14 @@ class BmeRelevantFactsClient:
                         continue
                     if key:
                         seen.add(key)
-                    records.append(record)
+                    records.append({**record, "retrieval_url": url})
                 if not _has_more(payload):
                     break
+                if page == max_pages:
+                    raise BmeRelevantFactsDataError(
+                        "BME relevant-facts results exceed "
+                        f"max_pages={max_pages} for companyKey={company_key}."
+                    )
         return records
 
     def _get_json(self, url: str) -> Any:
@@ -277,6 +282,10 @@ def _parse_payload(
                 "issuer_name": str(item.get("issuerName") or "").strip(),
                 "pdf_url": str(item.get("pdfurl") or "").strip(),
                 "url": _detail_url(prefix, digits),
+                "published_at_raw": str(
+                    item.get("relevantFactDate") or ""
+                ),
+                "raw_payload": dict(item),
             }
         )
     return records
