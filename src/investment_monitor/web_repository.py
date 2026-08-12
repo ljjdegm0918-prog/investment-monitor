@@ -2425,7 +2425,7 @@ _AQ_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
 
 _CXE_TICKER_SUFFIXES = ("CXE", "BXE")
 _CXE_TICKER_SEPARATORS = (".", " ", "-")
-_CXE_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
+_CXE_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 
 
 def normalize_se_ticker(ticker: str) -> str:
