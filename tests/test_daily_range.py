@@ -139,15 +139,16 @@ class DailyReportHelperTests(unittest.TestCase):
 
 class _DailyRangeHarness(unittest.TestCase):
     clock = None  # 子类可覆盖为返回固定时间的 callable，用于测试默认日期。
+    enabled_sources = ("sec", "news", "community")  # 子类可覆盖。
 
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
         self.project_root = Path(self.temporary_directory.name)
         (self.project_root / "config").mkdir()
         (self.project_root / "data").mkdir()
+        source_lines = "".join(f"  - {name}\n" for name in self.enabled_sources)
         (self.project_root / "config" / "settings.yaml").write_text(
-            "enabled_sources:\n  - sec\n  - news\n  - community\n"
-            "database_path: ../data/web.sqlite3\n",
+            f"enabled_sources:\n{source_lines}database_path: ../data/web.sqlite3\n",
             encoding="utf-8",
         )
         (self.project_root / "config" / "universe.csv").write_text(
@@ -457,6 +458,59 @@ class DailyRangeApiTests(_DailyRangeHarness):
         )
         self.assertEqual(response.status, 200)
         self.assertEqual(self.payload(response)["pagination"]["total"], 1)
+
+
+class DailyReportSourceConfigTests(_DailyRangeHarness):
+    """已配置 source 的记录必须显示，未配置 source 必须被诚实隐藏。
+
+    这是生产「No information for this date」问题的回归：数据库里已有的
+    yahoo_us / seeking_alpha 记录，只有在 #29 / #31 把对应 source 正确接入
+    settings / registry / allowed_sources 之后，才会重新出现在日报里。
+    """
+
+    enabled_sources = ("sec", "news", "community", "yahoo_us", "seeking_alpha")
+
+    def test_configured_news_and_community_sources_display_on_daily(self) -> None:
+        self.items.save([
+            make_item(
+                "yahoo-1",
+                source="yahoo_us",
+                source_type="news",
+                published_at=datetime(2026, 8, 12, 4, tzinfo=timezone.utc),
+            ),
+            make_item(
+                "sa-1",
+                source="seeking_alpha",
+                source_type="community",
+                published_at=datetime(2026, 8, 12, 5, tzinfo=timezone.utc),
+            ),
+        ])
+        response = self.application.handle("GET", "/api/daily?date=2026-08-12")
+        self.assertEqual(response.status, 200)
+        payload = self.payload(response)
+        self.assertEqual(payload["item_count"], 2)
+        self.assertEqual(payload["company_count"], 1)
+        company = payload["companies"][0]
+        self.assertEqual(company["ticker"], "AAPL")
+        self.assertEqual(
+            sorted(item["type"] for item in company["items"]),
+            ["Community", "News"],
+        )
+
+    def test_unconfigured_source_is_not_displayed(self) -> None:
+        self.items.save([
+            make_item(
+                "ghost-1",
+                source="ghost_source",
+                source_type="news",
+                published_at=datetime(2026, 8, 12, 4, tzinfo=timezone.utc),
+            ),
+        ])
+        response = self.application.handle("GET", "/api/daily?date=2026-08-12")
+        self.assertEqual(response.status, 200)
+        payload = self.payload(response)
+        self.assertEqual(payload["item_count"], 0)
+        self.assertEqual(payload["companies"], [])
 
 
 class DailyReportDefaultDateTests(_DailyRangeHarness):
