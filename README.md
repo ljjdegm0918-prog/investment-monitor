@@ -411,7 +411,6 @@ only** and never queried for AQ.
 AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
 
 The web Settings page shows Provider credentials for every implemented source
-The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and
 cannot be configured. An advanced section allows extra environment variables

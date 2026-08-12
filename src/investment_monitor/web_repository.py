@@ -2415,7 +2415,7 @@ _SE_ISIN_PATTERN = re.compile(r"SE[0-9A-Z]{10}")
 
 _AQ_TICKER_SUFFIXES = ("AQ",)
 _AQ_TICKER_SEPARATORS = (".", " ", "-")
-_AQ_ISIN_PATTERN = re.compile(r"[A-Z]{2}[0-9A-Z]{10}")
+_AQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 
 
 def normalize_se_ticker(ticker: str) -> str:
