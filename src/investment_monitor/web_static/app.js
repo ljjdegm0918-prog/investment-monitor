@@ -15,31 +15,37 @@ async function init() {
 
 async function renderDaily() {
   const params = new URLSearchParams(location.search);
-  const selectedDate = params.get("date") || state.bootstrap.selected_date;
+  const legacyDate = params.get("date");
+  const endDate = params.get("end_date") || legacyDate || state.bootstrap.report_selected_date;
+  const startDate = params.get("start_date") || legacyDate || endDate;
   const selectedList = params.get("list") || "";
   document.getElementById("page").innerHTML = `
     <section class="daily-head">
-      <div><p class="eyebrow">DAILY INFORMATION</p><h1>${formatDay(selectedDate)}</h1><p>Company updates for one Eastern Time calendar day.</p></div>
+      <div><p class="eyebrow">DAILY REPORTS</p><h1>${formatRange(startDate, endDate)}</h1><p>One report per Asia/Shanghai calendar day, limited to filings, news, and community updates.</p></div>
       <div class="daily-actions"><button class="button" id="print-page" type="button">Print / Save PDF</button></div>
     </section>
-    <form class="toolbar" id="daily-filter">
-      <label>Date<input type="date" id="daily-date" value="${escAttr(selectedDate)}"></label>
+    <form class="toolbar range-toolbar" id="daily-filter">
+      <label>From<input type="date" id="daily-start-date" value="${escAttr(startDate)}" required></label>
+      <label>To<input type="date" id="daily-end-date" value="${escAttr(endDate)}" required></label>
       <label>List<select id="daily-list"><option value="">All lists</option>${listOptions(selectedList)}</select></label>
-      <button class="button primary" type="submit">View</button>
+      <button class="button primary" type="submit">Generate reports</button>
     </form>
     <div id="daily-content"><p class="loading">Loading information…</p></div>`;
   document.getElementById("print-page").addEventListener("click", () => window.print());
   document.getElementById("daily-filter").addEventListener("submit", event => {
     event.preventDefault();
-    const next = new URLSearchParams({date: document.getElementById("daily-date").value});
+    const start = document.getElementById("daily-start-date").value;
+    const end = document.getElementById("daily-end-date").value;
+    if (start > end) { toast("The start date must be on or before the end date.", true); return; }
+    const next = new URLSearchParams({start_date: start, end_date: end});
     const list = document.getElementById("daily-list").value;
     if (list) next.set("list", list);
     location.href = `/today?${next}`;
   });
   try {
-    const query = new URLSearchParams({date:selectedDate});
+    const query = new URLSearchParams({start_date: startDate, end_date: endDate});
     if (selectedList) query.set("list", selectedList);
-    const data = await api(`/api/daily?${query}`);
+    const data = await api(`/api/daily-range?${query}`);
     document.getElementById("daily-content").innerHTML = dailyContent(data);
   } catch (error) {
     document.getElementById("daily-content").innerHTML = errorState("Request failed", error.message);
@@ -47,19 +53,56 @@ async function renderDaily() {
 }
 
 function dailyContent(data) {
-  if (!data.companies.length) return `<div class="empty"><h2>No information for this date</h2><p>Companies without updates are hidden by default.</p></div>`;
-  return `<div class="daily-document">${data.companies.map(company => `
-    <section class="company-section">
-      <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(company.exchange || "Unavailable")}</p></div><span>${company.items.length} update${company.items.length === 1 ? "" : "s"}</span></header>
-      <div class="information-list">${company.items.map(item => `
-        <article class="information-row">
-          <time datetime="${escAttr(item.time)}">${formatTime(item.time)}</time>
-          <span class="type type-${item.type.toLowerCase()}">${esc(item.type)}</span>
-          <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · Also seen on ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
-          <a class="title" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
-          <a class="raw-url" href="${escAttr(item.url)}" target="_blank" rel="noopener noreferrer">${esc(item.url)}</a>
-        </article>`).join("")}</div>
-    </section>`).join("")}</div>`;
+  const days = data.days || [data];
+  const total = data.item_count ?? days.reduce((sum, day) => sum + day.item_count, 0);
+  const perf = data.performance;
+  const perfBanner = perf?.warnings?.length
+    ? `<aside class="range-performance-warn" role="status">${perf.warnings.map(w => `<p>${esc(w)}</p>`).join("")}</aside>`
+    : "";
+  if (!total && days.length === 1) return `${perfBanner}<div class="empty"><h2>No information for this date</h2><p>No filing, news, or community updates were published in the selected day.</p></div>`;
+  return `${perfBanner}<section class="range-summary" aria-label="Range summary"><div><strong>${total}</strong><span>updates</span></div><p>${days.length} daily report${days.length === 1 ? "" : "s"} · Asia/Shanghai</p></section>
+    <div class="daily-range">${days.map(day => dailyDay(day)).join("")}</div>`;
+}
+
+function dailyDay(day) {
+  const counts = day.counts || {filings: 0, news: 0, community: 0};
+  return `<section class="daily-document day-report" id="day-${escAttr(day.date)}">
+    <header class="day-report-head">
+      <div><p class="eyebrow">DAILY REPORT</p><h2>${formatDay(day.date)}</h2></div>
+      <div class="category-counts" aria-label="Update counts">
+        <span><strong>${counts.filings || 0}</strong> Filings</span>
+        <span><strong>${counts.news || 0}</strong> News</span>
+        <span><strong>${counts.community || 0}</strong> Community</span>
+      </div>
+    </header>
+    ${day.companies.length ? day.companies.map(company => dailyCompany(company)).join("") : `<div class="day-empty"><p>No updates for this day.</p></div>`}
+  </section>`;
+}
+
+function dailyCompany(company) {
+  const items = company.items || [];
+  let groups = "";
+  let lastType = null;
+  for (const item of items) {
+    const label = CATEGORY_LABELS[item.type] || item.type;
+    if (label !== lastType) {
+      groups += `<h3 class="category-title">${esc(label)}</h3>`;
+      lastType = label;
+    }
+    const url = safeUrl(item.url);
+    groups += `
+      <article class="information-row">
+        <time datetime="${escAttr(item.time)}">${formatTime(item.time)}</time>
+        <span class="type type-${escAttr(String(item.type).toLowerCase())}">${esc(item.type)}</span>
+        <span class="source">${esc(item.source)}${(item.also_seen_on || []).length ? ` · Also seen on ${item.also_seen_on.map(esc).join(", ")}` : ""}</span>
+        <a class="title" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>
+        <a class="raw-url" href="${escAttr(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a>
+      </article>`;
+  }
+  return `<section class="company-section">
+    <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(company.exchange || "Unavailable")}${company.market ? ` · ${esc(String(company.market).toUpperCase())}` : ""}</p></div><span>${items.length} update${items.length === 1 ? "" : "s"}</span></header>
+    <div class="information-list">${groups}</div>
+  </section>`;
 }
 
 async function renderManage() {
@@ -257,12 +300,16 @@ async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap")
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
 function statusLabel(status) { return ({connected:"Connected",stale:"Data stale",not_connected:"Not connected",temporarily_unavailable:"Failed",unavailable:"Waiting for data"})[status] || status; }
 function regionForMarket(market) { return ({us:"United States",jp:"Japan",hk:"Hong Kong",cn:"China",kr:"Korea",uk:"United Kingdom",tw:"Taiwan",ca:"Canada",au:"Australia",be:"Belgium",fr:"France",de:"Germany",nl:"Netherlands",it:"Italy",es:"Spain",sg:"Singapore",ch:"Switzerland",pl:"Poland",se:"Sweden",aq:"Aquis (AQSE)",cxe:"Cboe Europe (CXE)",emf:"Europe (Funds)",trq:"Turquoise (TRQ)",eux:"Europe (Eurex)"})[market] || "Unavailable"; }
+const CATEGORY_LABELS = {Filing: "Official filings", News: "News", Community: "Community"};
 function formatDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
-function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York", timeZoneName:"short"}).format(new Date(value)); }
+function formatShortDay(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
+function formatRange(start, end) { return start === end ? formatDay(start) : `${formatShortDay(start)} – ${formatShortDay(end)}`; }
+function formatTime(value) { return new Intl.DateTimeFormat("en-US", {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat("en-US", {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
 async function api(url, options={}) { const response = await fetch(url, {headers:{"Content-Type":"application/json"}, ...options}); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`); return payload; }
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
+function safeUrl(value) { try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : "#"; } catch (_) { return "#"; } }
 function renderFatal(error) { document.getElementById("page").innerHTML = errorState("Workspace request failed", error.message); }
