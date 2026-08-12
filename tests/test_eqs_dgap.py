@@ -13,6 +13,14 @@ FIXTURES = Path(__file__).parent / "fixtures" / "eqs_dgap"
 SAP_UNIVERSE = {
     "SAP": {"name": "SAP SE O.N.", "isin": "DE0007164600", "board": "DAX", "exchange": "DAX"},
 }
+ETF_UNIVERSE = {
+    "EXS1": {
+        "name": "ISHS CORE DAX UC.ETF EOA",
+        "isin": "DE0005933931",
+        "board": "EXCHANGE TRADED FUNDS - PASSIV",
+        "exchange": "EXCHANGE TRADED FUNDS - PASSIV",
+    },
+}
 
 
 class FakeResponse:
@@ -122,6 +130,25 @@ class EqsDgapTests(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, (("SAP", "no_universe_isin"),))
         self.assertEqual(opener.requested, [])
+
+    def test_etf_isin_is_queried_and_empty_records_are_honest(self) -> None:
+        """DETF-1: ETF ISINs flow through eqs_dgap; live EQS returns none."""
+        opener = FakeOpener(b'{"status":"OK","records":[]}')
+        connector = EqsDgapConnector(
+            client=EqsDgapClient(opener=opener, requests_per_second=1000),
+            universe=ETF_UNIVERSE,
+        )
+        items = connector.collect(
+            CollectionRequest(
+                tickers=("EXS1",),
+                start_date=date(2026, 8, 1),
+                end_date=date(2026, 8, 8),
+                markets={"EXS1": "de"},
+            )
+        )
+        self.assertEqual(items, [])
+        self.assertEqual(connector.last_errors, ())
+        self.assertIn("isin=DE0005933931", opener.requested[0])
 
 
 if __name__ == "__main__":

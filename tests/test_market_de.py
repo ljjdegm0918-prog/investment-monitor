@@ -31,6 +31,11 @@ class MarketDETests(unittest.TestCase):
         self.assertEqual(MARKET_DE, "de")
         self.assertIn("de", ALLOWED_MARKETS)
 
+    def test_german_etf_deepening_has_no_new_market_code(self) -> None:
+        """DETF-0 lock: German ETF's stays on market=de."""
+        for blocked in ("etf", "de_etf", "xetra_etf"):
+            self.assertNotIn(blocked, ALLOWED_MARKETS)
+
     def test_collection_request_accepts_de_market(self) -> None:
         request = CollectionRequest(
             tickers=("SAP",),
@@ -187,6 +192,18 @@ class MarketDESourceRegistrationTests(unittest.TestCase):
             self.assertIn(name, registry.registered_names)
             self.assertIsNotNone(registry.factory_for(name))
         self.assertNotIn("de_community", registry.registered_names)
+
+    def test_no_etf_specific_disclosure_sources_are_registered(self) -> None:
+        """DETF-4 lock: no stable key-free German ETF-specific feed exists."""
+        registry = create_default_registry()
+        names = registry.registered_names
+        for blocked in (
+            "de_etf_prospectus",
+            "bafin_fund",
+            "eurex_etf",
+            "xetra_etf_pack",
+        ):
+            self.assertNotIn(blocked, names)
 
     def test_de_yahoo_symbol_uses_dot_de_suffix(self) -> None:
         self.assertEqual(de_yahoo_symbol("SAP"), "SAP.DE")
