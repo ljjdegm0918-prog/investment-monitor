@@ -63,6 +63,10 @@ For SE, no disclosure connector is wired (FI/Nasdaq/EQS A3 spike), so
 regulatory filings never get a key and are never annotated; SE news
 (yahoo_se / google_news_se) pairs across sources on ticker + Stockholm day
 + normalized title.
+For AQ, no disclosure connector is wired (AQSE Vercel-challenge A3 spike),
+so regulatory filings never get a key and are never annotated; AQ news
+(yahoo_aq / google_news_aq) pairs across sources on ticker + London day +
+normalized title (Europe/London, matching the AQSE publication timezone).
 """
 
 from __future__ import annotations
@@ -144,6 +148,8 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_pl": 29,
     "yahoo_se": 30,
     "google_news_se": 31,
+    "yahoo_aq": 32,
+    "google_news_aq": 33,
 }
 SOURCE_DISPLAY_LABELS = {
     "dart": "OpenDART",
@@ -197,6 +203,8 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_pl": "Google News (PL)",
     "yahoo_se": "Yahoo Finance SE",
     "google_news_se": "Google News (SE)",
+    "yahoo_aq": "Yahoo Finance AQ",
+    "google_news_aq": "Google News (AQ)",
 }
 
 _FULLWIDTH_SPACE = "\u3000"
@@ -209,7 +217,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se",
+        "sg", "be", "ch", "pl", "se", "aq",
     }:
         return None
     source_type = str(item.get("source_type") or "")
@@ -300,6 +308,11 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     if market == "ca":
         # No CA disclosure connector is wired (SEDAR+ A3 spike); a stray
         # regulatory_filing row must never be cross-annotated.
+        return None
+    if market == "aq":
+        # No AQ disclosure connector is wired (AQSE Vercel-challenge A3
+        # spike); a stray regulatory_filing row must never be
+        # cross-annotated.
         return None
     if market == "sg":
         # No SG disclosure connector is wired (SGX A3 spike); a stray
@@ -661,6 +674,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "se"
         else BRUSSELS
         if market == "be"
+        else LONDON
+        if market == "aq"
         else LONDON
     )
     title = normalize_title(item.get("title"))

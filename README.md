@@ -391,6 +391,25 @@ SE feed soft-dedupe is display-only ("Also seen on"; all rows are kept and total
 
 `market=be` feed soft-dedupe (display only, all rows kept; same `KR_FEED_SOFT_DEDUPE` switch as the other markets, default on): `yahoo_be` / `google_news_be` news pairs across sources on ticker + Brussels day (`Europe/Brussels`) + normalized title. FSMA STORI filings pair on the stable STORI document id (`external_id` = `requiredReportingTopicId`); without an id the fallback is source-scoped (source + ticker + Brussels day + normalized title), so a hypothetical second BE disclosure source is never cross-annotated by title. Every row stays in the feed with an "Also seen on" label; totals and page sizes are never shrunk.
 
+### Aquis sources (AQ)
+
+`market=aq` targets **Aquis Stock Exchange (AQSE)** issuers, not the Aquis
+Exchange MTF pan-European trading venue. Companies use canonical root
+tickers (`ADB` / `ADB.AQ` / `adb-aq` all store as `ADB`; the `.AQ` exchange
+suffix is stripped at add time while AQSE mnemonics stay as-is and
+12-character ISINs are kept as-is) and remain unmapped. Finnhub is **US
+only** and never queried for AQ.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `aq_disclosure` | Filings | none | **Not wired (AQ-1 spike A3, 2026-08-10)**: the official AQSE announcements page (`www.aquis.eu/stock-exchange/announcements`) is a server-rendered HTML list (Date / Title / View rows, key-free), but `www.aquis.eu` and `embed.aquis.eu` sit behind a Vercel bot challenge — stdlib/curl clients get HTTP 429 with `X-Vercel-Mitigated: challenge` and a JS proof-of-work checkpoint; no key-free official JSON/RSS exists (`embed.aquis.eu/api/*` returns the same challenge; `api.aquis.eu` / `data.aquis.eu` abort TLS). LSE/Investegate/Companies House are deliberately **not** used as Aquis substitutes, and no paid Aquis data product is wired. |
+| `aq_second_disclosure` | Filings | none | **Not wired (AQ-4 re-verified D2, 2026-08-10)**: no stable key-free second AQSE disclosure source appeared. The official announcements page and the market-notices page (`embed.aquis.eu/stock-exchange/rules-and-regulations/market-notices`) still return HTTP 429 (`X-Vercel-Mitigated: challenge`); no official RSS/JSON exists; third-party mirrors (Investegate / uk-wire / Proactive) are deliberately not wired as Aquis disclosure, and paid Aquis data products are excluded. |
+| `aq_universe` | Universe | none | **Wired (AQ-2, partial unofficial mirror)**: `refresh_aq_universe()` fetches `https://www.ticker.app/aqse` (server-rendered Name / TIDM / ISIN table; key-free). Live 2026-08-10: ~79 unique AQSE instruments, 61 with ISIN; the official Aquis directory (`embed.aquis.eu/companies`) renders ~90 names but is behind a Vercel bot challenge for stdlib/curl clients, so completeness is **not verified** — this is a partial mirror, never a full AQSE universe, and no LSE/UK directory is filtered in. Board/exchange stored as `AQSE`; never enters the feed; backfills name/exchange/ISIN on add-company. |
+| `yahoo_aq` | News | None (key-free) | Yahoo Finance AQ public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.AQ&region=GB&lang=en-GB`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ADB.AQ`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ADB`), `.AQ` is request-time only. |
+| `google_news_aq` | News | None (key-free) | Google News AQ RSS (`news.google.com/rss/search?q={ROOT}.AQ&hl=en-GB&gl=GB&ceid=GB:en`). Live verified 2026-08-10; results can be loosely related; public RSS may break without notice. |
+
+AQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no AQ disclosure connector is wired (AQ-1 A3 / AQ-4 D2). News: `yahoo_aq` ↔ `google_news_aq` pair across sources on ticker + London day (`Europe/London`) + normalized title.
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

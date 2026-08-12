@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo! Finance: ADB.AQ News</title>
+    <item>
+      <title>Adnams plc raises funds for new brewery</title>
+      <link>https://uk.finance.yahoo.com/news/adb-110000601.html</link>
+      <pubDate>Wed, 05 Aug 2026 08:30:00 +0000</pubDate>
+      <description>Adnams announces a new capital raise.</description>
+    </item>
+    <item>
+      <title>London small caps rally on rate hopes</title>
+      <link>https://uk.finance.yahoo.com/news/adb-110000602.html</link>
+      <pubDate>Thu, 06 Aug 2026 15:00:00 +0000</pubDate>
+      <description>Small-cap indices advance.</description>
+    </item>
+    <item>
+      <title>Old article outside the window</title>
+      <link>https://uk.finance.yahoo.com/news/adb-110000603.html</link>
+      <pubDate>Mon, 20 Jul 2026 10:00:00 +0000</pubDate>
+      <description>Too old to keep.</description>
+    </item>
+  </channel>
+</rss>

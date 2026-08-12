@@ -41,6 +41,7 @@ from .models import (
     MARKET_CH,
     MARKET_PL,
     MARKET_SE,
+    MARKET_AQ,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -58,6 +59,7 @@ from .universe.sg_universe import sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
 from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.se_universe import se_universe_name_map
+from .universe.aq_universe import aq_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -356,6 +358,8 @@ class WebApplication:
                     )
                 elif market == MARKET_SE:
                     name_fallback = se_universe_name_map()
+                elif market == MARKET_AQ:
+                    name_fallback = aq_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -709,6 +713,10 @@ class WebApplication:
         if market == MARKET_SE:
             # SE stays unmapped via SEC; disclosure matches by ISIN/name
             # from the universe, never by pretending an SEC CIK exists.
+            return None
+        if market == MARKET_AQ:
+            # AQ stays unmapped via SEC; never let SEC map an Aquis symbol
+            # to a same-named US company.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

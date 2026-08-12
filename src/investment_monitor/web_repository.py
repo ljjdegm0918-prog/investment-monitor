@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -69,6 +69,8 @@ SOURCE_LABELS = {
     "google_news_pl": "Google News (PL)",
     "yahoo_se": "Yahoo Finance SE",
     "google_news_se": "Google News (SE)",
+    "yahoo_aq": "Yahoo Finance AQ",
+    "google_news_aq": "Google News (AQ)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -113,6 +115,8 @@ PROVIDER_LABELS = {
     "google_news_pl": "Google News (PL)",
     "yahoo_se": "Yahoo Finance SE",
     "google_news_se": "Google News (SE)",
+    "yahoo_aq": "Yahoo Finance AQ",
+    "google_news_aq": "Google News (AQ)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -720,6 +724,10 @@ class WebRepository:
         if market == MARKET_SE:
             tickers = tuple(
                 dict.fromkeys(normalize_se_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_AQ:
+            tickers = tuple(
+                dict.fromkeys(normalize_aq_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2631,6 +2639,10 @@ _SE_TICKER_SUFFIXES = ("ST", "STO", "OMX")
 _SE_TICKER_SEPARATORS = (".", " ", "-")
 _SE_ISIN_PATTERN = re.compile(r"SE[0-9A-Z]{10}")
 
+_AQ_TICKER_SUFFIXES = ("AQ",)
+_AQ_TICKER_SEPARATORS = (".", " ", "-")
+_AQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
+
 
 def normalize_se_ticker(ticker: str) -> str:
     """Normalize a Swedish (Nasdaq Stockholm) symbol.
@@ -2657,6 +2669,42 @@ def normalize_se_ticker(ticker: str) -> str:
         changed = False
         for separator in _SE_TICKER_SEPARATORS:
             for suffix in _SE_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_aq_ticker(ticker: str) -> str:
+    """Normalize an Aquis (AQSE) symbol to its canonical root form.
+
+    Accepts plain symbols (``ADB``) and the common Aquis exchange suffix
+    used by data providers (``ADB.AQ``, ``ADB AQ``, ``ADB-AQ``; stacked
+    suffixes like ``ADB.AQ.AQ`` collapse to ``ADB``). The suffix is
+    stripped and the root symbol is uppercased; a plain symbol without a
+    suffix is preserved as-is. Suffix words without a separator (``AQ``)
+    are never erased. AQSE mnemonics are short alphanumeric codes
+    (typically 2-6 characters, e.g. ``ADB`` / ``MER`` / ``ALSP`` /
+    ``DXSP``) and may contain digits (``B HODL`` -> ``B HODL`` stays as
+    typed once whitespace is normalized); no fixed width is assumed.
+    When the input contains a 12-character ISIN (two letters followed by
+    10 alphanumeric characters, e.g. ``GB00BF01VL55`` for Ace Liberty &
+    Stone), the ISIN is extracted and returned instead, since an ISIN is
+    a stable identifier in its own right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _AQ_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AQ_TICKER_SEPARATORS:
+            for suffix in _AQ_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
