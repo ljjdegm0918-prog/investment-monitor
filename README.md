@@ -484,6 +484,27 @@ and never queried for TRQ.
 
 TRQ feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no TRQ disclosure connector is wired (TRQ-1 A3 / TRQ-4). News: `google_news_trq` pairs on ticker + London day (`Europe/London`) + normalized title (only one TRQ news source exists, so pairs are same-source).
 
+### Eurex Core (EUX)
+
+The "Eurex Core (NP, L1)" track is a **derivatives exchange** track
+(futures/options product codes), not a stock country track, not AEE
+(`cxe`/`trq`), not AQSE (`aq`), not Mutual Funds (`emf`), and not the
+Europe Display Value Bundle. The market short code is `eux`; no
+over-broad `fut`/`opt`/`deriv` code is used. Eurex product codes
+(`FDAX` / `FGBL` / `ESX5` / `2FE`) are the canonical identifiers (root /
+product level, not individual expiry contracts); `.EUX` suffixes are
+stripped at add time; product ISINs are kept as-is. Products are added as
+unmapped. Finnhub is **US only** and never queried for EUX.
+
+| Source | Type | Key | Boundaries |
+|---|---|---|---|
+| `eux_disclosure` | Filings | none | **Not wired (EUX-1 spike A3, 2026-08-11)**: the official Eurex circulars page (`eurex.com/ex-en/find/circulars`) is a JS-driven search surface (HTTP 200, but no server-rendered per-product rows and no stable JSON feed; the page lists exchange-wide operational notices, not per-product issuer OAM). Eurex derivatives are exchange-listed contracts without issuers, so no circular connector is wired and no stock OAM (eqs_dgap / investegate / uk / de / cxe) is re-mapped onto `market=eux`. The Eurex host also shows intermittent TLS EOFs (same host quirk as GPW/EQS). |
+| `eux_second_disclosure` | Filings | none | **Not wired (EUX-4 re-verified 2026-08-11)**: no stable key-free second Eurex disclosure source appeared. The official product list CSV remains reachable (HTTP 200, 844,916 bytes) and the circulars page remains a JS search surface (HTTP 200); no per-product notice JSON exists and paid Eurex/Deutsche Börse market-data products (`eurex_data_paid` / `deutsche_boerse_paid`) and the Europe Display Value Bundle are deliberately not wired. This is a derivatives track - not a stock or Display Bundle track. |
+| `eux_universe` | Universe | none | **Wired (EUX-2)**: `refresh_eux_universe()` fetches the key-free official Eurex product list CSV (linked from `eurex.com/ex-en/markets/productSearch`; live 2026-08-11: ~2,997 product rows, product-level - no individual expiry contracts). Semicolon-delimited with PRODUCT_ID / PRODUCT_TYPE / PRODUCT_NAME / PRODUCT_GROUP / CURRENCY / PRODUCT_ISIN / UNDERLYING_ISIN / COUNTRY_CODE / CASH_MARKET_ID etc.; types include FSTK/OSTK/FINX/OINX/FCUR/FBND/... (single-stock futures/options are Eurex derivatives, not Xetra cash equities). `counts` by product type and `counts_by_group`; backfills name/exchange/ISIN/group on add-company; breadth only, never enters the feed. The Eurex host shows intermittent TLS EOFs (fetch retries); the CSV blob URL may change and `EUX_UNIVERSE_PRODUCT_URL` overrides it. |
+| `google_news_eux` | News | None (key-free) | Google News RSS (`news.google.com/rss/search?q={query}&hl=de&gl=DE&ceid=DE:de`). Live verified 2026-08-11: quoted product names return items (~71 for `"DAX Futures"`); bare product codes also return items (~19 for `FDAX`) but are more loosely related. Query = product name from the EUX universe cache when available, otherwise the Eurex product code. **No `yahoo_eux` connector exists** because Yahoo Finance does not quote Eurex derivatives with a stable suffix. Results may be loosely related; public RSS may break without notice. |
+
+EUX feed soft-dedupe is display-only ("Also seen on"; all rows are kept and totals/page sizes never shrink; shared switch `KR_FEED_SOFT_DEDUPE`). Filings are never annotated because no EUX disclosure connector is wired (EUX-1 A3 / EUX-4). News: `google_news_eux` pairs on product code + Berlin day (`Europe/Berlin`) + normalized title (only one EUX news source exists, so pairs are same-source).
+
 The web Settings page shows Provider credentials for every implemented source
 (each connector declares its own fields, currently `FINNHUB_API_KEY` and
 `SEC_USER_AGENT`); unimplemented sources are shown as Not implemented and

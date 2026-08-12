@@ -45,6 +45,7 @@ from .models import (
     MARKET_CXE,
     MARKET_EMF,
     MARKET_TRQ,
+    MARKET_EUX,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -66,6 +67,7 @@ from .universe.aq_universe import aq_universe_name_map
 from .universe.cxe_universe import cxe_universe_name_map
 from .universe.emf_universe import emf_universe_name_map
 from .universe.trq_universe import trq_universe_name_map
+from .universe.eux_universe import eux_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -372,6 +374,8 @@ class WebApplication:
                     name_fallback = emf_universe_name_map()
                 elif market == MARKET_TRQ:
                     name_fallback = trq_universe_name_map()
+                elif market == MARKET_EUX:
+                    name_fallback = eux_universe_name_map()
                 elif market == MARKET_CA:
                     name_fallback = ca_universe_name_map()
                     if not name_fallback:
@@ -741,6 +745,10 @@ class WebApplication:
         if market == MARKET_TRQ:
             # TRQ stays unmapped via SEC; never let SEC map a Turquoise
             # symbol to a same-named US company.
+            return None
+        if market == MARKET_EUX:
+            # EUX stays unmapped via SEC; Eurex derivatives are product
+            # codes, never SEC CIKs.
             return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map

@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
 from .dedupe import annotate_feed_items
-from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
+from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
@@ -74,6 +74,7 @@ SOURCE_LABELS = {
     "google_news_cxe": "Google News (CXE)",
     "google_news_emf": "Google News (EMF)",
     "google_news_trq": "Google News (TRQ)",
+    "google_news_eux": "Google News (EUX)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -123,6 +124,7 @@ PROVIDER_LABELS = {
     "google_news_cxe": "Google News (CXE)",
     "google_news_emf": "Google News (EMF)",
     "google_news_trq": "Google News (TRQ)",
+    "google_news_eux": "Google News (EUX)",
     "gpw_espi": "GPW ESPI/EBI",
     "eqs_dgap": "EQS News (DGAP)",
     "yahoo_de": "Yahoo Finance DE",
@@ -746,6 +748,10 @@ class WebRepository:
         if market == MARKET_TRQ:
             tickers = tuple(
                 dict.fromkeys(normalize_trq_ticker(ticker) for ticker in tickers)
+            )
+        if market == MARKET_EUX:
+            tickers = tuple(
+                dict.fromkeys(normalize_eux_ticker(ticker) for ticker in tickers)
             )
         if market == MARKET_TW:
             tickers = tuple(
@@ -2673,6 +2679,10 @@ _TRQ_TICKER_SUFFIXES = ("TRQ", "TRQX", "TQEX")
 _TRQ_TICKER_SEPARATORS = (".", " ", "-")
 _TRQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 
+_EUX_TICKER_SUFFIXES = ("EUX",)
+_EUX_TICKER_SEPARATORS = (".", " ", "-")
+_EUX_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
+
 
 def normalize_se_ticker(ticker: str) -> str:
     """Normalize a Swedish (Nasdaq Stockholm) symbol.
@@ -2832,6 +2842,41 @@ def normalize_trq_ticker(ticker: str) -> str:
         changed = False
         for separator in _TRQ_TICKER_SEPARATORS:
             for suffix in _TRQ_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_eux_ticker(ticker: str) -> str:
+    """Normalize a Eurex product identifier to its canonical root form.
+
+    Eurex product codes (e.g. ``FDAX`` / ``FGBL`` / ``ESX5`` / ``2FE`` /
+    ``34DF``) are the canonical identifiers for the free Eurex product
+    list; individual expiry contracts are deliberately not stored (the
+    free product list is product-level). Accepts plain codes and the
+    explicit Eurex suffix used by data providers (``FDAX.EUX``,
+    ``FGBL EUX``, ``ESX5-EUX``; stacked suffixes collapse). The suffix is
+    stripped and the root code is uppercased; a plain code without a
+    suffix is preserved as-is. Suffix words without a separator (``EUX``)
+    are never erased. When the input contains a 12-character ISIN (two
+    letters + 10 alphanumeric characters), the ISIN is extracted and
+    returned instead, since an ISIN is a stable identifier in its own
+    right.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _EUX_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _EUX_TICKER_SEPARATORS:
+            for suffix in _EUX_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
