@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from time import perf_counter
 from typing import (
     Any,
     Dict,
@@ -25,11 +26,13 @@ from typing import (
 from zoneinfo import ZoneInfo
 
 from .config import SourceConfig, UniverseEntry
+from .daily import local_day_bounds
 from .dedupe import annotate_feed_items
 from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 
 EASTERN = ZoneInfo("America/New_York")
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 FIXED_LISTS = (
     ("holdings", "Holdings", 1),
     ("planned", "Planned Purchases", 2),
@@ -292,12 +295,20 @@ class FeedFilters:
             raise ValueError("amendment must be all, yes, or no")
         if self.information_type not in {
             "all",
+            "daily",
             "filings",
             "news",
             "community",
             "research",
         }:
             raise ValueError("unsupported information_type")
+
+
+@dataclass(frozen=True)
+class FeedDisplayAllResult:
+    items: Tuple[Mapping[str, Any], ...]
+    pages_fetched: int
+    query_ms: int
 
 
 @dataclass(frozen=True)
@@ -920,42 +931,20 @@ class WebRepository:
         source_placeholders = ",".join("?" for _ in self._allowed_sources)
         if not source_placeholders:
             return PageResult((), 0, 1, filters.page_size)
-        sql = f"""
-            SELECT i.id, i.source, i.source_type, i.external_id, i.issuer,
-                   i.published_at, i.title, i.document_type, i.url,
-                   i.collected_at, i.raw_metadata, i.market, i.summary,
-                   i.effective_at,
-                   COALESCE(r.is_read, 0) AS is_read,
-                   c.ticker, c.name AS company_name, c.exchange, c.cik,
-                   GROUP_CONCAT(DISTINCT l.slug) AS list_slugs
-            FROM information_items i
-            JOIN information_item_tickers it ON it.item_id = i.id
-            JOIN companies c ON c.ticker = it.ticker
-              AND (c.market = it.market OR it.market = 'unknown')
-            JOIN company_list_memberships m ON m.company_id = c.id
-            JOIN system_lists l ON l.id = m.list_id
-            LEFT JOIN information_read_state r ON r.item_id = i.id
-            WHERE i.source IN ({source_placeholders})
-              AND COALESCE(json_extract(i.raw_metadata, '$.generated'), 0) != 1
-              {where_sql}
-            GROUP BY i.id, c.id
-            ORDER BY {self._effective_timestamp_sql()} DESC,
-                     i.external_id DESC, i.source DESC, i.id DESC
-            LIMIT ? OFFSET ?
-        """
-        count_sql = f"""
-            SELECT COUNT(DISTINCT i.id) AS total
-            FROM information_items i
-            JOIN information_item_tickers it ON it.item_id = i.id
-            JOIN companies c ON c.ticker = it.ticker
-              AND (c.market = it.market OR it.market = 'unknown')
-            JOIN company_list_memberships m ON m.company_id = c.id
-            JOIN system_lists l ON l.id = m.list_id
-            LEFT JOIN information_read_state r ON r.item_id = i.id
-            WHERE i.source IN ({source_placeholders})
-              AND COALESCE(json_extract(i.raw_metadata, '$.generated'), 0) != 1
-              {where_sql}
-        """
+        base_conditions = self._feed_base_conditions(source_placeholders)
+        sql = (
+            f"SELECT {self._feed_select_columns()} "
+            f"{self._feed_from_join()} "
+            f"WHERE {base_conditions} {where_sql} "
+            f"GROUP BY i.id, c.id "
+            f"ORDER BY {self._feed_order_by()} "
+            "LIMIT ? OFFSET ?"
+        )
+        count_sql = (
+            f"SELECT COUNT(DISTINCT i.id) AS total "
+            f"{self._feed_from_join()} "
+            f"WHERE {base_conditions} {where_sql}"
+        )
         base_parameters = list(self._allowed_sources) + parameters
         with self._connect() as connection:
             total = int(
@@ -987,6 +976,42 @@ class WebRepository:
             result.total,
             result.page,
             result.page_size,
+        )
+
+    def query_feed_display_all(self, filters: FeedFilters) -> FeedDisplayAllResult:
+        """Return every matching display row with global soft dedupe.
+
+        Daily reports need the complete information item × company row set.
+        ``query_feed`` counts ``COUNT(DISTINCT i.id)`` while returning one row
+        per ``(i.id, c.id)``, so its page count undercounts when a single item
+        is tickered to multiple companies and a naive page loop truncates the
+        result.  This method therefore runs a single unpaginated query and
+        annotates the full row set once, without LIMIT/OFFSET.
+        """
+        started = perf_counter()
+        where_sql, parameters = self._feed_where(filters)
+        source_placeholders = ",".join("?" for _ in self._allowed_sources)
+        if not source_placeholders:
+            return FeedDisplayAllResult((), pages_fetched=1, query_ms=0)
+        sql = (
+            f"SELECT {self._feed_select_columns()} "
+            f"{self._feed_from_join()} "
+            f"WHERE {self._feed_base_conditions(source_placeholders)} {where_sql} "
+            f"GROUP BY i.id, c.id "
+            f"ORDER BY {self._feed_order_by()}"
+        )
+        base_parameters = list(self._allowed_sources) + parameters
+        with self._connect() as connection:
+            rows = connection.execute(sql, base_parameters).fetchall()
+        items = tuple(self._feed_item(row) for row in rows)
+        query_ms = int((perf_counter() - started) * 1000)
+        return FeedDisplayAllResult(
+            items=tuple(annotate_feed_items(
+                items,
+                enabled=self._kr_soft_dedupe_enabled(),
+            )),
+            pages_fetched=1,
+            query_ms=query_ms,
         )
 
     @staticmethod
@@ -1851,17 +1876,59 @@ class WebRepository:
             conditions.append("i.source_type = 'community'")
         elif filters.information_type == "research":
             conditions.append("i.source_type = 'research'")
+        elif filters.information_type == "daily":
+            conditions.append(
+                "i.source_type IN ('regulatory_filing', "
+                "'regulatory_disclosure', 'news', 'community')"
+            )
         if filters.form_type:
             conditions.append("i.document_type = ?")
             parameters.append(filters.form_type)
-        if filters.start_date:
-            start_utc, _ = _eastern_day_bounds(filters.start_date)
-            conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
-            parameters.append(start_utc.isoformat())
-        if filters.end_date:
-            _, end_utc = _eastern_day_bounds(filters.end_date)
-            conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
-            parameters.append(end_utc.isoformat())
+        if filters.start_date or filters.end_date:
+            if filters.information_type == "daily":
+                calendar_date_sql = (
+                    "date(json_extract(i.raw_metadata, '$.calendar_date'))"
+                )
+                calendar_conditions: List[str] = []
+                timestamp_conditions: List[str] = []
+                calendar_parameters: List[Any] = []
+                timestamp_parameters: List[Any] = []
+                if filters.start_date:
+                    start_utc, _ = local_day_bounds(filters.start_date, SHANGHAI)
+                    calendar_conditions.append(f"{calendar_date_sql} >= date(?)")
+                    calendar_parameters.append(filters.start_date.isoformat())
+                    timestamp_conditions.append(
+                        f"{self._effective_timestamp_sql()} >= datetime(?)"
+                    )
+                    timestamp_parameters.append(start_utc.isoformat())
+                if filters.end_date:
+                    _, end_utc = local_day_bounds(filters.end_date, SHANGHAI)
+                    calendar_conditions.append(f"{calendar_date_sql} <= date(?)")
+                    calendar_parameters.append(filters.end_date.isoformat())
+                    timestamp_conditions.append(
+                        f"{self._effective_timestamp_sql()} < datetime(?)"
+                    )
+                    timestamp_parameters.append(end_utc.isoformat())
+                conditions.append(
+                    "(("
+                    + f"{calendar_date_sql} IS NOT NULL AND "
+                    + " AND ".join(calendar_conditions)
+                    + ") OR ("
+                    + f"{calendar_date_sql} IS NULL AND "
+                    + " AND ".join(timestamp_conditions)
+                    + "))"
+                )
+                parameters.extend(calendar_parameters)
+                parameters.extend(timestamp_parameters)
+            else:
+                if filters.start_date:
+                    start_utc, _ = _eastern_day_bounds(filters.start_date)
+                    conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
+                    parameters.append(start_utc.isoformat())
+                if filters.end_date:
+                    _, end_utc = _eastern_day_bounds(filters.end_date)
+                    conditions.append(f"{self._effective_timestamp_sql()} < datetime(?)")
+                    parameters.append(end_utc.isoformat())
         if filters.start_at:
             conditions.append(f"{self._effective_timestamp_sql()} >= datetime(?)")
             parameters.append(filters.start_at.astimezone(timezone.utc).isoformat())
@@ -1980,6 +2047,44 @@ class WebRepository:
             "COALESCE(datetime(i.effective_at), "
             "datetime(json_extract(i.raw_metadata, '$.acceptanceDateTime')), "
             "datetime(i.published_at))"
+        )
+
+    def _feed_select_columns(self) -> str:
+        """Return the SELECT column list shared by feed queries."""
+        return (
+            "i.id, i.source, i.source_type, i.external_id, i.issuer, "
+            "i.published_at, i.title, i.document_type, i.url, "
+            "i.collected_at, i.raw_metadata, i.market, i.summary, "
+            "i.effective_at, "
+            "COALESCE(r.is_read, 0) AS is_read, "
+            "c.ticker, c.name AS company_name, c.exchange, c.cik, "
+            "GROUP_CONCAT(DISTINCT l.slug) AS list_slugs"
+        )
+
+    def _feed_from_join(self) -> str:
+        """Return the shared FROM/JOIN clause for feed queries."""
+        return (
+            "FROM information_items i "
+            "JOIN information_item_tickers it ON it.item_id = i.id "
+            "JOIN companies c ON c.ticker = it.ticker "
+            "  AND (c.market = it.market OR it.market = 'unknown') "
+            "JOIN company_list_memberships m ON m.company_id = c.id "
+            "JOIN system_lists l ON l.id = m.list_id "
+            "LEFT JOIN information_read_state r ON r.item_id = i.id"
+        )
+
+    def _feed_base_conditions(self, source_placeholders: str) -> str:
+        """Return the source-scope and generated-row exclusion shared by feeds."""
+        return (
+            f"i.source IN ({source_placeholders}) "
+            "AND COALESCE(json_extract(i.raw_metadata, '$.generated'), 0) != 1"
+        )
+
+    def _feed_order_by(self) -> str:
+        """Return the shared, stable feed ordering."""
+        return (
+            f"{self._effective_timestamp_sql()} DESC, "
+            "i.external_id DESC, i.source DESC, i.id DESC"
         )
 
     def _complete_source_catalog(

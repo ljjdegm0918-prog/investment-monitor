@@ -85,6 +85,7 @@ from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
+SHANGHAI = ZoneInfo("Asia/Shanghai")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
 
 
@@ -154,7 +155,11 @@ class WebApplication:
         project_root: Path,
         *,
         collection_runner: CollectionRunner = run_ticker_collection,
+        clock: Optional[Callable[[], datetime]] = None,
     ) -> None:
+        # The clock is injectable so Daily Report default dates are testable
+        # without monkeypatching ``datetime``; callers may omit it.
+        self._clock = clock if clock is not None else (lambda: datetime.now(timezone.utc))
         self.project_root = project_root
         load_environment_file(project_root / ".env")
         self.settings_path = project_root / "config" / "settings.yaml"
@@ -267,6 +272,8 @@ class WebApplication:
                 return self._json(self._feed(query))
             if method == "GET" and parsed.path == "/api/daily":
                 return self._json(self._daily(query))
+            if method == "GET" and parsed.path == "/api/daily-range":
+                return self._json(self._daily_range(query))
             if method == "GET" and parsed.path == "/api/companies":
                 return self._json({"companies": self.repository.companies(_first(query, "list"))})
             if method == "GET" and parsed.path == "/api/companies/search":
@@ -858,6 +865,7 @@ class WebApplication:
             list_record["unread_count"] = counts["list_unread"].get(slug, 0)
         return {
             "selected_date": selected_date.isoformat(),
+            "report_selected_date": _shanghai_default_day(self._clock()).isoformat(),
             "display_date": f"{selected_date.strftime('%b')} {selected_date.day}, {selected_date.year}",
             "timezone": "America/New_York",
             "timezone_label": "ET",
@@ -892,26 +900,75 @@ class WebApplication:
         }
 
     def _daily(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
-        selected_date = _query_date(query, "date") or datetime.now(EASTERN).date()
+        selected_date = _query_date(query, "date") or _shanghai_default_day(self._clock())
         list_slug = _first(query, "list")
-        items: List[Mapping[str, Any]] = []
-        page = 1
-        while True:
-            result = self.repository.query_feed_display(FeedFilters(
-                list_slug=list_slug,
-                start_date=selected_date,
-                end_date=selected_date,
-                page=page,
-                page_size=100,
-            ))
-            items.extend(result.items)
-            if page >= result.pages:
-                break
-            page += 1
-        groups: Dict[str, Dict[str, Any]] = {}
+        return self._daily_range_payload(selected_date, selected_date, list_slug)["days"][0]
+
+    def _daily_range(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
+        today = _shanghai_default_day(self._clock())
+        requested_start = _query_date(query, "start_date")
+        requested_end = _query_date(query, "end_date")
+        # An end date on its own is a request for that one report.  Defaulting
+        # the omitted start to today would turn a valid historic request into
+        # an inverted range.
+        end_date = requested_end or requested_start or today
+        start_date = requested_start or end_date
+        if start_date > end_date:
+            raise ValueError("start_date must not be after end_date")
+        return self._daily_range_payload(
+            start_date,
+            end_date,
+            _first(query, "list"),
+        )
+
+    def _daily_range_payload(
+        self,
+        start_date: date,
+        end_date: date,
+        list_slug: Optional[str],
+    ) -> Mapping[str, Any]:
+        # Filter the report categories in SQL, then annotate the complete
+        # range once so soft-dedupe can see pairs split across DB pages.
+        feed_result = self.repository.query_feed_display_all(FeedFilters(
+            list_slug=list_slug,
+            information_type="daily",
+            start_date=start_date,
+            end_date=end_date,
+            page_size=100,
+        ))
+        items = feed_result.items
+        day_count = (end_date - start_date).days + 1
+        performance = _daily_range_performance(
+            day_count=day_count,
+            query_ms=feed_result.query_ms,
+            pages_fetched=feed_result.pages_fetched,
+        )
+        day_payloads: Dict[date, Dict[str, Any]] = {}
+        cursor = start_date
+        while cursor <= end_date:
+            day_payloads[cursor] = {
+                "date": cursor.isoformat(),
+                "timezone": "Asia/Shanghai",
+                "list": list_slug,
+                "companies": [],
+                "item_count": 0,
+                "company_count": 0,
+                "counts": {"filings": 0, "news": 0, "community": 0},
+            }
+            cursor += timedelta(days=1)
+
+        groups: Dict[date, Dict[str, Dict[str, Any]]] = {
+            day: {} for day in day_payloads
+        }
         for item in items:
+            category = _daily_item_category(str(item["source_type"]))
+            if category is None:
+                continue
+            item_date = _daily_item_date(item)
+            if item_date not in groups:
+                continue
             key = f"{item['ticker']}:{item['market']}"
-            group = groups.setdefault(key, {
+            group = groups[item_date].setdefault(key, {
                 "ticker": item["ticker"],
                 "name": item["company_name"],
                 "exchange": item["exchange"],
@@ -926,15 +983,38 @@ class WebApplication:
                 "title": item["title"],
                 "url": item["url"],
                 "also_seen_on": list(also_seen),
+                "_category": category,
+                "_sort_dt": _daily_effective_at(item["effective_at"]),
+                "_external_id": str(item["external_id"]),
+                "_id": int(item["id"]),
             })
+            day_payloads[item_date]["item_count"] += 1
+            day_payloads[item_date]["counts"][category] += 1
+
+        for day, company_groups in groups.items():
+            for group in company_groups.values():
+                group["items"].sort(key=_daily_item_sort_key)
+                for entry in group["items"]:
+                    entry.pop("_category", None)
+                    entry.pop("_sort_dt", None)
+                    entry.pop("_external_id", None)
+                    entry.pop("_id", None)
+            day_payloads[day]["companies"] = sorted(
+                company_groups.values(),
+                key=_daily_company_sort_key,
+            )
+            day_payloads[day]["company_count"] = len(day_payloads[day]["companies"])
+
         return {
-            "date": selected_date.isoformat(),
-            "timezone": "America/New_York",
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "timezone": "Asia/Shanghai",
             "list": list_slug,
-            "companies": sorted(groups.values(), key=lambda group: (
-                str(group["name"]).casefold(), str(group["ticker"])
-            )),
-            "item_count": len(items),
+            "days": [day_payloads[day] for day in sorted(day_payloads, reverse=True)],
+            "item_count": sum(
+                int(payload["item_count"]) for payload in day_payloads.values()
+            ),
+            "performance": performance,
         }
 
     def _html(self, path: str) -> WebResponse:
@@ -1117,6 +1197,21 @@ def _query_date(query: Mapping[str, Sequence[str]], key: str) -> Optional[date]:
     return date.fromisoformat(value) if value else None
 
 
+def _shanghai_default_day(now: Optional[datetime] = None) -> date:
+    """Return the current Asia/Shanghai calendar day for Daily Report defaults.
+
+    ``now`` may be injected as a fixed instant so tests do not have to
+    monkeypatch the clock.  A naive ``now`` is treated as UTC, matching the
+    service's canonical timestamps.  This is intentionally distinct from the
+    Eastern ``selected_date`` still used by Today, badges, counts and the
+    scheduler.
+    """
+    current = now if now is not None else datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(SHANGHAI).date()
+
+
 def _required_bool(payload: Mapping[str, Any], key: str) -> bool:
     value = payload.get(key)
     if not isinstance(value, bool):
@@ -1185,6 +1280,117 @@ def _daily_source_label(item: Mapping[str, Any]) -> str:
         if publisher:
             return publisher
     return str(item.get("source_label") or item.get("source") or "Unavailable")
+
+
+_DAILY_CATEGORY_ORDER = {"filings": 0, "news": 1, "community": 2}
+
+
+def _daily_item_category(source_type: str) -> Optional[str]:
+    if source_type in {"regulatory_filing", "regulatory_disclosure"}:
+        return "filings"
+    if source_type == "news":
+        return "news"
+    if source_type == "community":
+        return "community"
+    return None
+
+
+def _daily_effective_at(value: Any) -> datetime:
+    """Parse a feed timestamp using the same UTC assumption as stored items.
+
+    Historical rows predating ``effective_at`` can contain a naive ISO value.
+    Treating it as UTC keeps the Shanghai report day independent of where the
+    service happens to run.
+    """
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _daily_item_date(item: Mapping[str, Any]) -> date:
+    """Return the report day in Asia/Shanghai, preserving date-only disclosures.
+
+    Date-only disclosures (e.g. TWSE/TPEx material, BME relevant facts) carry
+    ``raw_metadata.calendar_date`` and must be placed on that calendar day
+    without a timezone conversion.  Everything else uses the canonical event
+    time already resolved by the repository (``effective_at``), converted to
+    Asia/Shanghai.  Collection time is never consulted.
+    """
+    metadata = item.get("raw_metadata")
+    if isinstance(metadata, Mapping):
+        calendar_date = metadata.get("calendar_date")
+        if isinstance(calendar_date, str):
+            try:
+                return date.fromisoformat(calendar_date)
+            except ValueError:
+                pass
+    return _daily_effective_at(item["effective_at"]).astimezone(SHANGHAI).date()
+
+
+def _daily_item_sort_key(item: Mapping[str, Any]) -> Tuple[Any, ...]:
+    """Category order first, then event time descending, then stable tiebreakers."""
+    return (
+        _DAILY_CATEGORY_ORDER[item["_category"]],
+        -item["_sort_dt"].timestamp(),
+        item["_external_id"],
+        item["_id"],
+    )
+
+
+def _daily_company_sort_key(group: Mapping[str, Any]) -> Tuple[str, str, str]:
+    """Canonical Daily Report company order: name, ticker, market."""
+    return (
+        str(group["name"]).casefold(),
+        str(group["ticker"]),
+        str(group["market"]),
+    )
+
+
+def _daily_range_warn_days() -> int:
+    return _environment_int("DAILY_RANGE_WARN_DAYS", 90, minimum=1, maximum=366)
+
+
+def _daily_range_slow_ms() -> int:
+    return _environment_int("DAILY_RANGE_SLOW_MS", 3000, minimum=0, maximum=120_000)
+
+
+def _daily_range_performance(
+    *,
+    day_count: int,
+    query_ms: int,
+    pages_fetched: int,
+) -> Mapping[str, Any]:
+    warn_days = _daily_range_warn_days()
+    slow_ms = _daily_range_slow_ms()
+    warnings: List[str] = []
+    if day_count >= warn_days:
+        warnings.append(
+            f"Large date range ({day_count} days). "
+            "Daily reports load the full filtered result set; "
+            "consider a shorter range for faster loads."
+        )
+    if query_ms >= slow_ms:
+        warnings.append(
+            f"Slow query ({query_ms} ms). "
+            "Consider narrowing the date range or list filter."
+        )
+    if warnings:
+        LOGGER.warning(
+            "daily-range performance: days=%s query_ms=%s pages=%s warnings=%s",
+            day_count,
+            query_ms,
+            pages_fetched,
+            warnings,
+        )
+    return {
+        "day_count": day_count,
+        "query_ms": query_ms,
+        "pages_fetched": pages_fetched,
+        "warn_days": warn_days,
+        "slow_ms": slow_ms,
+        "warnings": warnings,
+    }
 
 
 def _environment_bool(name: str, default: bool) -> bool:
