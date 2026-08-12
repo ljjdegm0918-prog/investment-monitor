@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Noahpinion</title>
+    <link>https://www.noahpinion.blog</link>
+    <description>Economics and finance commentary by Noah Smith.</description>
+    <item>
+      <title>The poverty of anti-tech thought</title>
+      <link>https://www.noahpinion.blog/p/the-poverty-of-anti-tech-thought</link>
+      <guid isPermaLink="true">https://www.noahpinion.blog/p/the-poverty-of-anti-tech-thought</guid>
+      <pubDate>Tue, 11 Aug 2026 08:01:13 GMT</pubDate>
+      <description>Why anti-tech intellectuals keep missing the point.</description>
+    </item>
+    <item>
+      <title>NVDA capex cycle keeps rolling</title>
+      <link>https://www.noahpinion.blog/p/nvda-capex-cycle-keeps-rolling</link>
+      <guid isPermaLink="true">https://www.noahpinion.blog/p/nvda-capex-cycle-keeps-rolling</guid>
+      <pubDate>Tue, 11 Aug 2026 15:30:00 GMT</pubDate>
+      <description>AI infrastructure spending shows no sign of slowing.</description>
+    </item>
+    <item>
+      <title>Apple and the AI handset</title>
+      <link>https://www.noahpinion.blog/p/apple-and-the-ai-handset</link>
+      <guid isPermaLink="true">https://www.noahpinion.blog/p/apple-and-the-ai-handset</guid>
+      <pubDate>Wed, 12 Aug 2026 02:45:00 GMT</pubDate>
+      <description>Apple suppliers ramp for the next iPhone generation.</description>
+    </item>
+    <item>
+      <title>Older economics note</title>
+      <link>https://www.noahpinion.blog/p/older-economics-note</link>
+      <guid isPermaLink="true">https://www.noahpinion.blog/p/older-economics-note</guid>
+      <pubDate>Mon, 10 Aug 2026 20:00:00 GMT</pubDate>
+      <description>An older post that falls outside the target day.</description>
+    </item>
+  </channel>
+</rss>

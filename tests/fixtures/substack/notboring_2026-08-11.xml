@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Not Boring</title>
+    <link>https://www.notboring.co</link>
+    <description>Technology investing by Packy McCormick.</description>
+    <item>
+      <title>Weekly Dose of Optimism #207</title>
+      <link>https://www.notboring.co/p/weekly-dose-of-optimism-207</link>
+      <guid isPermaLink="true">https://www.notboring.co/p/weekly-dose-of-optimism-207</guid>
+      <pubDate>Tue, 11 Aug 2026 12:50:11 GMT</pubDate>
+      <description>TSMC keeps raising its capital expenditure guidance.</description>
+    </item>
+    <item>
+      <title>Weekly Dose of Optimism #205</title>
+      <link>https://www.notboring.co/p/weekly-dose-of-optimism-205</link>
+      <guid isPermaLink="true">https://www.notboring.co/p/weekly-dose-of-optimism-205</guid>
+      <pubDate>Fri, 07 Aug 2026 12:50:11 GMT</pubDate>
+      <description>An older issue outside the target day.</description>
+    </item>
+  </channel>
+</rss>

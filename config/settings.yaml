@@ -104,6 +104,42 @@ sources:
     label: Google News (AU)
     source_type: news
     enabled: true          # key-free Google News RSS search; may be loosely related / break without notice
+  - name: ceoca_ca
+    label: CEO.ca (CA)
+    source_type: community
+    enabled: true          # key-free CEO.ca JSON API (new-api.ceo.ca); channel page URL only; may change without notice
+  - name: hotcopper_au
+    label: HotCopper (AU)
+    source_type: community
+    enabled: true          # registered stub: public HotCopper boards return HTTP 403 Cloudflare to bots (spike 2026-08-11); collect() returns []; login/paywall out of scope
+  - name: lse_share_chat
+    label: LSE Share Chat (UK)
+    source_type: community
+    enabled: true          # registered stub: lse.co.uk Share Chat HTTP 403 to bots; LSE.com discussion is SPA shell (spike 2026-08-11); collect() returns []; login/paywall out of scope
+  - name: xueqiu
+    label: Xueqiu (CN/HK)
+    source_type: community
+    enabled: true          # registered stub: xueqiu.com HTML is an Aliyun WAF JS-challenge shell; JSON APIs require xq_a_token session cookie (error 400016) (spike 2026-08-11); collect() returns []; login/WAF bypass out of scope
+  - name: seeking_alpha
+    label: Seeking Alpha (US)
+    source_type: community
+    enabled: true          # LIVE public combined RSS (article/news stream); https://seekingalpha.com/api/sa/combined/{SYMBOL}.xml; stdlib urllib, no cookie; NY calendar-day filter; ~30-item rolling window, no pagination. HTML symbol/forum/comments pages return PerimeterX 403 — out of scope to bypass. Category is honest article/news metadata, not forum posts.
+  - name: yellowbrick
+    label: Yellowbrick Investing (US)
+    source_type: community
+    enabled: true          # registered stub: Yellowbrick Investing has no stable public login-free surface (spike 2026-08-11): ybrick.co is dead (DNS/transport error); joinyellowbrick.com/stocks, /ideas, /pitches all return HTTP 404; Substack is waitlist-only. collect() returns []; login/Supabase-key scraping out of scope.
+  - name: substack
+    label: Substack (US)
+    source_type: community
+    enabled: true          # LIVE publication-whitelist article/news metadata via public RSS (/feed); https://{publication}/feed; stdlib urllib, no cookie. Default whitelist: noahpinion.blog, notboring.co, astralcodexten.com, paulkrugman.substack.com, oneusefulthing.org. America/New_York calendar-day filter. No structured ticker binding: optional client-side keyword match (best-effort, false positives/negatives — see tests/fixtures/substack/SPIKE.md). Category is newsletter article/news metadata, NOT forum/discussion posts. Whitelist requires maintenance against off-platform publication migration.
+  - name: x_community
+    label: X (US)
+    source_type: community
+    enabled: true          # registered stub (Stub·STOP, spike 2026-08-11; tests/fixtures/x_community/SPIKE.md): no stable public login-free surface for ticker discovery — x.com search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Official X API v2 search/recent requires paid Bearer/OAuth2 key — this connector does NOT wire a key path. No-key HTML / undocumented syndication scrape out of scope. collect() returns []. Category if ever LIVE: social post stream (not forum/article).
+  - name: vic
+    label: Value Investors Club (US)
+    source_type: community
+    enabled: true          # registered stub (Stub·STOP, spike 2026-08-11; tests/fixtures/vic/SPIKE.md): no stable public login-free ticker+day surface — /feed /rss /api/ideas /sitemap.xml return HTML shells (not RSS/JSON); /ideas?symbol=TICKER does not filter (identical idea-href set for MSFT/AAPL/bare /ideas); homepage free signup only unlocks 45-day delayed guest ideas; membership/login and HTML catalog scrape out of scope. collect() returns []. Category if ever LIVE: club investment-idea write-ups (not forum/article RSS).
   - name: amf_oam
     label: AMF OAM
     source_type: filings

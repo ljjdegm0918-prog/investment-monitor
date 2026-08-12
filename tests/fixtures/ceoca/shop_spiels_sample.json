@@ -1,0 +1,34 @@
+{
+  "channel": "shop",
+  "total_spiels": 4,
+  "spiels": [
+    {
+      "channel": "shop",
+      "spiel_id": "spiel-aug5-morning",
+      "spiel": "Shopify looks strong into earnings; watching guidance closely.",
+      "name": "@bullish_ca",
+      "timestamp": 1785938400000
+    },
+    {
+      "channel": "shop",
+      "spiel_id": "spiel-aug5-evening",
+      "spiel": "Volume picking up on the close — any news?",
+      "name": "@trader_tor",
+      "timestamp": 1785981600000
+    },
+    {
+      "channel": "shop",
+      "spiel_id": "spiel-aug4-late",
+      "spiel": "Still holding from yesterday's dip.",
+      "name": "@patient_holder",
+      "timestamp": 1785898800000
+    },
+    {
+      "channel": "shop",
+      "spiel_id": "spiel-aug6-early",
+      "spiel": "Pre-market chatter ahead of the open.",
+      "name": "@early_bird",
+      "timestamp": 1785992400000
+    }
+  ]
+}
