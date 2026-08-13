@@ -783,6 +783,32 @@ class ResearchRepositoryTests(unittest.TestCase):
         self.assertEqual(card["status"], "failed")
         self.assertEqual(card["error_code"], "generation_interrupted")
 
+    def test_identity_snapshot_migration_is_idempotent(self):
+        with self.research._connect() as connection:
+            ensure_research_schema(connection)
+            ensure_research_schema(connection)
+            columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(research_cards)")
+            }
+        self.assertIn("company_name_snapshot", columns)
+        self.assertIn("ticker_snapshot", columns)
+        self.assertIn("market_snapshot", columns)
+
+    def test_create_generation_writes_identity_snapshot(self):
+        self.add_company("AAPL", "holdings")
+        company_id = self.repository.companies()[0]["id"]
+        card_id = self.research.create_generation(
+            company_id=company_id, language="en", evidence_fingerprint="fp",
+            model_provider_fingerprint="provider", model_name="model",
+            company_name="Apple Inc.", ticker="AAPL", market="us",
+        )
+        card = self.research.card_by_id(card_id)
+        self.assertEqual(card["company_name_snapshot"], "Apple Inc.")
+        self.assertEqual(card["ticker_snapshot"], "AAPL")
+        self.assertEqual(card["market_snapshot"], "us")
+
+
 
 class ResearchServiceTests(unittest.TestCase):
     def setUp(self):

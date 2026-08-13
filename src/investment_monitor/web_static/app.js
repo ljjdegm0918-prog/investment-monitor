@@ -121,6 +121,8 @@ const MESSAGES = {
     "nav.research": "Research",
     "research.eyebrow": "RESEARCH ASSISTANT",
     "research.heading": "Research",
+    "research.print_pdf": "Print / Save PDF",
+    "research.print_title": "Research card",
     "research.subtitle": "Evidence-backed summaries of the companies you already track in Holdings, Planned, or Watchlist.",
     "research.disclaimer": "Research assistance only. This is not investment advice.",
     "research.data_send": "Generating a card sends this company’s selected public evidence to your configured model provider.",
@@ -307,6 +309,8 @@ const MESSAGES = {
     "nav.research": "研究",
     "research.eyebrow": "研究助手",
     "research.heading": "研究",
+    "research.print_pdf": "打印 / 保存 PDF",
+    "research.print_title": "研究卡",
     "research.subtitle": "基于证据，梳理你已在持仓、计划或关注列表中的公司。",
     "research.disclaimer": "仅供研究辅助，不构成投资建议。",
     "research.data_send": "生成研究卡会把该公司的选定公开证据发送给你配置的模型服务。",
@@ -446,6 +450,15 @@ function applyStaticLabels() {
 
 const state = { bootstrap: null, selectedList: "" };
 document.addEventListener("DOMContentLoaded", init);
+
+// Printing must include the full evidence list, so unfold every <details>
+// before the browser snapshots the page for print / save-as-PDF. The native
+// print button never re-queries the server or alters card data.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeprint", () => {
+    document.querySelectorAll(".evidence-list").forEach(details => details.setAttribute("open", ""));
+  });
+}
 
 async function init() {
   applyStaticLabels();
@@ -784,10 +797,20 @@ async function pollGeneration(generationId) {
 async function viewCard(cardId) {
   try {
     const card = await api(`/api/research/cards/${cardId}`);
+    if (!card || card.status !== "completed") {
+      document.getElementById("research-card").innerHTML = errorState(t("research.generation_failed"), "");
+      return;
+    }
     document.getElementById("research-card").innerHTML = researchCardContent(card);
+    bindResearchPrint();
   } catch (error) {
     document.getElementById("research-card").innerHTML = errorState(t("research.generation_failed"), error.message);
   }
+}
+
+function bindResearchPrint() {
+  const button = document.querySelector('[data-action="print-research"]');
+  if (button) button.addEventListener("click", () => window.print());
 }
 
 function listScopeLabel(slug) {
@@ -799,15 +822,36 @@ function listScopeLabel(slug) {
 function researchCardMeta(card) {
   if (!card.start_date || !card.end_date) return "";
   const generated = card.generated_at ? formatDateTime(card.generated_at) : "";
-  return `<p class="meta research-card-scope">${t("research.card_scope")}: ${esc(card.start_date)} → ${esc(card.end_date)} · ${esc(listScopeLabel(card.list_scope))} · ${t("research.evidence_in_range")}: ${card.evidence_total} · ${t("research.evidence_sent")}: ${card.evidence_sent}${generated ? ` · ${t("research.last_generated")}: ${esc(generated)}` : ""}</p>`;
+  const counts = `${t("research.filings")}: ${card.filing_count || 0} · ${t("research.news")}: ${card.news_count || 0} · ${t("research.community")}: ${card.community_count || 0}`;
+  return `<p class="meta research-card-scope">${t("research.card_scope")}: ${esc(card.start_date)} → ${esc(card.end_date)} · ${esc(listScopeLabel(card.list_scope))}</p>
+    <p class="meta research-card-counts">${t("research.evidence_in_range")}: ${card.evidence_total} · ${counts} · ${t("research.evidence_sent")}: ${card.evidence_sent}${generated ? ` · ${t("research.last_generated")}: ${esc(generated)}` : ""}</p>`;
+}
+
+function researchCompanyLine(card) {
+  const parts = [];
+  if (card.company_name) parts.push(card.company_name);
+  if (card.ticker) parts.push(card.ticker);
+  if (card.market) parts.push(String(card.market).toUpperCase());
+  if (!parts.length) return "";
+  return `<p class="research-company">${parts.map(esc).join(" · ")}</p>`;
 }
 
 function researchCardContent(card) {
+  if (!card || card.status !== "completed") return "";
   const content = card.content || {};
   const coverage = content.coverage || {};
   const sections = [
-    `<section class="research-card-inner">
-      <header><h2>${t("research.heading")}</h2>${researchCardMeta(card)}<p class="disclaimer">${t("research.disclaimer")}</p></header>
+    `<section class="research-card-inner" data-card-id="${escAttr(card.id)}">
+      <header class="research-card-header">
+        <p class="print-brand">Investment Monitor · ${t("research.print_title")}</p>
+        <div class="research-card-title">
+          <h2>${t("research.heading")}</h2>
+          <button class="button" data-action="print-research" type="button">${t("research.print_pdf")}</button>
+        </div>
+        ${researchCompanyLine(card)}
+        ${researchCardMeta(card)}
+        <p class="disclaimer">${t("research.disclaimer")}</p>
+      </header>
       <section><h3>${t("research.evidence_coverage")}</h3>
         <p>${esc(coverage.summary || "")}</p>
         ${(coverage.limitations || []).length ? `<ul>${coverage.limitations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
@@ -861,7 +905,13 @@ function researchEvidenceList(evidence) {
   return `<details class="evidence-list"><summary>${t("research.evidence")} (${evidence.length})</summary>
     <ul>${evidence.map(item => `<li><span class="ref">${esc(item.evidence_ref)}</span>
       <a href="${escAttr(safeUrl(item.url_snapshot))}" target="_blank" rel="noopener noreferrer">${esc(item.title_snapshot)}</a>
-      <small>${esc(item.source)} · ${esc(item.information_type)} · ${formatDateTime(item.event_timestamp)}</small></li>`).join("")}</ul></details>`;
+      <a class="raw-url" href="${escAttr(safeUrl(item.url_snapshot))}" target="_blank" rel="noopener noreferrer">${esc(item.url_snapshot)}</a>
+      <small>${esc(item.source)} · ${researchInfoTypeLabel(item.information_type)} · ${formatDateTime(item.event_timestamp)}</small></li>`).join("")}</ul></details>`;
+}
+
+function researchInfoTypeLabel(type) {
+  const key = {filing: "research.filings", news: "research.news", community: "research.community"}[type];
+  return key ? t(key) : type;
 }
 
 async function renderManage() {

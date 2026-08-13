@@ -83,6 +83,7 @@ from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
 from .research import ResearchScope, ResearchSettings, card_from_json, validate_language
+from .research_repository import CARD_STATUS_COMPLETED
 from .research_service import ResearchService, validate_list_slug
 
 LOGGER = logging.getLogger(__name__)
@@ -337,11 +338,15 @@ class WebApplication:
                 card = self.research.card(card_id)
                 if card is None:
                     return self._json({"error": "Card not found"}, 404)
-                if not self.repository.company_in_research_lists(
-                    int(card["company_id"])
-                ):
+                # Only a completed card is printable. Failed or still-generating
+                # cards (and their error codes) must never be exposed here.
+                if card.get("status") != CARD_STATUS_COMPLETED:
                     return self._json({"error": "Card not found"}, 404)
-                return self._json(_research_card_payload(card))
+                company_id = int(card["company_id"])
+                if not self.repository.company_in_research_lists(company_id):
+                    return self._json({"error": "Card not found"}, 404)
+                company = self.repository.company_identity(company_id)
+                return self._json(_research_card_payload(card, company))
             if method == "POST" and parsed.path == "/api/research/generate":
                 payload = _decode_json(body)
                 company_id = int(payload["company_id"])
@@ -1490,14 +1495,33 @@ def _trailing_id(path: str, prefix: str) -> int:
     return int(segment)
 
 
-def _research_card_payload(card: Mapping[str, Any]) -> Mapping[str, Any]:
+def _research_card_payload(
+    card: Mapping[str, Any],
+    company: Optional[Mapping[str, Any]] = None,
+) -> Mapping[str, Any]:
     content = None
     if card.get("content_json"):
         content = card_from_json(card["content_json"])
     evidence = list(card.get("evidence") or ())
+    company = company or {}
+    # Identity snapshot: cards written after the snapshot migration carry a
+    # frozen company name/ticker/market on the row. Only legacy cards (all
+    # three snapshot columns NULL) fall back to the current identity, purely
+    # as a compatibility path. Newly generated cards never use this fallback,
+    # and it never alters the evidence snapshot, scope, or generation time.
+    company_name = card.get("company_name_snapshot")
+    ticker = card.get("ticker_snapshot")
+    market = card.get("market_snapshot")
+    if company_name is None and ticker is None and market is None:
+        company_name = company.get("name")
+        ticker = company.get("ticker")
+        market = company.get("market")
     return {
         "id": int(card["id"]),
         "company_id": int(card["company_id"]),
+        "company_name": company_name,
+        "ticker": ticker,
+        "market": market,
         "language": card["language"],
         "status": card["status"],
         "generated_at": card["generated_at"],
@@ -1507,6 +1531,15 @@ def _research_card_payload(card: Mapping[str, Any]) -> Mapping[str, Any]:
         "list_scope": card.get("list_scope"),
         "evidence_total": len(evidence),
         "evidence_sent": len(evidence),
+        "filing_count": sum(
+            1 for item in evidence if item.get("information_type") == "filing"
+        ),
+        "news_count": sum(
+            1 for item in evidence if item.get("information_type") == "news"
+        ),
+        "community_count": sum(
+            1 for item in evidence if item.get("information_type") == "community"
+        ),
         "content": content,
         "evidence": evidence,
     }

@@ -105,12 +105,34 @@ def ensure_research_schema(connection: sqlite3.Connection) -> None:
         """
     )
     _migrate_research_card_scope(connection)
+    _migrate_research_card_identity_snapshot(connection)
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_research_cards_scope
             ON research_cards(company_id, language, start_date, end_date, list_scope)
         """
     )
+
+
+def _migrate_research_card_identity_snapshot(connection: sqlite3.Connection) -> None:
+    """Add company identity snapshot columns to existing databases, idempotently.
+
+    Older databases have no company_name_snapshot / ticker_snapshot /
+    market_snapshot columns. Existing rows keep NULLs and are treated as legacy
+    cards; the card payload may fall back to the current company identity only
+    for those legacy rows. Newly generated cards always write these columns at
+    creation time, so no new card ever relies on the fallback. No rows are
+    rewritten and no fabricated identities are backfilled.
+    """
+    columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(research_cards)")
+    }
+    for column in ("company_name_snapshot", "ticker_snapshot", "market_snapshot"):
+        if column not in columns:
+            connection.execute(
+                f"ALTER TABLE research_cards ADD COLUMN {column} TEXT"
+            )
 
 
 def _migrate_research_card_scope(connection: sqlite3.Connection) -> None:
@@ -149,8 +171,17 @@ class ResearchRepository:
         model_provider_fingerprint: str,
         model_name: str,
         scope: Optional["ResearchScope"] = None,
+        company_name: Optional[str] = None,
+        ticker: Optional[str] = None,
+        market: Optional[str] = None,
     ) -> int:
-        """Create a placeholder ``generating`` row to dedupe concurrent work."""
+        """Create a placeholder ``generating`` row to dedupe concurrent work.
+
+        ``company_name``/``ticker``/``market`` are a frozen snapshot of the
+        company identity at generation time. They come from the server-side
+        identity that was already validated against the Research scope — never
+        from the browser — and are never re-read from the current identity.
+        """
         now = _utc_now()
         with self._connect() as connection:
             cursor = connection.execute(
@@ -160,8 +191,9 @@ class ResearchRepository:
                     model_name, prompt_version, schema_version,
                     evidence_rule_version, evidence_fingerprint, content_json,
                     generated_at, created_at, updated_at, error_code,
-                    start_date, end_date, list_scope
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL, ?, ?, ?)
+                    start_date, end_date, list_scope,
+                    company_name_snapshot, ticker_snapshot, market_snapshot
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id,
@@ -178,6 +210,9 @@ class ResearchRepository:
                     scope.start_date.isoformat() if scope else None,
                     scope.end_date.isoformat() if scope else None,
                     scope.stored_list_scope if scope else None,
+                    company_name,
+                    ticker,
+                    market,
                 ),
             )
             return int(cursor.lastrowid)

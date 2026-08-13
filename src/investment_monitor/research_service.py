@@ -208,6 +208,9 @@ class ResearchService:
                 model_provider_fingerprint=self._settings.provider_identifier,
                 model_name=self._settings.model,
                 scope=scope,
+                company_name=identity.get("name"),
+                ticker=identity.get("ticker"),
+                market=identity.get("market"),
             )
         if self._synchronous:
             self._run_generation(card_id, company_id, language, selection, scope)

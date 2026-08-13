@@ -23,6 +23,14 @@ APP_JS_PATH = (
     / "app.js"
 )
 
+APP_CSS_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "src"
+    / "investment_monitor"
+    / "web_static"
+    / "app.css"
+)
+
 DEFAULT_CARD = {
     "schema_version": "research-card-v1",
     "language": "en",
@@ -202,6 +210,56 @@ class ResearchWebTests(unittest.TestCase):
         self.assertIn("esc(r.explanation)", js)
         self.assertIn("esc(d.why_it_matters)", js)
 
+    def test_app_js_research_print_button_and_metadata(self):
+        js = APP_JS_PATH.read_text(encoding="utf-8")
+        for token in (
+            "research.print_pdf",
+            "research.print_title",
+            'data-action="print-research"',
+            "window.print()",
+            "beforeprint",
+            "researchCompanyLine",
+            "researchInfoTypeLabel",
+            "data-card-id",
+            "Print / Save PDF",
+            "打印 / 保存 PDF",
+        ):
+            self.assertIn(token, js)
+        # Card metadata comes from the server payload fields (company, counts),
+        # never re-queried from the current page.
+        for token in (
+            "card.company_name",
+            "card.ticker",
+            "card.market",
+            "card.filing_count",
+            "card.news_count",
+            "card.community_count",
+        ):
+            self.assertIn(token, js)
+
+    def test_app_js_requires_completed_status_for_print(self):
+        js = APP_JS_PATH.read_text(encoding="utf-8")
+        # Both viewCard and researchCardContent gate on completed status, so a
+        # failed or generating card never renders the print action and never
+        # reaches bindResearchPrint / window.print().
+        self.assertIn('card.status !== "completed"', js)
+        self.assertIn("bindResearchPrint", js)
+
+    def test_app_css_research_print_rules(self):
+        css = APP_CSS_PATH.read_text(encoding="utf-8")
+        for token in (
+            "@media print",
+            ".page-heading",
+            "#research-companies",
+            ".research-card .button",
+            ".research-card-title .button",
+            ".print-brand",
+            ".research-claims li",
+            ".evidence-list .raw-url",
+            "overflow-wrap:anywhere",
+        ):
+            self.assertIn(token, css)
+
     def test_app_js_generation_state_machine(self):
         js = APP_JS_PATH.read_text(encoding="utf-8")
         # Foreground polling uses an explicit timeout, not a fake failure.
@@ -358,6 +416,118 @@ class ResearchWebTests(unittest.TestCase):
         for change in card["content"]["recent_changes"]:
             used.update(change["evidence_ids"])
         self.assertTrue(used.issubset(refs))
+
+    def test_card_payload_includes_company_identity_and_category_counts(self):
+        ai = FakeAI()
+        self.enable_research(ai)
+        self.seed_evidence()
+        result = self.generate_and_wait(self.aapl_id())
+        self.assertEqual(result["status"], "completed")
+        card = self.payload(self.application.handle(
+            "GET", f"/api/research/cards/{result['card_id']}"
+        ))
+        # Print metadata must come from the frozen card snapshot, including the
+        # company identity and per-category counts, without another query.
+        # The universe import has no SEC rows yet, so the company name falls
+        # back to the ticker; the field must still be present and truthful.
+        self.assertEqual(card["company_name"], "AAPL")
+        self.assertEqual(card["ticker"], "AAPL")
+        self.assertEqual(card["market"], "us")
+        self.assertEqual(card["filing_count"], 3)
+        self.assertEqual(card["news_count"], 0)
+        self.assertEqual(card["community_count"], 0)
+        self.assertEqual(card["evidence_total"], 3)
+        self.assertEqual(card["evidence_sent"], 3)
+        self.assertEqual(card["start_date"], RANGE_START)
+        self.assertEqual(card["end_date"], RANGE_END)
+
+    def _create_card_in_status(self, status):
+        """Create an AAPL card row in the given status via the repository."""
+        repo = self.application.research._repo
+        card_id = repo.create_generation(
+            company_id=self.aapl_id(),
+            language="en",
+            evidence_fingerprint="fp",
+            model_provider_fingerprint="provider",
+            model_name="model",
+        )
+        if status == "failed":
+            repo.fail_generation(card_id, "test_error")
+        return card_id
+
+    def _update_company_identity(self, company_id, *, name, ticker, market):
+        with self.application.repository._connect() as connection:
+            connection.execute(
+                "UPDATE companies SET name = ?, ticker = ?, market = ? WHERE id = ?",
+                (name, ticker, market, company_id),
+            )
+
+    def test_card_endpoint_rejects_non_completed_cards(self):
+        # Only completed cards are printable. Failed and generating cards must
+        # return a stable, content-free 404 and never expose their body/error.
+        generating_id = self._create_card_in_status("generating")
+        response = self.application.handle(
+            "GET", f"/api/research/cards/{generating_id}"
+        )
+        self.assertEqual(response.status, 404)
+        self.assertEqual(self.payload(response), {"error": "Card not found"})
+
+        failed_id = self._create_card_in_status("failed")
+        response = self.application.handle(
+            "GET", f"/api/research/cards/{failed_id}"
+        )
+        self.assertEqual(response.status, 404)
+        body = self.payload(response)
+        self.assertEqual(body, {"error": "Card not found"})
+        self.assertNotIn("test_error", json.dumps(body))
+
+    def test_card_identity_is_frozen_snapshot(self):
+        ai = FakeAI()
+        self.enable_research(ai)
+        self.seed_evidence()
+        result = self.generate_and_wait(self.aapl_id())
+        self.assertEqual(result["status"], "completed")
+        card_id = result["card_id"]
+        # Mutate the company identity after generation; the card payload must
+        # still report the frozen snapshot, not the current identity.
+        self._update_company_identity(
+            self.aapl_id(), name="Renamed Corp", ticker="RNM", market="jp"
+        )
+        card = self.payload(self.application.handle(
+            "GET", f"/api/research/cards/{card_id}"
+        ))
+        self.assertEqual(card["company_name"], "AAPL")
+        self.assertEqual(card["ticker"], "AAPL")
+        self.assertEqual(card["market"], "us")
+
+    def test_legacy_card_without_snapshot_falls_back_to_current_identity(self):
+        repo = self.application.research._repo
+        company_id = self.aapl_id()
+        # A legacy completed card (snapshot columns NULL) predates the
+        # migration; it may fall back to the current identity.
+        card_id = repo.create_generation(
+            company_id=company_id,
+            language="en",
+            evidence_fingerprint="fp",
+            model_provider_fingerprint="provider",
+            model_name="model",
+        )
+        repo.complete_generation(
+            card_id,
+            company_id=company_id,
+            content_json=json.dumps(DEFAULT_CARD),
+            evidence=[],
+        )
+        self._update_company_identity(
+            company_id, name="Renamed Corp", ticker="RNM", market="jp"
+        )
+        card = self.payload(self.application.handle(
+            "GET", f"/api/research/cards/{card_id}"
+        ))
+        self.assertEqual(card["status"], "completed")
+        self.assertEqual(card["company_name"], "Renamed Corp")
+        self.assertEqual(card["ticker"], "RNM")
+        self.assertEqual(card["market"], "jp")
 
     def test_generate_cache_hit_does_not_call_model(self):
         ai = FakeAI()

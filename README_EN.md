@@ -652,6 +652,37 @@ They never give buy/sell ratings, price targets, or price predictions.
   provider. The API key is read only from the environment and is never stored
   in SQLite, returned by an API, or written to logs.
 
+### Print / Save PDF
+
+Once a research card has been generated, a **Print / Save PDF** button appears
+next to the card title. Clicking it opens the browser's **native print dialog**;
+choose "Save as PDF" there and pick your own local filename and directory.
+
+The PDF is the complete, traceable version of that card, including:
+
+- the company name, ticker, and market;
+- the generation scope (From / To date range and list scope);
+- the generation time;
+- the total in-range evidence count and Filing / News / Community breakdown;
+- the number of evidence items actually sent to the model;
+- the explicit research-assistance disclaimer;
+- recent changes, main risks, volatility drivers, and what to investigate next;
+- the full evidence list (`E1`/`E2`… reference, type, source, original title,
+  event time, and original URL).
+
+Key boundaries:
+
+- The PDF is a frozen snapshot of the evidence used at generation time; it does
+  not silently update when new evidence arrives later.
+- A `stale` card can still be printed as a historical result, but regenerate to
+  reflect the current range's new evidence.
+- Switching the date range or list clears the old card and its print button, so
+  a range A card is never printed as range B content.
+- The system never saves a PDF on the server, never uploads a PDF, and never
+  chooses a save path for you; the PDF is produced and saved locally by your
+  browser.
+- The PDF remains research assistance only and is not investment advice.
+
 ```text
 RESEARCH_AI_ENABLED=false
 RESEARCH_AI_BASE_URL=https://api.deepseek.com
