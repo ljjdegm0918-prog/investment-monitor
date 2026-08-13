@@ -20,12 +20,33 @@ from .research import (
     RESEARCH_PROMPT_VERSION,
     RESEARCH_SCHEMA_VERSION,
     ResearchEvidence,
+    ResearchScope,
     information_type_of,
 )
 
 CARD_STATUS_GENERATING = "generating"
 CARD_STATUS_COMPLETED = "completed"
 CARD_STATUS_FAILED = "failed"
+
+
+def _scope_filter(
+    scope: Optional["ResearchScope"],
+) -> Tuple[str, Tuple[Any, ...]]:
+    """Return a WHERE fragment pinning a card to one exact generation scope.
+
+    ``IS`` is NULL-safe equality in SQLite, so a legacy unscoped card (NULL
+    range columns) never matches a real user-selected scope, and vice versa.
+    """
+    if scope is None:
+        return "", ()
+    return (
+        "AND start_date IS ? AND end_date IS ? AND list_scope IS ?",
+        (
+            scope.start_date.isoformat(),
+            scope.end_date.isoformat(),
+            scope.stored_list_scope,
+        ),
+    )
 
 # Timestamps are stored as UTC ISO strings, matching the monitor's other
 # tables (collected_at, created_at, ...).
@@ -83,6 +104,32 @@ def ensure_research_schema(connection: sqlite3.Connection) -> None:
             ON research_card_evidence(information_item_id);
         """
     )
+    _migrate_research_card_scope(connection)
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_research_cards_scope
+            ON research_cards(company_id, language, start_date, end_date, list_scope)
+        """
+    )
+
+
+def _migrate_research_card_scope(connection: sqlite3.Connection) -> None:
+    """Add the generation-scope columns to existing databases, idempotently.
+
+    Older databases have no start_date/end_date/list_scope columns. Existing
+    rows keep NULLs and are treated as legacy unscoped cards: they never match
+    a scoped query and can never pose as the latest card for a user-selected
+    range. No rows are rewritten and no fabricated ranges are backfilled.
+    """
+    columns = {
+        str(row[1])
+        for row in connection.execute("PRAGMA table_info(research_cards)")
+    }
+    for column in ("start_date", "end_date", "list_scope"):
+        if column not in columns:
+            connection.execute(
+                f"ALTER TABLE research_cards ADD COLUMN {column} TEXT"
+            )
 
 
 class ResearchRepository:
@@ -101,6 +148,7 @@ class ResearchRepository:
         evidence_fingerprint: str,
         model_provider_fingerprint: str,
         model_name: str,
+        scope: Optional["ResearchScope"] = None,
     ) -> int:
         """Create a placeholder ``generating`` row to dedupe concurrent work."""
         now = _utc_now()
@@ -111,8 +159,9 @@ class ResearchRepository:
                     company_id, language, status, model_provider_fingerprint,
                     model_name, prompt_version, schema_version,
                     evidence_rule_version, evidence_fingerprint, content_json,
-                    generated_at, created_at, updated_at, error_code
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL)
+                    generated_at, created_at, updated_at, error_code,
+                    start_date, end_date, list_scope
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL, ?, ?, ?)
                 """,
                 (
                     company_id,
@@ -126,6 +175,9 @@ class ResearchRepository:
                     evidence_fingerprint,
                     now,
                     now,
+                    scope.start_date.isoformat() if scope else None,
+                    scope.end_date.isoformat() if scope else None,
+                    scope.stored_list_scope if scope else None,
                 ),
             )
             return int(cursor.lastrowid)
@@ -192,15 +244,22 @@ class ResearchRepository:
                 (CARD_STATUS_FAILED, _utc_now(), error_code, card_id),
             )
 
-    def has_in_progress(self, company_id: int, language: str) -> bool:
+    def has_in_progress(
+        self,
+        company_id: int,
+        language: str,
+        scope: Optional[ResearchScope] = None,
+    ) -> bool:
+        scope_sql, scope_parameters = _scope_filter(scope)
         with self._connect() as connection:
             row = connection.execute(
-                """
+                f"""
                 SELECT 1 FROM research_cards
                 WHERE company_id = ? AND language = ? AND status = ?
+                {scope_sql}
                 LIMIT 1
                 """,
-                (company_id, language, CARD_STATUS_GENERATING),
+                (company_id, language, CARD_STATUS_GENERATING, *scope_parameters),
             ).fetchone()
         return row is not None
 
@@ -221,17 +280,20 @@ class ResearchRepository:
         self,
         company_id: int,
         language: str,
+        scope: Optional[ResearchScope] = None,
     ) -> Optional[Mapping[str, Any]]:
-        """Return the most recent card for a company/language, or None."""
+        """Return the most recent card for a company/language/scope, or None."""
+        scope_sql, scope_parameters = _scope_filter(scope)
         with self._connect() as connection:
             row = connection.execute(
-                """
+                f"""
                 SELECT * FROM research_cards
                 WHERE company_id = ? AND language = ?
+                {scope_sql}
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (company_id, language),
+                (company_id, language, *scope_parameters),
             ).fetchone()
         return dict(row) if row else None
 
@@ -239,17 +301,20 @@ class ResearchRepository:
         self,
         company_id: int,
         language: str,
+        scope: Optional[ResearchScope] = None,
     ) -> Optional[Mapping[str, Any]]:
-        """Return the latest completed (valid) card, or None."""
+        """Return the latest completed (valid) card for the scope, or None."""
+        scope_sql, scope_parameters = _scope_filter(scope)
         with self._connect() as connection:
             row = connection.execute(
-                """
+                f"""
                 SELECT * FROM research_cards
                 WHERE company_id = ? AND language = ? AND status = ?
+                {scope_sql}
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (company_id, language, CARD_STATUS_COMPLETED),
+                (company_id, language, CARD_STATUS_COMPLETED, *scope_parameters),
             ).fetchone()
         return dict(row) if row else None
 

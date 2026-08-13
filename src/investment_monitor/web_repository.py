@@ -622,79 +622,6 @@ class WebRepository:
             ).fetchall()
         return [_company_dict(row) for row in rows]
 
-    def research_items(self, company_id: int) -> Tuple[Mapping[str, Any], ...]:
-        """Return every eligible research evidence item for one company.
-
-        The query scopes to the current company strictly by ticker + market,
-        allowed sources, supported information types, and excludes generated
-        rows. A ``market = 'unknown'`` row is only eligible when the ticker
-        appears in a single market in ``companies`` (so no ambiguous cross-market
-        sharing can happen); otherwise the unknown row is excluded. This is the
-        single place evidence rows are fetched; ``research.select_evidence`` then
-        applies the time window, ordering, cap and eligibility rules.
-        """
-        with self._connect() as connection:
-            company = connection.execute(
-                "SELECT ticker, market FROM companies WHERE id = ?",
-                (company_id,),
-            ).fetchone()
-            if company is None:
-                return ()
-            ticker = str(company["ticker"])
-            market = str(company["market"] or MARKET_US)
-            source_placeholders = ",".join("?" for _ in self._allowed_sources)
-            if not source_placeholders:
-                return ()
-            rows = connection.execute(
-                f"""
-                SELECT i.id, i.source, i.source_type, i.external_id, i.issuer,
-                       i.published_at, i.title, i.document_type, i.url,
-                       i.collected_at, i.raw_metadata, i.market, i.summary,
-                       i.effective_at
-                FROM information_items i
-                JOIN information_item_tickers it ON it.item_id = i.id
-                WHERE it.ticker = ?
-                  AND (
-                      it.market = ?
-                      OR (
-                          it.market = 'unknown'
-                          AND (
-                              SELECT COUNT(DISTINCT market)
-                              FROM companies
-                              WHERE ticker = ?
-                          ) = 1
-                      )
-                  )
-                  AND i.source IN ({source_placeholders})
-                  AND i.source_type IN (
-                      'regulatory_filing', 'regulatory_disclosure',
-                      'news', 'community'
-                  )
-                  AND COALESCE(
-                      json_extract(i.raw_metadata, '$.generated'), 0
-                  ) != 1
-                ORDER BY i.id
-                """,
-                [ticker, market, ticker, *self._allowed_sources],
-            ).fetchall()
-        return tuple(self._research_item(row) for row in rows)
-
-    @staticmethod
-    def _research_item(row: sqlite3.Row) -> Mapping[str, Any]:
-        raw_metadata = json.loads(row["raw_metadata"])
-        return {
-            "id": int(row["id"]),
-            "source": row["source"],
-            "source_type": row["source_type"],
-            "external_id": row["external_id"],
-            "published_at": row["published_at"],
-            "title": row["title"],
-            "url": row["url"],
-            "summary": row["summary"],
-            "effective_at": row["effective_at"],
-            "raw_metadata": raw_metadata,
-        }
-
     def search_companies(self, query: str, *, limit: int = 20) -> List[Mapping[str, Any]]:
         """Search known companies by name, ticker, or recorded exchange."""
         term = query.strip()
@@ -1161,6 +1088,31 @@ class WebRepository:
     def _kr_soft_dedupe_enabled() -> bool:
         value = os.environ.get("KR_FEED_SOFT_DEDUPE", "true").strip().lower()
         return value not in {"0", "false", "no", "off"}
+
+    def daily_display_rows(
+        self,
+        list_slug: Optional[str],
+        start_date: date,
+        end_date: date,
+    ) -> FeedDisplayAllResult:
+        """Return the exact Daily Report display rows for a scope.
+
+        This is the single shared query boundary for ``/api/daily-range`` and
+        Research evidence selection: same list scope, same Asia/Shanghai
+        calendar-day window (date-only disclosures aligned by
+        ``raw_metadata.calendar_date``, everything else by ``effective_at``),
+        same allowed-source and generated-row exclusions, same unpaginated
+        (item x company) row set, and the same annotate-only soft dedupe.
+        Research must never run a parallel selection rule; it consumes these
+        rows and filters to the current company.
+        """
+        return self.query_feed_display_all(FeedFilters(
+            list_slug=list_slug,
+            information_type="daily",
+            start_date=start_date,
+            end_date=end_date,
+            page_size=100,
+        ))
 
     def counts(self, selected_date: date) -> Mapping[str, Any]:
         start_utc, end_utc = _eastern_day_bounds(selected_date)
@@ -2124,6 +2076,8 @@ class WebRepository:
             "document_type": row["document_type"],
             "url": row["url"],
             "is_read": bool(row["is_read"]),
+            "company_id": int(row["company_id"]),
+            "company_market": row["company_market"],
             "is_amendment": str(row["document_type"]).endswith("/A"),
             "list_slugs": list_slugs,
             "raw_metadata": raw_metadata,
@@ -2200,7 +2154,8 @@ class WebRepository:
             "i.collected_at, i.raw_metadata, i.market, i.summary, "
             "i.effective_at, "
             "COALESCE(r.is_read, 0) AS is_read, "
-            "c.ticker, c.name AS company_name, c.exchange, c.cik, "
+            "c.id AS company_id, c.ticker, c.name AS company_name, "
+            "c.exchange, c.cik, c.market AS company_market, "
             "GROUP_CONCAT(DISTINCT l.slug) AS list_slugs"
         )
 

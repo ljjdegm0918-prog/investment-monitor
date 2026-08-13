@@ -14,7 +14,7 @@ still belongs to Holdings / Planned / Watchlist.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 import ipaddress
 import json
 from hashlib import sha256
@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 
 # Versioned artifacts. These participate in the evidence fingerprint so that a
 # prompt/schema/rule change invalidates previously cached cards.
-RESEARCH_PROMPT_VERSION = "research-prompt-v1"
+RESEARCH_PROMPT_VERSION = "research-prompt-v2"
 RESEARCH_SCHEMA_VERSION = "research-card-v1"
 RESEARCH_EVIDENCE_RULE_VERSION = "research-evidence-v1"
 
@@ -86,6 +86,7 @@ ERROR_INTERNAL = "research_internal_error"
 ERROR_UPSTREAM_REDIRECT = "upstream_redirect_error"
 ERROR_REQUEST_TOO_LARGE = "request_too_large"
 ERROR_RESPONSE_TOO_LARGE = "response_too_large"
+ERROR_RANGE_TOO_LARGE = "research_range_too_large"
 
 # Content-type categories accepted as research evidence. ``regulatory_filing``
 # and ``regulatory_disclosure`` are the two stored filing variants.
@@ -133,6 +134,34 @@ def _env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
 
 
 @dataclass(frozen=True)
+class ResearchScope:
+    """The user-selected generation scope shared by Daily and Research.
+
+    ``start_date``/``end_date`` are Asia/Shanghai calendar days, exactly
+    like the Daily report range. ``list_scope`` is one of "holdings",
+    "planned", "watchlist", or None meaning the union of the three fixed
+    lists ("All lists"). A custom list is never a valid Research scope.
+    """
+
+    start_date: date
+    end_date: date
+    list_scope: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not be after end_date")
+
+    @property
+    def list_key(self) -> str:
+        """Stable cache/fingerprint key for the list scope."""
+        return self.list_scope or "all"
+
+    @property
+    def stored_list_scope(self) -> Optional[str]:
+        """Value persisted on research_cards rows (NULL for the union)."""
+        return self.list_scope
+
+@dataclass(frozen=True)
 class ResearchSettings:
     """Non-sensitive Research configuration read from the environment."""
 
@@ -141,8 +170,6 @@ class ResearchSettings:
     model: str = "deepseek-chat"
     api_key: str = ""
     request_timeout_seconds: int = 60
-    lookback_days: int = 365
-    max_evidence_items: int = 120
     min_evidence_items: int = 3
 
     def __post_init__(self) -> None:
@@ -161,12 +188,6 @@ class ResearchSettings:
             api_key=(env.get("RESEARCH_AI_API_KEY") or "").strip(),
             request_timeout_seconds=_env_int(
                 "RESEARCH_AI_REQUEST_TIMEOUT_SECONDS", 60, minimum=1, maximum=300
-            ),
-            lookback_days=_env_int(
-                "RESEARCH_LOOKBACK_DAYS", 365, minimum=1, maximum=3650
-            ),
-            max_evidence_items=_env_int(
-                "RESEARCH_MAX_EVIDENCE_ITEMS", 120, minimum=1, maximum=500
             ),
             min_evidence_items=_env_int(
                 "RESEARCH_MIN_EVIDENCE_ITEMS", 3, minimum=1, maximum=120
@@ -331,6 +352,7 @@ class EvidenceSelection:
     news_count: int
     community_count: int
     min_evidence_items: int
+    too_large: bool = False
 
     @property
     def total(self) -> int:
@@ -351,7 +373,12 @@ class EvidenceSelection:
 
     @property
     def eligible(self) -> bool:
-        """Enough evidence and not community-only."""
+        """Enough evidence and not community-only.
+
+        ``too_large`` is deliberately NOT part of eligibility: a too-large
+        range is still "eligible" evidence, but the caller must refuse to
+        generate rather than silently drop items.
+        """
         if self.total < self.min_evidence_items:
             return False
         if self.community_count > 0 and self.community_count == self.total:
@@ -430,7 +457,7 @@ def select_evidence(
     company_id: int,
     language: str,
     settings: ResearchSettings,
-    now: Optional[datetime] = None,
+    scope: Optional[ResearchScope] = None,
     min_evidence_items: Optional[int] = None,
     company_name: Optional[str] = None,
     ticker: Optional[str] = None,
@@ -438,22 +465,19 @@ def select_evidence(
 ) -> EvidenceSelection:
     """Select, sort, cap, and fingerprint the evidence for one company.
 
-    ``items`` must already be scoped to the current company and to allowed,
-    non-generated, supported-type rows by the repository query. This function
-    is the single place where the time window, ordering, cap, minimum count,
-    community-only rule, prompt-size budget, and fingerprint are decided, so
-    the web handler and the prompt builder never diverge.
+    ``items`` must already be scoped to the current company, the selected
+    date range and list scope, and to allowed, non-generated, supported-type
+    rows by the shared Daily-compatible display-row query. This function is
+    the single place where ordering, minimum count, community-only rule,
+    prompt-size budget, and fingerprint are decided, so the web handler and
+    the prompt builder never diverge. Every item passed in is kept; there is
+    no count-based truncation.
     """
     minimum = (
         settings.min_evidence_items
         if min_evidence_items is None
         else min_evidence_items
     )
-    current = now if now is not None else datetime.now(timezone.utc)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
-    cutoff = current - timedelta(days=settings.lookback_days)
-
     selected: List[ResearchEvidence] = []
     for item in items:
         source_type = _source_type_of(item)
@@ -462,8 +486,6 @@ def select_evidence(
         try:
             event_at = _event_timestamp(item)
         except ValueError:
-            continue
-        if event_at < cutoff:
             continue
         title = _truncate_text(
             str(item.get("title") or "").strip(), MAX_EVIDENCE_TITLE_CHARS
@@ -494,11 +516,9 @@ def select_evidence(
     # Stable ordering: canonical event time descending, then stable tiebreakers.
     selected.sort(key=_evidence_sort_key)
 
-    selected = selected[: settings.max_evidence_items]
-
-    # Assign stable E1..En reference ids in selection order first, so the
-    # prompt-budget cap below sees the exact ids the model will receive.
-    selected = [
+    # Assign stable E1..En reference ids in selection order. Every eligible item
+    # in the range is kept — there is NO count-based truncation here.
+    evidence = tuple(
         ResearchEvidence(
             ref=f"E{index}",
             item_id=item.item_id,
@@ -511,19 +531,7 @@ def select_evidence(
             summary=item.summary,
         )
         for index, item in enumerate(selected, start=1)
-    ]
-
-    # Cap the total prompt byte budget using the real final prompt, so the
-    # exact evidence the model sees is deterministic and bounded (and therefore
-    # reflected by the fingerprint).
-    selected = _cap_by_prompt_bytes(
-        selected,
-        company_name=company_name,
-        ticker=ticker,
-        market=market,
-        language=language,
     )
-    evidence = tuple(selected)
 
     filing_count = sum(1 for e in evidence if _category_count(e.source_type) == "filing")
     news_count = sum(1 for e in evidence if _category_count(e.source_type) == "news")
@@ -531,11 +539,26 @@ def select_evidence(
         1 for e in evidence if _category_count(e.source_type) == "community"
     )
 
+    # The full prompt must fit the safety byte budget. If it does not, the caller
+    # must refuse to generate (research_range_too_large) — never silently drop
+    # items to fit.
+    too_large = False
+    if company_name is not None and ticker is not None and market is not None:
+        prompt_bytes = _total_prompt_bytes(
+            evidence,
+            company_name=company_name,
+            ticker=ticker,
+            market=market,
+            language=language,
+        )
+        too_large = prompt_bytes > MAX_PROMPT_BYTES
+
     fingerprint = evidence_fingerprint(
         evidence,
         company_id=company_id,
         language=language,
         settings=settings,
+        scope=scope,
     )
     return EvidenceSelection(
         evidence=evidence,
@@ -544,6 +567,7 @@ def select_evidence(
         news_count=news_count,
         community_count=community_count,
         min_evidence_items=minimum,
+        too_large=too_large,
     )
 
 
@@ -554,35 +578,19 @@ def _truncate_text(value: str, max_chars: int) -> str:
     return value[:max_chars]
 
 
-def _cap_by_prompt_bytes(
+def _total_prompt_bytes(
     evidence: Sequence[ResearchEvidence],
     *,
-    company_name: Optional[str],
-    ticker: Optional[str],
-    market: Optional[str],
+    company_name: str,
+    ticker: str,
+    market: str,
     language: str,
-) -> List[ResearchEvidence]:
-    """Keep evidence until the real final prompt fits the UTF-8 byte budget.
+) -> int:
+    """Return the UTF-8 byte size of the full final prompt (system + user).
 
-    When company identity is available, the budget is measured on the actual
-    ``build_user_prompt`` output (system prompt + header + every evidence line),
-    so the fingerprint reflects the exact evidence set the model receives.
-    Without company identity (pure unit tests) it falls back to a
-    title+summary estimate.
+    This is a size check only: it never drops or truncates evidence. When the
+    result exceeds the safety budget the caller must refuse to generate.
     """
-    if company_name is None or ticker is None or market is None:
-        result: List[ResearchEvidence] = []
-        total = 0
-        for item in evidence:
-            item_bytes = len(item.title.encode("utf-8")) + len(
-                (item.summary or "").encode("utf-8")
-            )
-            if result and total + item_bytes > MAX_PROMPT_BYTES:
-                break
-            result.append(item)
-            total += item_bytes
-        return result
-
     system = build_system_prompt(language)
     prefix = _user_prompt_prefix(
         company_name=company_name,
@@ -591,16 +599,9 @@ def _cap_by_prompt_bytes(
         language=language,
         news_only=True,  # conservative: include the news-only coverage note
     )
-    base_bytes = len(system.encode("utf-8")) + len(prefix.encode("utf-8"))
-    result: List[ResearchEvidence] = []
-    total = base_bytes
-    for item in evidence:
-        line_bytes = len(_evidence_prompt_line(item).encode("utf-8")) + 1
-        if result and total + line_bytes > MAX_PROMPT_BYTES:
-            break
-        result.append(item)
-        total += line_bytes
-    return result
+    lines = [prefix] + [_evidence_prompt_line(item) for item in evidence]
+    user = "\n".join(lines)
+    return len(system.encode("utf-8")) + len(user.encode("utf-8"))
 
 
 def _evidence_sort_key(item: ResearchEvidence) -> Tuple[Any, ...]:
@@ -617,13 +618,14 @@ def evidence_fingerprint(
     company_id: int,
     language: str,
     settings: ResearchSettings,
+    scope: Optional[ResearchScope] = None,
 ) -> str:
     """Compute a stable SHA-256 fingerprint over the evidence and config.
 
     The fingerprint covers every stable field that actually reaches the model
     (id, title, summary, source, source type, url, event time, published time)
-    plus the ordering/truncation result. Any change invalidates the cache so a
-    changed summary or url can never silently reuse a stale card.
+    plus the full ordered set. Any change invalidates the cache so a changed
+    summary or url can never silently reuse a stale card.
     """
     canonical = {
         "company_id": company_id,
@@ -633,8 +635,9 @@ def evidence_fingerprint(
         "prompt_version": RESEARCH_PROMPT_VERSION,
         "schema_version": RESEARCH_SCHEMA_VERSION,
         "evidence_rule_version": RESEARCH_EVIDENCE_RULE_VERSION,
-        "lookback_days": settings.lookback_days,
-        "max_evidence_items": settings.max_evidence_items,
+        "start_date": scope.start_date.isoformat() if scope else None,
+        "end_date": scope.end_date.isoformat() if scope else None,
+        "list_scope": scope.list_key if scope else None,
         "min_evidence_items": settings.min_evidence_items,
         "evidence": [
             {
@@ -1011,9 +1014,26 @@ def _user_prompt_prefix(
             else ""
         )
         schema_hint = (
-            "\n按 schema_version=research-card-v1 返回，字段包括：coverage（summary、"
-            "limitations）、recent_changes、main_risks、volatility_drivers、"
-            "questions_to_investigate。每条实质性判断都要带 evidence_ids。\n"
+            "\n按 schema_version=research-card-v1 返回严格 JSON 对象（不要 Markdown 围栏）。\n"
+            "顶层字段只能是 schema_version、language、coverage、recent_changes、main_risks、"
+            "volatility_drivers、questions_to_investigate，不得添加任何其他字段。\n"
+            'language 字段必须原样填写 "zh-CN"。\n'
+            "coverage 恰好为 {summary: 字符串, limitations: 非空字符串数组}。\n"
+            "recent_changes 每项恰好为 {title, summary, claim_type, evidence_ids}。\n"
+            "main_risks 每项恰好为 {category, title, explanation, evidence_strength, "
+            "claim_type, evidence_ids}；category 只能取 operational、financial、regulatory、"
+            "competitive、product_technology、governance、market_sentiment、information_gap、"
+            "other；evidence_strength 只能取 high、medium、low。\n"
+            "volatility_drivers 每项恰好为 {trigger, why_it_matters, signals_to_watch: "
+            "非空字符串数组, claim_type, evidence_ids}。\n"
+            "questions_to_investigate 每项恰好为 {question, reason, evidence_ids}。\n"
+            "每个数组至少一项；每项字段必须恰好如上，不多不少。\n"
+            "claim_type 只能取 direct_disclosure_fact、reported_news、community_viewpoint、"
+            "cautious_inference，且引用的证据类别必须匹配：direct_disclosure_fact 只能引用 "
+            "type=regulatory_filing 的证据，reported_news 只能引用 type=news 的证据，"
+            "community_viewpoint 只能引用 type=community 的证据，cautious_inference 可引用"
+            "任意证据。没有 regulatory_filing 证据时不得使用 direct_disclosure_fact。\n"
+            "每条判断的 evidence_ids 只能引用传入的 E1/E2/... 编号，不能编造。\n"
         )
     else:
         instruction = (
@@ -1028,10 +1048,36 @@ def _user_prompt_prefix(
             else ""
         )
         schema_hint = (
-            "\nReturn schema_version=research-card-v1 with coverage (summary, "
-            "limitations), recent_changes, main_risks, volatility_drivers, and "
-            "questions_to_investigate. Cite evidence ids for every substantive "
-            "claim.\n"
+            "\nReturn a strict JSON object with schema_version=research-card-v1 "
+            "(no Markdown fences).\n"
+            "Top-level fields must be exactly schema_version, language, coverage, "
+            "recent_changes, main_risks, volatility_drivers, "
+            "questions_to_investigate; do not add any other field.\n"
+            'The language field must be exactly "en".\n'
+            "coverage is exactly {summary: string, limitations: non-empty string "
+            "array}.\n"
+            "Each recent_changes item is exactly {title, summary, claim_type, "
+            "evidence_ids}.\n"
+            "Each main_risks item is exactly {category, title, explanation, "
+            "evidence_strength, claim_type, evidence_ids}; category must be one of "
+            "operational, financial, regulatory, competitive, product_technology, "
+            "governance, market_sentiment, information_gap, other; "
+            "evidence_strength must be one of high, medium, low.\n"
+            "Each volatility_drivers item is exactly {trigger, why_it_matters, "
+            "signals_to_watch: non-empty string array, claim_type, evidence_ids}.\n"
+            "Each questions_to_investigate item is exactly {question, reason, "
+            "evidence_ids}.\n"
+            "Every array must have at least one item; every item must have exactly "
+            "the listed fields, no more and no fewer.\n"
+            "claim_type must be one of direct_disclosure_fact, reported_news, "
+            "community_viewpoint, cautious_inference, and the cited evidence kind "
+            "must match: direct_disclosure_fact may only cite type=regulatory_filing "
+            "evidence, reported_news only type=news evidence, community_viewpoint "
+            "only type=community evidence, cautious_inference may cite any evidence. "
+            "When there is no regulatory_filing evidence, never use "
+            "direct_disclosure_fact.\n"
+            "Each claim's evidence_ids may only reference the provided E1/E2/... "
+            "ids; never invent an id.\n"
         )
     return instruction + coverage_note + schema_hint + "\nEvidence:"
 

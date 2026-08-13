@@ -66,6 +66,12 @@ SAME_ORIGIN_HEADERS = {
     "Origin": "http://127.0.0.1:8765",
 }
 
+# Explicit range covering every seeded fixture date (2026-01), so tests do not
+# depend on the real clock (the default range is the current Shanghai day).
+RANGE_START = "2025-06-01"
+RANGE_END = "2027-01-01"
+RANGE_QUERY = f"?start_date={RANGE_START}&end_date={RANGE_END}"
+
 
 class FakeAI:
     def __init__(self, card=None, delay=0.0):
@@ -149,7 +155,10 @@ class ResearchWebTests(unittest.TestCase):
     def generate_and_wait(self, company_id, language="en", force=False):
         result = self.payload(self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": company_id, "language": language, "force": force}).encode(),
+            json.dumps({
+                "company_id": company_id, "language": language, "force": force,
+                "start_date": RANGE_START, "end_date": RANGE_END,
+            }).encode(),
             headers=SAME_ORIGIN_HEADERS,
         ))
         if result.get("status") == "generating":
@@ -193,6 +202,20 @@ class ResearchWebTests(unittest.TestCase):
         self.assertIn("esc(r.explanation)", js)
         self.assertIn("esc(d.why_it_matters)", js)
 
+    def test_app_js_generation_state_machine(self):
+        js = APP_JS_PATH.read_text(encoding="utf-8")
+        # Foreground polling uses an explicit timeout, not a fake failure.
+        self.assertIn("GENERATION_FOREGROUND_TIMEOUT_MS", js)
+        self.assertIn("GENERATION_POLL_INTERVAL_MS", js)
+        self.assertIn("research.generating_in_background", js)
+        self.assertIn("generationFailureMessage", js)
+        self.assertIn("research.error.invalid_response", js)
+        # pollGeneration must not hardcode 120 attempts or toast a fake failure
+        # on the foreground timeout path.
+        self.assertNotIn("attempt < 120", js)
+        # generateCard must re-sync from the server in a finally block.
+        self.assertIn("finally {", js)
+
     # --- companies listing ---
 
     def test_companies_listing_and_filter(self):
@@ -201,12 +224,12 @@ class ResearchWebTests(unittest.TestCase):
             json.dumps({"tickers": "MSFT", "lists": ["planned"], "market": "us"}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         )
-        data = self.payload(self.application.handle("GET", "/api/research/companies"))
+        data = self.payload(self.application.handle("GET", "/api/research/companies" + RANGE_QUERY))
         tickers = {c["ticker"] for c in data["companies"]}
         self.assertIn("AAPL", tickers)
         self.assertIn("MSFT", tickers)
         holdings = self.payload(self.application.handle(
-            "GET", "/api/research/companies?list=holdings"
+            "GET", f"/api/research/companies?list=holdings&start_date={RANGE_START}&end_date={RANGE_END}"
         ))
         self.assertEqual([c["ticker"] for c in holdings["companies"]], ["AAPL"])
 
@@ -223,12 +246,12 @@ class ResearchWebTests(unittest.TestCase):
 
     def test_insufficient_evidence_status(self):
         self.enable_research()
-        data = self.payload(self.application.handle("GET", "/api/research/companies"))
+        data = self.payload(self.application.handle("GET", "/api/research/companies" + RANGE_QUERY))
         aapl = [c for c in data["companies"] if c["ticker"] == "AAPL"][0]
         self.assertEqual(aapl["status"], "insufficient_evidence")
 
     def test_model_not_configured_status(self):
-        data = self.payload(self.application.handle("GET", "/api/research/companies"))
+        data = self.payload(self.application.handle("GET", "/api/research/companies" + RANGE_QUERY))
         aapl = [c for c in data["companies"] if c["ticker"] == "AAPL"][0]
         self.assertEqual(aapl["status"], "model_not_configured")
 
@@ -238,7 +261,7 @@ class ResearchWebTests(unittest.TestCase):
         self.seed_evidence()
         result = self.payload(self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": False}).encode(),
+            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": False, "start_date": RANGE_START, "end_date": RANGE_END}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         ))
         self.assertEqual(result["code"], "research_disabled")
@@ -247,7 +270,7 @@ class ResearchWebTests(unittest.TestCase):
         self.enable_research()
         response = self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": 99999, "language": "en", "force": False}).encode(),
+            json.dumps({"company_id": 99999, "language": "en", "force": False, "start_date": RANGE_START, "end_date": RANGE_END}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         )
         self.assertEqual(response.status, 400)
@@ -257,13 +280,13 @@ class ResearchWebTests(unittest.TestCase):
         self.seed_evidence()
         response = self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": self.aapl_id(), "language": "fr", "force": False}).encode(),
+            json.dumps({"company_id": self.aapl_id(), "language": "fr", "force": False, "start_date": RANGE_START, "end_date": RANGE_END}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         )
         self.assertEqual(response.status, 400)
 
     def _force_body(self, force_value, include=True):
-        payload = {"company_id": self.aapl_id(), "language": "en"}
+        payload = {"company_id": self.aapl_id(), "language": "en", "start_date": RANGE_START, "end_date": RANGE_END}
         if include:
             payload["force"] = force_value
         return json.dumps(payload).encode()
@@ -363,13 +386,13 @@ class ResearchWebTests(unittest.TestCase):
         self.seed_evidence()
         first = self.payload(self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": True}).encode(),
+            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": True, "start_date": RANGE_START, "end_date": RANGE_END}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         ))
         self.assertEqual(first["status"], "generating")
         second = self.payload(self.application.handle(
             "POST", "/api/research/generate",
-            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": True}).encode(),
+            json.dumps({"company_id": self.aapl_id(), "language": "en", "force": True, "start_date": RANGE_START, "end_date": RANGE_END}).encode(),
             headers=SAME_ORIGIN_HEADERS,
         ))
         self.assertEqual(second["code"], "generation_in_progress")
@@ -548,7 +571,7 @@ class ResearchWebTests(unittest.TestCase):
             collected_at=datetime(2026, 1, 6, tzinfo=timezone.utc),
             raw_metadata={"acceptanceDateTime": "2026-01-05T11:00:00-04:00"},
         ),))
-        data = self.payload(self.application.handle("GET", "/api/research/companies"))
+        data = self.payload(self.application.handle("GET", "/api/research/companies" + RANGE_QUERY))
         aapl = [c for c in data["companies"] if c["ticker"] == "AAPL"][0]
         self.assertEqual(aapl["status"], "stale")
 

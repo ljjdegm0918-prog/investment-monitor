@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import copy
@@ -11,6 +11,7 @@ from investment_monitor.models import InformationItem
 from investment_monitor.sqlite_repository import SQLiteInformationRepository
 from investment_monitor.web_repository import WebRepository
 from investment_monitor.research import (
+    ResearchScope,
     ResearchSettings,
     ResearchEvidence,
     MAX_PROMPT_BYTES,
@@ -26,6 +27,10 @@ from investment_monitor.research_repository import (
     ensure_research_schema,
 )
 from investment_monitor.research_service import ResearchService, validate_list_slug
+
+# Scope covering every seeded fixture date (2026-01) used by service tests.
+SCOPE = ResearchScope(date(2025, 1, 1), date(2027, 1, 1))
+SCOPE_HOLDINGS = ResearchScope(date(2025, 1, 1), date(2027, 1, 1), "holdings")
 
 
 class FakeResolver:
@@ -151,7 +156,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual([e.ref for e in selection.evidence], ["E1", "E2", "E3"])
         self.assertEqual([e.item_id for e in selection.evidence], [2, 3, 1])
@@ -168,7 +172,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual(selection.evidence[0].event_at, datetime(2026, 5, 1, tzinfo=timezone.utc))
 
@@ -182,14 +185,14 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual(selection.evidence[0].event_at, datetime(2026, 6, 1, tzinfo=timezone.utc))
 
     def test_collected_at_is_never_the_event_time(self):
-        # A 10-year-old filing must fall outside the lookback even though its
-        # collection time (collected_at) is recent. collected_at is not passed
-        # to the selector at all; only the stored event fields count.
+        # collected_at is not passed to the selector at all; only the stored
+        # event fields count. The selector applies no date window itself: the
+        # shared Daily-compatible repository query owns range scoping, so an
+        # old item passed in is kept with its effective_at as the event time.
         items = [
             make_item_dict(
                 1,
@@ -198,50 +201,70 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
-        )
-        self.assertEqual(selection.total, 0)
-
-    def test_lookback_boundary_inclusive(self):
-        settings = ResearchSettings(lookback_days=365)
-        items = [
-            make_item_dict(1, effective_at="2025-08-02T00:00:00+00:00"),
-        ]
-        selection = select_evidence(
-            items, company_id=1, language="en", settings=settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual(selection.total, 1)
+        self.assertEqual(
+            selection.evidence[0].event_at,
+            datetime(2010, 1, 1, tzinfo=timezone.utc),
+        )
 
-    def test_lookback_boundary_exclusive(self):
-        settings = ResearchSettings(lookback_days=365)
+    def test_selector_applies_no_date_window(self):
+        # Date-range scoping lives in the shared Daily display-row query; the
+        # selector keeps every item it is given, however old.
         items = [
-            make_item_dict(1, effective_at="2025-07-31T23:59:59+00:00"),
+            make_item_dict(1, effective_at="2015-01-01T00:00:00+00:00"),
+            make_item_dict(2, effective_at="2035-01-01T00:00:00+00:00"),
         ]
         selection = select_evidence(
-            items, company_id=1, language="en", settings=settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            items, company_id=1, language="en", settings=self.settings,
         )
-        self.assertEqual(selection.total, 0)
+        self.assertEqual(selection.total, 2)
 
-    def test_max_items_cap(self):
-        settings = ResearchSettings(max_evidence_items=5, min_evidence_items=3)
+    def test_settings_have_no_lookback_or_max_items(self):
+        # RESEARCH_LOOKBACK_DAYS / RESEARCH_MAX_EVIDENCE_ITEMS are gone: the
+        # selected range (not a lookback) scopes evidence, and no count cap
+        # exists. Stale environment values must not be read back in.
+        settings = ResearchSettings.from_environment({
+            "RESEARCH_LOOKBACK_DAYS": "7",
+            "RESEARCH_MAX_EVIDENCE_ITEMS": "5",
+        })
+        self.assertFalse(hasattr(settings, "lookback_days"))
+        self.assertFalse(hasattr(settings, "max_evidence_items"))
+
+    def test_no_count_truncation_all_items_kept(self):
         items = [
-            make_item_dict(i, effective_at=f"2026-07-{i:02d}T00:00:00+00:00")
+            make_item_dict(i, effective_at=f"2026-07-{i % 28 + 1:02d}T00:00:00+00:00")
             for i in range(1, 21)
         ]
         selection = select_evidence(
-            items, company_id=1, language="en", settings=settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            items, company_id=1, language="en", settings=self.settings,
         )
-        self.assertEqual(selection.total, 5)
-        self.assertEqual(selection.evidence[0].item_id, 20)
+        self.assertEqual(selection.total, 20)
+
+    def test_31_items_all_kept_no_30_truncation(self):
+        items = [
+            make_item_dict(i, effective_at=f"2026-07-{i % 28 + 1:02d}T00:00:00+00:00")
+            for i in range(1, 32)
+        ]
+        selection = select_evidence(
+            items, company_id=1, language="en", settings=self.settings,
+        )
+        self.assertEqual(selection.total, 31)
+
+    def test_150_items_all_kept_no_120_truncation(self):
+        items = [
+            make_item_dict(i, effective_at=f"2026-07-{i % 28 + 1:02d}T00:00:00+00:00")
+            for i in range(1, 151)
+        ]
+        selection = select_evidence(
+            items, company_id=1, language="en", settings=self.settings,
+        )
+        self.assertEqual(selection.total, 150)
 
     def test_insufficient_evidence_when_below_minimum(self):
         items = [make_item_dict(1), make_item_dict(2)]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertFalse(selection.eligible)
 
@@ -253,7 +276,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertFalse(selection.eligible)
         self.assertEqual(selection.community_count, 3)
@@ -266,7 +288,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertTrue(selection.eligible)
         self.assertTrue(selection.news_only)
@@ -278,11 +299,9 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection_a = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         selection_b = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual(selection_a.fingerprint, selection_b.fingerprint)
 
@@ -294,12 +313,10 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         original = select_evidence(
             base, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         ).fingerprint
         added = select_evidence(
             base + [make_item_dict(4, effective_at="2026-04-01T00:00:00+00:00")],
             company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         ).fingerprint
         self.assertNotEqual(original, added)
 
@@ -312,12 +329,10 @@ class EvidenceSelectionTests(unittest.TestCase):
             ]
         a = select_evidence(
             items_with_summary("summary A"), company_id=1, language="en",
-            settings=self.settings, now=datetime(2026, 8, 1, tzinfo=timezone.utc),
-        ).fingerprint
+            settings=self.settings,        ).fingerprint
         b = select_evidence(
             items_with_summary("summary B"), company_id=1, language="en",
-            settings=self.settings, now=datetime(2026, 8, 1, tzinfo=timezone.utc),
-        ).fingerprint
+            settings=self.settings,        ).fingerprint
         self.assertNotEqual(a, b)
 
     def test_fingerprint_differs_by_language(self):
@@ -328,11 +343,9 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         en = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         ).fingerprint
         zh = select_evidence(
             items, company_id=1, language="zh-CN", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         ).fingerprint
         self.assertNotEqual(en, zh)
 
@@ -344,12 +357,10 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         base = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         other_model = select_evidence(
             items, company_id=1, language="en",
             settings=ResearchSettings(model="other-model"),
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertNotEqual(base.fingerprint, other_model.fingerprint)
 
@@ -362,7 +373,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         self.assertEqual(selection.total, 3)
 
@@ -374,7 +384,6 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         item1 = [e for e in selection.evidence if e.item_id == 1][0]
         self.assertLessEqual(len(item1.title), 500)
@@ -387,30 +396,22 @@ class EvidenceSelectionTests(unittest.TestCase):
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
         item1 = [e for e in selection.evidence if e.item_id == 1][0]
         self.assertLessEqual(len(item1.summary), 2000)
 
-    def test_total_prompt_budget_capped(self):
-        # 120 items with large CJK titles+summaries exceed the 512KB budget, so
-        # the selector must stop adding evidence before the cap.
+    def test_full_range_no_budget_truncation(self):
+        # 120 items are all kept — no count or byte truncation happens.
         items = [
-            make_item_dict(
-                i,
-                title="中" * 500,
-                summary="文" * 2000,
-                effective_at=f"2026-01-01T00:00:00+00:00",
-            )
+            make_item_dict(i, title="x" * 100, effective_at="2026-01-01T00:00:00+00:00")
             for i in range(1, 121)
         ]
         selection = select_evidence(
             items, company_id=1, language="en", settings=self.settings,
-            now=datetime(2026, 8, 1, tzinfo=timezone.utc),
         )
-        self.assertLess(selection.total, 120)
+        self.assertEqual(selection.total, 120)
 
-    def test_actual_prompt_within_budget(self):
+    def test_too_large_flagged_when_prompt_over_budget(self):
         import investment_monitor.research as research_mod
         with patch.object(research_mod, "MAX_PROMPT_BYTES", 4000):
             items = [
@@ -418,37 +419,31 @@ class EvidenceSelectionTests(unittest.TestCase):
                     i,
                     title="中文标题" * 40,
                     summary="中文摘要" * 80,
-                    effective_at=f"2026-01-01T00:00:00+00:00",
+                    effective_at="2026-01-01T00:00:00+00:00",
                 )
                 for i in range(1, 60)
             ]
             selection = select_evidence(
                 items, company_id=1, language="zh-CN", settings=self.settings,
-                now=datetime(2026, 8, 1, tzinfo=timezone.utc),
                 company_name="测试公司", ticker="TEST", market="cn",
             )
-            system = build_system_prompt("zh-CN")
-            user = build_user_prompt(
-                company_name="测试公司", ticker="TEST", market="cn",
-                language="zh-CN", evidence=selection.evidence, news_only=False,
-            )
-            total = len(system.encode("utf-8")) + len(user.encode("utf-8"))
-            self.assertLessEqual(total, 4000)
+            self.assertTrue(selection.too_large)
+            self.assertEqual(selection.total, 59)  # full set, never truncated
 
-    def test_truncation_below_minimum_returns_insufficient(self):
+    def test_too_large_does_not_drop_items_or_mark_ineligible(self):
         import investment_monitor.research as research_mod
         with patch.object(research_mod, "MAX_PROMPT_BYTES", 120):
             items = [
-                make_item_dict(i, title="x" * 500, effective_at=f"2026-01-01T00:00:00+00:00")
+                make_item_dict(i, title="x" * 500, effective_at="2026-01-01T00:00:00+00:00")
                 for i in range(1, 10)
             ]
             selection = select_evidence(
                 items, company_id=1, language="en", settings=self.settings,
-                now=datetime(2026, 8, 1, tzinfo=timezone.utc),
                 company_name="Apple", ticker="AAPL", market="us",
             )
-            # 预算极小，能保留的证据少于 min_evidence_items(3)
-            self.assertFalse(selection.eligible)
+            self.assertTrue(selection.too_large)
+            self.assertEqual(selection.total, 9)
+            self.assertTrue(selection.eligible)
 
 
 FILING_REF = {
@@ -588,6 +583,49 @@ class CardValidationTests(unittest.TestCase):
         self.assertIn("不可信数据", zh)
         self.assertIn("绝不能把 Community 证据说成 Filing", zh)
 
+    def test_zh_cn_system_prompt_is_clean_utf8(self):
+        zh = build_system_prompt("zh-CN")
+        # 正常简体中文关键句必须真实存在。
+        for sentence in (
+            "你是投资研究助手",
+            "只能基于用户提供的证据工作",
+            "不要把社区观点写成事实",
+            "输出必须是严格的 JSON",
+            "不要输出免责声明",
+        ):
+            self.assertIn(sentence, zh)
+        # 不能出现典型 mojibake 片段。
+        for mojibake in (
+            "浣犳槸",
+            "鎶曡祫",
+            "鐮旂┒",
+            "鍔╂墜",
+            "绀惧尯",
+        ):
+            self.assertNotIn(mojibake, zh)
+        # 关键安全约束必须保留在中文 prompt 中。
+        self.assertIn("只", zh)
+        self.assertIn("证据", zh)
+
+    def test_zh_cn_user_prompt_is_clean_utf8(self):
+        from investment_monitor.research import ResearchEvidence
+        from datetime import datetime, timezone as tz
+        evidence = [
+            ResearchEvidence(
+                ref="E1", item_id=1, source="sec",
+                source_type="regulatory_filing", title="测试标题",
+                url="https://example.com", event_at=datetime(2026, 1, 1, tzinfo=tz.utc),
+                published_at=None, summary="测试摘要",
+            )
+        ]
+        user = build_user_prompt(
+            company_name="测试公司", ticker="TEST", market="cn",
+            language="zh-CN", evidence=evidence, news_only=False,
+        )
+        self.assertIn("请基于以下证据生成研究卡 JSON", user)
+        self.assertIn("测试公司", user)
+        self.assertNotIn("浣犳槸", user)
+
 
 class ResearchRepositoryTests(unittest.TestCase):
     def setUp(self):
@@ -609,7 +647,17 @@ class ResearchRepositoryTests(unittest.TestCase):
     def save_item(self, item):
         self.items.save((item,))
 
-    def test_research_items_scoped_to_current_company(self):
+    def research_rows(self, company):
+        """The exact Daily display rows for this company (shared query)."""
+        result = self.repository.daily_display_rows(
+            None, date(2020, 1, 1), date(2030, 1, 1)
+        )
+        return [
+            row for row in result.items
+            if row["company_id"] == company["id"]
+        ]
+
+    def test_shared_rows_scoped_to_current_company(self):
         self.add_company("AAPL", "holdings")
         self.add_company("MSFT", "holdings")
         self.save_item(InformationItem(
@@ -628,11 +676,11 @@ class ResearchRepositoryTests(unittest.TestCase):
         ))
         aapl_id = self.repository.companies()[0]["id"]
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        items = self.repository.research_items(aapl["id"])
+        items = self.research_rows(aapl)
         self.assertTrue(all(i["title"] == "AAPL filing" for i in items))
         self.assertEqual(len(items), 1)
 
-    def test_research_items_exclude_generated(self):
+    def test_shared_rows_exclude_generated(self):
         self.add_company("AAPL", "holdings")
         self.save_item(InformationItem(
             source="sec", source_type="regulatory_filing",
@@ -643,9 +691,9 @@ class ResearchRepositoryTests(unittest.TestCase):
             raw_metadata={"generated": True},
         ))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        self.assertEqual(len(self.repository.research_items(aapl["id"])), 0)
+        self.assertEqual(len(self.research_rows(aapl)), 0)
 
-    def test_research_items_exclude_unsupported_source_type(self):
+    def test_shared_rows_exclude_unsupported_source_type(self):
         self.add_company("AAPL", "holdings")
         self.save_item(InformationItem(
             source="sec", source_type="research",
@@ -655,9 +703,9 @@ class ResearchRepositoryTests(unittest.TestCase):
             url="https://example.com/res", collected_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
         ))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        self.assertEqual(len(self.repository.research_items(aapl["id"])), 0)
+        self.assertEqual(len(self.research_rows(aapl)), 0)
 
-    def test_research_items_exclude_non_allowed_source(self):
+    def test_shared_rows_exclude_non_allowed_source(self):
         # Default allowed_sources is ("sec",); a mock source row must not appear.
         self.add_company("AAPL", "holdings")
         self.save_item(InformationItem(
@@ -668,7 +716,7 @@ class ResearchRepositoryTests(unittest.TestCase):
             url="https://example.com/mock", collected_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
         ))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        self.assertEqual(len(self.repository.research_items(aapl["id"])), 0)
+        self.assertEqual(len(self.research_rows(aapl)), 0)
 
     # --- P0-3: strict company/market isolation ---
 
@@ -683,7 +731,10 @@ class ResearchRepositoryTests(unittest.TestCase):
             market="unknown",
         ))
 
-    def test_unknown_item_excluded_when_ticker_in_multiple_markets(self):
+    def test_unknown_item_shown_like_daily_when_ticker_in_multiple_markets(self):
+        # The shared Daily query joins unknown-market rows onto every matching
+        # ticker; Research consumes the same rows, so both companies see the
+        # item exactly as /today displays it (parity over divergence).
         self.add_company("ABC", "holdings")  # market=us
         result = self.repository.add_companies_batch(
             "ABC", ("holdings",), self.resolver, market="hk"
@@ -691,13 +742,15 @@ class ResearchRepositoryTests(unittest.TestCase):
         self.assertFalse(result["failed"])
         self._add_unknown_item("ABC")
         for company in self.repository.companies():
-            self.assertEqual(len(self.repository.research_items(company["id"])), 0)
+            rows = self.research_rows(company)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["title"], "ABC unknown")
 
     def test_unknown_item_allowed_when_ticker_unique(self):
         self.add_company("ABC", "holdings")  # only market=us
         self._add_unknown_item("ABC")
         abc = [c for c in self.repository.companies() if c["ticker"] == "ABC"][0]
-        items = self.repository.research_items(abc["id"])
+        items = self.research_rows(abc)
         self.assertEqual(len(items), 1)
 
     def test_strict_market_item_still_used(self):
@@ -712,7 +765,7 @@ class ResearchRepositoryTests(unittest.TestCase):
             market="us",
         ))
         abc = [c for c in self.repository.companies() if c["ticker"] == "ABC"][0]
-        items = self.repository.research_items(abc["id"])
+        items = self.research_rows(abc)
         self.assertEqual(len(items), 1)
 
     def test_persist_and_recover_interrupted(self):
@@ -767,18 +820,18 @@ class ResearchServiceTests(unittest.TestCase):
         self.repository.remove_all_memberships("AAPL")
         service = self.build_service()
         with self.assertRaises(ValueError):
-            service.generate(1, "en", force=False)
+            service.generate(1, "en", SCOPE, force=False)
 
     def test_companies_only_returns_fixed_list_members(self):
         self.add_company("AAPL", "holdings")
         self.add_company("MSFT", "planned")
         self.add_company("NVDA", "watchlist")
         service = self.build_service()
-        companies = service.companies(None, "en")
+        companies = service.companies(SCOPE, "en")
         self.assertEqual({c["ticker"] for c in companies}, {"AAPL", "MSFT", "NVDA"})
         # All lists dedupe the same company.
         self.add_company("AAPL", "planned")
-        companies = service.companies(None, "en")
+        companies = service.companies(SCOPE, "en")
         aapl_rows = [c for c in companies if c["ticker"] == "AAPL"]
         self.assertEqual(len(aapl_rows), 1)
 
@@ -786,14 +839,14 @@ class ResearchServiceTests(unittest.TestCase):
         self.add_company("AAPL", "holdings")
         self.add_company("MSFT", "planned")
         service = self.build_service()
-        holdings = service.companies("holdings", "en")
+        holdings = service.companies(SCOPE_HOLDINGS, "en")
         self.assertEqual([c["ticker"] for c in holdings], ["AAPL"])
 
     def test_no_list_company_invisible(self):
         self.add_company("AAPL", "holdings")
         self.repository.remove_all_memberships("AAPL")
         service = self.build_service()
-        self.assertEqual([c["ticker"] for c in service.companies(None, "en")], [])
+        self.assertEqual([c["ticker"] for c in service.companies(SCOPE, "en")], [])
 
     def test_custom_list_only_company_invisible(self):
         custom = self.repository.create_list("My Custom")
@@ -802,13 +855,13 @@ class ResearchServiceTests(unittest.TestCase):
         )
         self.assertFalse(result["failed"])
         service = self.build_service()
-        self.assertEqual([c["ticker"] for c in service.companies(None, "en")], [])
+        self.assertEqual([c["ticker"] for c in service.companies(SCOPE, "en")], [])
 
     def test_holdings_watchlist_company_appears_once_in_all(self):
         self.add_company("AAPL", "holdings")
         self.add_company("AAPL", "watchlist")
         service = self.build_service()
-        aapl_rows = [c for c in service.companies(None, "en") if c["ticker"] == "AAPL"]
+        aapl_rows = [c for c in service.companies(SCOPE, "en") if c["ticker"] == "AAPL"]
         self.assertEqual(len(aapl_rows), 1)
 
     def test_invalid_list_slug_rejected(self):
@@ -818,13 +871,13 @@ class ResearchServiceTests(unittest.TestCase):
     def test_disabled_service_returns_error(self):
         self.add_company("AAPL", "holdings")
         service = self.build_service(settings=ResearchSettings(enabled=False))
-        result = service.generate(1, "en")
+        result = service.generate(1, "en", SCOPE)
         self.assertEqual(result["code"], "research_disabled")
 
     def test_not_configured_returns_error(self):
         self.add_company("AAPL", "holdings")
         service = self.build_service(settings=ResearchSettings(enabled=True, api_key=""))
-        result = service.generate(1, "en")
+        result = service.generate(1, "en", SCOPE)
         self.assertEqual(result["code"], "model_not_configured")
 
     def test_generate_caches_on_same_fingerprint(self):
@@ -840,10 +893,10 @@ class ResearchServiceTests(unittest.TestCase):
         ai = FakeAI()
         service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        first = service.generate(aapl["id"], "en")
+        first = service.generate(aapl["id"], "en", SCOPE)
         self.assertEqual(first["status"], "completed")
         self.assertEqual(len(ai.calls), 1)
-        second = service.generate(aapl["id"], "en")
+        second = service.generate(aapl["id"], "en", SCOPE)
         self.assertEqual(second["status"], "cached")
         self.assertEqual(len(ai.calls), 1)
 
@@ -860,10 +913,64 @@ class ResearchServiceTests(unittest.TestCase):
         ai = FakeAI()
         service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        first = service.generate(aapl["id"], "en")
-        second = service.generate(aapl["id"], "en", force=True)
+        first = service.generate(aapl["id"], "en", SCOPE)
+        second = service.generate(aapl["id"], "en", SCOPE, force=True)
         self.assertEqual(second["status"], "completed")
         self.assertEqual(len(ai.calls), 2)
+
+    def test_regenerate_after_failure_succeeds(self):
+        self.add_company("AAPL", "holdings")
+        for i in range(3):
+            self.save_item(InformationItem(
+                source="sec", source_type="regulatory_filing",
+                external_id=f"f{i}", tickers=("AAPL",), issuer="AAPL Inc.",
+                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                title=f"filing {i}", document_type="8-K",
+                url=f"https://example.com/{i}", collected_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            ))
+        # First call returns a card whose claim_type mismatches the filing
+        # evidence, so server-side validation fails it as invalid_model_response.
+        bad_card = copy.deepcopy(DEFAULT_CARD)
+        bad_card["recent_changes"] = [
+            {"title": "t", "summary": "s", "claim_type": "reported_news", "evidence_ids": ["E1"]}
+        ]
+        ai = FakeAI(card=bad_card)
+        service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
+        aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
+        first = service.generate(aapl["id"], "en", SCOPE)
+        self.assertEqual(first["status"], "failed")
+        self.assertEqual(first.get("error_code"), "invalid_model_response")
+        # Regenerate with a valid card succeeds.
+        ai.card = copy.deepcopy(DEFAULT_CARD)
+        second = service.generate(aapl["id"], "en", SCOPE, force=True)
+        self.assertEqual(second["status"], "completed")
+
+    def test_range_too_large_refuses_generation(self):
+        self.add_company("AAPL", "holdings")
+        self._seed_filings(10)
+        ai = FakeAI()
+        service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
+        aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
+        import investment_monitor.research as research_mod
+        with patch.object(research_mod, "MAX_PROMPT_BYTES", 120):
+            result = service.generate(aapl["id"], "en", SCOPE)
+        self.assertEqual(result["code"], "research_range_too_large")
+        self.assertEqual(len(ai.calls), 0)  # 不调用模型
+        latest = service._repo.latest_completed_card(aapl["id"], "en")
+        self.assertIsNone(latest)  # 不保存 completed card
+
+    def test_full_evidence_sent_to_model_and_snapshot(self):
+        self.add_company("AAPL", "holdings")
+        self._seed_filings(31)
+        ai = FakeAI()
+        service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
+        aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
+        result = service.generate(aapl["id"], "en", SCOPE)
+        self.assertEqual(result["status"], "completed")
+        # mock AI received all 31 evidence refs (not a 30-item subset).
+        self.assertEqual(ai.calls[0]["user"].count("[E"), 31)
+        card = service._repo.latest_completed_card(aapl["id"], "en")
+        self.assertEqual(len(service._repo.evidence_snapshot(card["id"])), 31)
 
     # --- P1-1: frozen evidence snapshot ---
 
@@ -912,7 +1019,7 @@ class ResearchServiceTests(unittest.TestCase):
         service = self._async_service(ai)
         try:
             aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-            result = service.generate(aapl["id"], "en", force=True)
+            result = service.generate(aapl["id"], "en", SCOPE, force=True)
             self.assertEqual(result["status"], "generating")
             ai.started.wait(timeout=5)
             self._seed_filings(1)  # add a 4th item while the worker is frozen
@@ -933,7 +1040,7 @@ class ResearchServiceTests(unittest.TestCase):
         service = self._async_service(ai)
         try:
             aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-            result = service.generate(aapl["id"], "en", force=True)
+            result = service.generate(aapl["id"], "en", SCOPE, force=True)
             ai.started.wait(timeout=5)
             self._delete_item("seed-2")  # remove an item while frozen
             ai.release.set()
@@ -950,14 +1057,14 @@ class ResearchServiceTests(unittest.TestCase):
         ai = FakeAI()
         service = self.build_service(ai=ai, settings=ResearchSettings(enabled=True, api_key="k"))
         aapl = [c for c in self.repository.companies() if c["ticker"] == "AAPL"][0]
-        selection = service._select(aapl["id"], "en")
+        selection = service._select(aapl["id"], "en", SCOPE)
         card_id = service._repo.create_generation(
             company_id=aapl["id"], language="en",
             evidence_fingerprint=selection.fingerprint,
             model_provider_fingerprint="p", model_name="m",
         )
         self.repository.remove_all_memberships("AAPL")
-        service._run_generation(card_id, aapl["id"], "en", selection)
+        service._run_generation(card_id, aapl["id"], "en", selection, SCOPE)
         self.assertEqual(len(ai.calls), 0)
         card = service._repo.latest_card(aapl["id"], "en")
         self.assertEqual(card["status"], "failed")

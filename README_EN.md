@@ -639,9 +639,14 @@ They never give buy/sell ratings, price targets, or price predictions.
   cache entries.
 - Fewer than `RESEARCH_MIN_EVIDENCE_ITEMS` items, or a community-only evidence
   set, produces `insufficient_evidence` and never calls the model.
+- **No count-based truncation**: every eligible item in the date range is sent
+  to the model — never "just the latest 30". If the full range cannot be sent
+  safely, generation is refused (`research_range_too_large`) and the user is
+  asked to shorten the range; items are never silently dropped.
 - Cards are cached by an evidence fingerprint (company, language, model,
-  provider, prompt/schema/rule versions, and the ordered evidence set). New
-  evidence marks the previous card `stale`; `Regenerate` bypasses the cache.
+  provider, prompt/schema/rule versions, and the ordered **full** evidence
+  set). Adding, removing, or changing any in-range item marks the previous
+  card `stale`; `Regenerate` bypasses the cache.
 - The model feature is **off by default**. When enabled, generating a card
   sends the selected public evidence to the configured OpenAI-compatible
   provider. The API key is read only from the environment and is never stored
@@ -653,8 +658,6 @@ RESEARCH_AI_BASE_URL=https://api.deepseek.com
 RESEARCH_AI_MODEL=deepseek-chat
 RESEARCH_AI_API_KEY=
 RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
-RESEARCH_LOOKBACK_DAYS=365
-RESEARCH_MAX_EVIDENCE_ITEMS=120
 RESEARCH_MIN_EVIDENCE_ITEMS=3
 
 # The scheme the browser sees at the reverse-proxy entry point ("http" for

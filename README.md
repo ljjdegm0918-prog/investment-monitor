@@ -1,6 +1,6 @@
 # Investment Monitor
 
-中文 · [English](README_EN.md)
+中文 · [中文使用指南](README_ZH.md) · [English](README_EN.md)
 
 > **说明：** Web 界面目前仍为英文。
 
@@ -437,7 +437,8 @@ Investment Monitor running at http://127.0.0.1:8765
 - 只使用监控器已入库的证据（官方披露、新闻与社区内容）；不做外部网页搜索或 IR 抓取。
 - 原始新闻、披露与社区文本**绝不翻译或改写**。卡片按语言（`en` 或 `zh-CN`）分别生成并分别缓存。
 - 证据少于 `RESEARCH_MIN_EVIDENCE_ITEMS` 条、或全部来自社区时，返回 `insufficient_evidence`，不调用模型。
-- 卡片按证据指纹缓存（公司、语言、模型、provider、prompt/schema/rule 版本及排序后的证据集合）。新证据会使旧卡变为 `stale`；`Regenerate` 绕过缓存。
+- **不按数量截断**：日期范围内所有合格证据都会送入模型，不取"最新 30 条"之类的子集。若全量证据构成的请求超过安全发送上限，系统会明确拒绝（`research_range_too_large`）并提示缩短日期范围，**绝不悄悄漏掉资料**。
+- 卡片按证据指纹缓存（公司、语言、模型、provider、prompt/schema/rule 版本及排序后的**全量**证据集合）。范围内任意证据新增、删除或变化都会使旧卡变为 `stale`；`Regenerate` 绕过缓存。
 - 模型功能**默认关闭**。启用后，生成卡片会把选定的公开证据发送给你配置的 OpenAI-compatible 服务。API key 只从环境读取，绝不写入 SQLite、通过 API 返回或写入日志。
 
 ```text
@@ -446,8 +447,6 @@ RESEARCH_AI_BASE_URL=https://api.deepseek.com
 RESEARCH_AI_MODEL=deepseek-chat
 RESEARCH_AI_API_KEY=
 RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
-RESEARCH_LOOKBACK_DAYS=365
-RESEARCH_MAX_EVIDENCE_ITEMS=120
 RESEARCH_MIN_EVIDENCE_ITEMS=3
 
 # 浏览器在反代入口看到的协议（本地开发 http，HTTPS 反代生产必须设为 https）。

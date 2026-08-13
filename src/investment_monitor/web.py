@@ -82,7 +82,7 @@ from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
-from .research import ResearchSettings, card_from_json, validate_language
+from .research import ResearchScope, ResearchSettings, card_from_json, validate_language
 from .research_service import ResearchService, validate_list_slug
 
 LOGGER = logging.getLogger(__name__)
@@ -320,9 +320,17 @@ class WebApplication:
                         400,
                     )
                 language = _fallback_language(_first(query, "language"))
+                scope = self._research_scope(
+                    _query_date(query, "start_date"),
+                    _query_date(query, "end_date"),
+                    list_slug,
+                )
                 return self._json({
-                    "companies": self.research.companies(list_slug, language),
+                    "companies": self.research.companies(scope, language),
                     "model": self.research.model_status(),
+                    "start_date": scope.start_date.isoformat(),
+                    "end_date": scope.end_date.isoformat(),
+                    "list": list_slug,
                 })
             if method == "GET" and parsed.path.startswith("/api/research/cards/"):
                 card_id = _trailing_id(parsed.path, "/api/research/cards/")
@@ -339,7 +347,13 @@ class WebApplication:
                 company_id = int(payload["company_id"])
                 language = validate_language(payload.get("language") or "en")
                 force = _optional_bool(payload, "force", False)
-                result = self.research.generate(company_id, language, force)
+                list_slug = validate_list_slug(payload.get("list"))
+                scope = self._research_scope(
+                    _payload_date(payload, "start_date"),
+                    _payload_date(payload, "end_date"),
+                    list_slug,
+                )
+                result = self.research.generate(company_id, language, scope, force)
                 status_code = 202 if result["status"] == "generating" else 200
                 return self._json(result, status_code)
             if method == "GET" and parsed.path.startswith("/api/research/generations/"):
@@ -975,6 +989,29 @@ class WebApplication:
             _first(query, "list"),
         )
 
+    def _research_scope(
+        self,
+        requested_start: Optional[date],
+        requested_end: Optional[date],
+        list_slug: Optional[str],
+    ) -> ResearchScope:
+        """Resolve a Research scope with the exact Daily range semantics.
+
+        Defaults mirror ``/api/daily-range``: an omitted end falls back to the
+        requested start and then to the current Asia/Shanghai day; an omitted
+        start falls back to the end. ``start > end`` is a hard 400 upstream.
+        """
+        today = _shanghai_default_day(self._clock())
+        end_date = requested_end or requested_start or today
+        start_date = requested_start or end_date
+        if start_date > end_date:
+            raise ValueError("start_date must not be after end_date")
+        return ResearchScope(
+            start_date=start_date,
+            end_date=end_date,
+            list_scope=list_slug,
+        )
+
     def _daily_range_payload(
         self,
         start_date: date,
@@ -983,13 +1020,11 @@ class WebApplication:
     ) -> Mapping[str, Any]:
         # Filter the report categories in SQL, then annotate the complete
         # range once so soft-dedupe can see pairs split across DB pages.
-        feed_result = self.repository.query_feed_display_all(FeedFilters(
-            list_slug=list_slug,
-            information_type="daily",
-            start_date=start_date,
-            end_date=end_date,
-            page_size=100,
-        ))
+        # This is the same shared query boundary Research consumes, so the
+        # Daily display rows and the Research evidence set are identical.
+        feed_result = self.repository.daily_display_rows(
+            list_slug, start_date, end_date
+        )
         items = feed_result.items
         day_count = (end_date - start_date).days + 1
         performance = _daily_range_performance(
@@ -1348,6 +1383,16 @@ def _query_date(query: Mapping[str, Sequence[str]], key: str) -> Optional[date]:
     return date.fromisoformat(value) if value else None
 
 
+def _payload_date(payload: Mapping[str, Any], key: str) -> Optional[date]:
+    """Parse an optional ISO date from a JSON body; invalid values raise."""
+    value = payload.get(key)
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{key} must be an ISO date string")
+    return date.fromisoformat(value.strip())
+
+
 def _shanghai_default_day(now: Optional[datetime] = None) -> date:
     """Return the current Asia/Shanghai calendar day for Daily Report defaults.
 
@@ -1449,6 +1494,7 @@ def _research_card_payload(card: Mapping[str, Any]) -> Mapping[str, Any]:
     content = None
     if card.get("content_json"):
         content = card_from_json(card["content_json"])
+    evidence = list(card.get("evidence") or ())
     return {
         "id": int(card["id"]),
         "company_id": int(card["company_id"]),
@@ -1456,8 +1502,13 @@ def _research_card_payload(card: Mapping[str, Any]) -> Mapping[str, Any]:
         "status": card["status"],
         "generated_at": card["generated_at"],
         "error_code": card["error_code"],
+        "start_date": card.get("start_date"),
+        "end_date": card.get("end_date"),
+        "list_scope": card.get("list_scope"),
+        "evidence_total": len(evidence),
+        "evidence_sent": len(evidence),
         "content": content,
-        "evidence": list(card.get("evidence") or ()),
+        "evidence": evidence,
     }
 
 

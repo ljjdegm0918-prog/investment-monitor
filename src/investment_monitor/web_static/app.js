@@ -126,6 +126,17 @@ const MESSAGES = {
     "research.data_send": "Generating a card sends this company’s selected public evidence to your configured model provider.",
     "research.list": "List",
     "research.all_lists": "All lists",
+    "research.from": "From",
+    "research.to": "To",
+    "research.apply": "Apply",
+    "research.selected_range": "Selected date range",
+    "research.evidence_in_range": "Evidence in selected range",
+    "research.evidence_sent": "Evidence sent to model",
+    "research.no_card_for_range": "No research card for this range",
+    "research.insufficient_in_range": "Insufficient evidence in this date range",
+    "research.card_scope": "This card was generated for",
+    "research.range_new_evidence": "Current range has new evidence available",
+    "research.start_after_end": "Range start must not be after range end",
     "research.model_label": "Model",
     "research.model_enabled": "enabled",
     "research.model_disabled": "not configured",
@@ -134,6 +145,7 @@ const MESSAGES = {
     "research.regenerate": "Regenerate",
     "research.new_evidence": "New evidence available",
     "research.evidence_coverage": "Evidence coverage",
+    "research.total_items": "items",
     "research.filings": "Filings",
     "research.news": "News",
     "research.community": "Community",
@@ -152,6 +164,17 @@ const MESSAGES = {
     "research.model_not_configured": "Model not configured",
     "research.generation_failed": "Generation failed",
     "research.generating": "Generating…",
+    "research.generating_in_background": "Generation is still running in the background; refresh the page later to see the result.",
+    "research.error.invalid_response": "The model returned an invalid response. Try regenerating.",
+    "research.error.upstream_timeout": "The model request timed out.",
+    "research.error.upstream_network": "Could not reach the model provider.",
+    "research.error.upstream_auth": "The model API key was rejected.",
+    "research.error.upstream_rate_limited": "The model provider rate limit was reached.",
+    "research.error.upstream_server": "The model provider returned an error.",
+    "research.error.internal": "An internal error occurred.",
+    "research.error.request_too_large": "The request was too large.",
+    "research.error.response_too_large": "The model response was too large.",
+    "research.error.range_too_large": "The selected date range contains too much evidence to generate a research card without omitting items. Please choose a shorter date range and try again.",
     "research.no_card": "No card generated yet.",
     "research.signals": "Signals to watch",
     "research.claim.direct_disclosure_fact": "Disclosure fact",
@@ -289,6 +312,17 @@ const MESSAGES = {
     "research.data_send": "生成研究卡会把该公司的选定公开证据发送给你配置的模型服务。",
     "research.list": "列表",
     "research.all_lists": "所有列表",
+    "research.from": "从",
+    "research.to": "到",
+    "research.apply": "应用",
+    "research.selected_range": "所选日期范围",
+    "research.evidence_in_range": "所选范围内证据",
+    "research.evidence_sent": "已发送给模型的证据",
+    "research.no_card_for_range": "此日期范围尚未生成研究卡",
+    "research.insufficient_in_range": "此日期范围内证据不足",
+    "research.card_scope": "此研究卡生成所用范围为",
+    "research.range_new_evidence": "当前范围有新证据可更新",
+    "research.start_after_end": "开始日期不能晚于结束日期",
     "research.model_label": "模型",
     "research.model_enabled": "已启用",
     "research.model_disabled": "未配置",
@@ -297,6 +331,7 @@ const MESSAGES = {
     "research.regenerate": "重新生成",
     "research.new_evidence": "有新证据可更新",
     "research.evidence_coverage": "证据覆盖情况",
+    "research.total_items": "条",
     "research.filings": "申报",
     "research.news": "新闻",
     "research.community": "社区",
@@ -315,6 +350,17 @@ const MESSAGES = {
     "research.model_not_configured": "分析模型未配置",
     "research.generation_failed": "生成失败",
     "research.generating": "生成中…",
+    "research.generating_in_background": "生成仍在后台进行，稍后刷新页面可查看结果。",
+    "research.error.invalid_response": "模型返回了无效结果，请尝试重新生成。",
+    "research.error.upstream_timeout": "模型请求超时。",
+    "research.error.upstream_network": "无法连接模型服务。",
+    "research.error.upstream_auth": "模型 API key 被拒绝。",
+    "research.error.upstream_rate_limited": "已达到模型服务速率限制。",
+    "research.error.upstream_server": "模型服务返回错误。",
+    "research.error.internal": "发生内部错误。",
+    "research.error.request_too_large": "请求过大。",
+    "research.error.response_too_large": "模型响应过大。",
+    "research.error.range_too_large": "所选日期范围内的资料过多，无法在不遗漏资料的情况下生成研究卡。请缩短日期范围后重试。",
     "research.no_card": "尚未生成研究卡。",
     "research.signals": "需要关注的信号",
     "research.claim.direct_disclosure_fact": "披露事实",
@@ -511,6 +557,9 @@ function dailyCompany(company) {
 
 async function renderResearch() {
   const params = new URLSearchParams(location.search);
+  const legacyDate = params.get("date");
+  const endDate = params.get("end_date") || legacyDate || state.bootstrap.report_selected_date;
+  const startDate = params.get("start_date") || legacyDate || endDate;
   const list = params.get("list") || "";
   document.getElementById("page").innerHTML = `
     <section class="page-heading">
@@ -519,24 +568,47 @@ async function renderResearch() {
       <p>${t("research.subtitle")}</p>
       <p class="disclaimer">${t("research.disclaimer")}</p>
     </section>
-    <section class="research-toolbar">
+    <form class="toolbar range-toolbar research-range-toolbar" id="research-filter">
+      <label>${t("research.from")}<input type="date" id="research-start-date" value="${escAttr(startDate)}" required></label>
+      <label>${t("research.to")}<input type="date" id="research-end-date" value="${escAttr(endDate)}" required></label>
       <label>${t("research.list")}<select id="research-list"><option value="">${t("research.all_lists")}</option>${listOptions(list)}</select></label>
+      <button class="button primary" type="submit">${t("research.apply")}</button>
       <p class="model-status" id="research-model"></p>
       <p class="data-send-note">${t("research.data_send")}</p>
-    </section>
+    </form>
     <div id="research-companies"><p class="loading">${t("research.loading")}</p></div>
     <div id="research-card" class="research-card"></div>`;
-  document.getElementById("research-list").addEventListener("change", event => {
-    const next = withLang(new URLSearchParams());
-    if (event.target.value) next.set("list", event.target.value);
+  document.getElementById("research-filter").addEventListener("submit", event => {
+    event.preventDefault();
+    const start = document.getElementById("research-start-date").value;
+    const end = document.getElementById("research-end-date").value;
+    if (start > end) { toast(t("research.start_after_end"), true); return; }
+    // Navigating rebuilds the page, so a previous range's card is never shown
+    // under the new scope.
+    const next = withLang(new URLSearchParams({start_date: start, end_date: end}));
+    const nextList = document.getElementById("research-list").value;
+    if (nextList) next.set("list", nextList);
     location.href = `/research?${next}`;
   });
-  await loadResearchCompanies(list);
+  await loadResearchCompanies(startDate, endDate, list);
 }
 
-async function loadResearchCompanies(list) {
-  const query = withLang(new URLSearchParams());
+function researchScopeParams(startDate, endDate, list) {
+  const query = withLang(new URLSearchParams({start_date: startDate, end_date: endDate}));
   if (list) query.set("list", list);
+  return query;
+}
+
+function currentResearchScope() {
+  const params = new URLSearchParams(location.search);
+  const legacyDate = params.get("date");
+  const endDate = params.get("end_date") || legacyDate || state.bootstrap.report_selected_date;
+  const startDate = params.get("start_date") || legacyDate || endDate;
+  return {startDate, endDate, list: params.get("list") || ""};
+}
+
+async function loadResearchCompanies(startDate, endDate, list) {
+  const query = researchScopeParams(startDate, endDate, list);
   try {
     const data = await api(`/api/research/companies?${query}`);
     renderResearchModel(data.model);
@@ -569,7 +641,7 @@ function renderResearchCompanies(companies) {
 }
 
 function researchCompanyRow(company) {
-  const coverage = `${company.filing_count} ${t("research.filings")} · ${company.news_count} ${t("research.news")} · ${company.community_count} ${t("research.community")}`;
+  const coverage = `${company.evidence_total} ${t("research.total_items")} · ${company.filing_count} ${t("research.filings")} · ${company.news_count} ${t("research.news")} · ${company.community_count} ${t("research.community")}`;
   const stale = company.stale ? `<span class="badge stale">${t("research.new_evidence")}</span>` : "";
   const latest = company.latest_evidence_at ? formatDateTime(company.latest_evidence_at) : t("common.none_recorded");
   const generated = company.latest_generated_at ? formatDateTime(company.latest_generated_at) : t("research.no_card");
@@ -629,41 +701,84 @@ function bindResearchActions() {
   });
 }
 
+const GENERATION_POLL_INTERVAL_MS = 1500;
+const GENERATION_FOREGROUND_TIMEOUT_MS = 120000;
+
+const GENERATION_ERROR_MESSAGES = {
+  research_disabled: "research.error.internal",
+  model_not_configured: "research.model_not_configured",
+  no_eligible_evidence: "research.insufficient_evidence",
+  insufficient_evidence: "research.insufficient_evidence",
+  upstream_timeout: "research.error.upstream_timeout",
+  upstream_network_error: "research.error.upstream_network",
+  upstream_auth_error: "research.error.upstream_auth",
+  upstream_rate_limited: "research.error.upstream_rate_limited",
+  upstream_server_error: "research.error.upstream_server",
+  upstream_redirect_error: "research.error.upstream_server",
+  invalid_model_response: "research.error.invalid_response",
+  invalid_evidence_reference: "research.error.invalid_response",
+  generation_in_progress: "research.generating",
+  research_internal_error: "research.error.internal",
+  request_too_large: "research.error.request_too_large",
+  response_too_large: "research.error.response_too_large",
+  research_range_too_large: "research.error.range_too_large",
+};
+
+function generationFailureMessage(status) {
+  const code = (status && (status.error_code || status.code)) || "";
+  const key = GENERATION_ERROR_MESSAGES[code];
+  return key ? t(key) : t("research.generation_failed");
+}
+
 async function generateCard(companyId, force, button) {
   button.disabled = true;
   const original = button.textContent;
   button.textContent = t("research.generating");
+  const scope = currentResearchScope();
   try {
     const result = await api("/api/research/generate", {
       method: "POST",
-      body: JSON.stringify({ company_id: Number(companyId), language: lang, force }),
+      body: JSON.stringify({
+        company_id: Number(companyId),
+        language: lang,
+        force,
+        start_date: scope.startDate,
+        end_date: scope.endDate,
+        list: scope.list || "all",
+      }),
     });
     if (result.status === "cached" || result.status === "completed") {
       if (result.card_id) await viewCard(result.card_id);
-      await loadResearchCompanies(new URLSearchParams(location.search).get("list") || "");
     } else if (result.status === "generating") {
       await pollGeneration(result.generation_id);
-      await loadResearchCompanies(new URLSearchParams(location.search).get("list") || "");
     } else {
-      toast(result.error || t("research.generation_failed"), true);
+      toast(generationFailureMessage(result), true);
     }
   } catch (error) {
-    toast(error.message, true);
+    toast(t("common.request_failed"), true);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+    // Always re-sync from the server so the authoritative status overwrites
+    // any local "generating" state (including after a foreground timeout).
+    await loadResearchCompanies(scope.startDate, scope.endDate, scope.list);
   }
-  button.disabled = false;
-  button.textContent = original;
 }
 
 async function pollGeneration(generationId) {
-  for (let attempt = 0; attempt < 120; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  const deadline = Date.now() + GENERATION_FOREGROUND_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, GENERATION_POLL_INTERVAL_MS));
     try {
       const status = await api(`/api/research/generations/${generationId}`);
       if (status.status === "completed") { if (status.card_id) await viewCard(status.card_id); return; }
-      if (status.status === "failed") { toast(status.error_code || t("research.generation_failed"), true); return; }
+      if (status.status === "failed") { toast(generationFailureMessage(status), true); return; }
     } catch (_) { return; }
   }
-  toast(t("research.generation_failed"), true);
+  // Reached the foreground wait limit: do not pretend this failed. The list is
+  // re-synced by generateCard's finally, and the user is told it continues in
+  // the background.
+  toast(t("research.generating_in_background"));
 }
 
 async function viewCard(cardId) {
@@ -675,12 +790,24 @@ async function viewCard(cardId) {
   }
 }
 
+function listScopeLabel(slug) {
+  if (!slug) return t("research.all_lists");
+  const found = (state.bootstrap?.lists || []).find(l => l.slug === slug);
+  return found ? found.name : slug;
+}
+
+function researchCardMeta(card) {
+  if (!card.start_date || !card.end_date) return "";
+  const generated = card.generated_at ? formatDateTime(card.generated_at) : "";
+  return `<p class="meta research-card-scope">${t("research.card_scope")}: ${esc(card.start_date)} → ${esc(card.end_date)} · ${esc(listScopeLabel(card.list_scope))} · ${t("research.evidence_in_range")}: ${card.evidence_total} · ${t("research.evidence_sent")}: ${card.evidence_sent}${generated ? ` · ${t("research.last_generated")}: ${esc(generated)}` : ""}</p>`;
+}
+
 function researchCardContent(card) {
   const content = card.content || {};
   const coverage = content.coverage || {};
   const sections = [
     `<section class="research-card-inner">
-      <header><h2>${t("research.heading")}</h2><p class="disclaimer">${t("research.disclaimer")}</p></header>
+      <header><h2>${t("research.heading")}</h2>${researchCardMeta(card)}<p class="disclaimer">${t("research.disclaimer")}</p></header>
       <section><h3>${t("research.evidence_coverage")}</h3>
         <p>${esc(coverage.summary || "")}</p>
         ${(coverage.limitations || []).length ? `<ul>${coverage.limitations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}

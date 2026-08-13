@@ -24,6 +24,8 @@ from .research import (
     ERROR_INVALID_MODEL_RESPONSE,
     ERROR_NO_ELIGIBLE_EVIDENCE,
     ERROR_NOT_CONFIGURED,
+    ERROR_RANGE_TOO_LARGE,
+    ResearchScope,
     ResearchSettings,
     EvidenceSelection,
     ResearchEvidence,
@@ -97,30 +99,36 @@ class ResearchService:
 
     def companies(
         self,
-        list_slug: Optional[str],
+        scope: ResearchScope,
         language: str,
     ) -> List[Mapping[str, Any]]:
         """Return every research-visible company with its card status.
 
         Only companies in Holdings / Planned / Watchlist are returned; a
         company with no list membership or only in a custom list never shows.
+        Every count and status is computed from the exact Daily display rows
+        of the requested scope — never from an independent lookback window.
         """
         language = validate_language(language)
-        slug = validate_list_slug(list_slug)
-        rows = self._web.research_companies(slug)
+        rows = self._web.research_companies(scope.list_scope)
+        scoped_rows = self._scoped_rows(scope)
         result: List[Mapping[str, Any]] = []
         for company in rows:
             company_id = int(company["id"])
-            selection = self._select(company_id, language)
-            latest = self._repo.latest_card(company_id, language)
-            generating = self._repo.has_in_progress(company_id, language)
+            selection = self._select(
+                company_id, language, scope, rows=scoped_rows
+            )
+            latest = self._repo.latest_card(company_id, language, scope)
+            generating = self._repo.has_in_progress(company_id, language, scope)
             status = selectable_status(
                 settings=self._settings,
                 selection=selection,
                 latest_card=latest,
                 generating=generating,
             )
-            latest_completed = self._repo.latest_completed_card(company_id, language)
+            latest_completed = self._repo.latest_completed_card(
+                company_id, language, scope
+            )
             result.append(
                 {
                     "id": company_id,
@@ -154,30 +162,38 @@ class ResearchService:
         self,
         company_id: int,
         language: str,
+        scope: ResearchScope,
         force: bool = False,
     ) -> Mapping[str, Any]:
         language = validate_language(language)
         identity = self._web.company_identity(company_id)
-        if identity is None or not self._web.company_in_research_lists(company_id):
-            raise ValueError("Company is not in Holdings, Planned, or Watchlist")
+        if identity is None or not _company_in_scope(identity, scope):
+            raise ValueError("Company is not in the selected Research scope")
         if not self._settings.enabled:
             return _error(ERROR_DISABLED, "Research generation is disabled.")
         if not self._settings.configured:
             return _error(ERROR_NOT_CONFIGURED, "The model API key is not configured.")
 
         with self._lock:
-            if self._repo.has_in_progress(company_id, language):
+            if self._repo.has_in_progress(company_id, language, scope):
                 return _error(
                     ERROR_GENERATION_IN_PROGRESS,
-                    "A generation is already in progress for this company and language.",
+                    "A generation is already in progress for this company, language and range.",
                 )
-            selection = self._select(company_id, language)
+            selection = self._select(company_id, language, scope)
             eligibility = _eligibility_error(selection)
             if eligibility is not None:
                 return eligibility
             assert selection is not None
+            if selection.too_large:
+                return _error(
+                    ERROR_RANGE_TOO_LARGE,
+                    f"The selected range has {selection.total} evidence items, "
+                    "which is too many to send without omitting any. "
+                    "Please choose a shorter date range.",
+                )
             if not force:
-                latest = self._repo.latest_completed_card(company_id, language)
+                latest = self._repo.latest_completed_card(company_id, language, scope)
                 if latest is not None and latest["evidence_fingerprint"] == selection.fingerprint:
                     return {
                         "status": "cached",
@@ -191,13 +207,14 @@ class ResearchService:
                 evidence_fingerprint=selection.fingerprint,
                 model_provider_fingerprint=self._settings.provider_identifier,
                 model_name=self._settings.model,
+                scope=scope,
             )
         if self._synchronous:
-            self._run_generation(card_id, company_id, language, selection)
+            self._run_generation(card_id, company_id, language, selection, scope)
             return self._generation_result(card_id)
         assert self._executor is not None
         self._executor.submit(
-            self._run_generation, card_id, company_id, language, selection
+            self._run_generation, card_id, company_id, language, selection, scope
         )
         return {
             "status": "generating",
@@ -222,20 +239,51 @@ class ResearchService:
         if self._executor is not None:
             self._executor.shutdown(wait=True)
 
+    def _scoped_rows(
+        self,
+        scope: ResearchScope,
+    ) -> Tuple[Mapping[int, Tuple[Mapping[str, Any], ...]], int]:
+        """Fetch the shared Daily display rows once and group them by company.
+
+        Returns ``({company_id: rows}, total)`` where ``rows`` are the exact
+        display rows Daily shows for that company in this scope. Grouping keys
+        on the joined company id, not the item's own market, so an
+        ``unknown``-market item lands on the company Daily displays it under.
+        """
+        result = self._web.daily_display_rows(
+            scope.list_scope, scope.start_date, scope.end_date
+        )
+        grouped: Dict[int, List[Mapping[str, Any]]] = {}
+        for row in result.items:
+            grouped.setdefault(int(row["company_id"]), []).append(row)
+        return (
+            {company_id: tuple(rows) for company_id, rows in grouped.items()},
+            len(result.items),
+        )
+
     def _select(
         self,
         company_id: int,
         language: str,
+        scope: ResearchScope,
+        *,
+        rows: Optional[Tuple[Mapping[int, Tuple[Mapping[str, Any], ...]], int]] = None,
     ) -> Optional[EvidenceSelection]:
-        items = self._web.research_items(company_id)
+        identity = self._web.company_identity(company_id)
+        if identity is None:
+            return None
+        if rows is None:
+            rows = self._scoped_rows(scope)
+        grouped, _total = rows
+        items = grouped.get(company_id, ())
         if not items:
             return None
-        identity = self._web.company_identity(company_id) or {}
         return select_evidence(
             items,
             company_id=company_id,
             language=language,
             settings=self._settings,
+            scope=scope,
             company_name=identity.get("name"),
             ticker=identity.get("ticker"),
             market=identity.get("market"),
@@ -247,21 +295,22 @@ class ResearchService:
         company_id: int,
         language: str,
         selection: EvidenceSelection,
+        scope: ResearchScope,
     ) -> None:
         """Run one generation using the frozen evidence selection.
 
         The selection is frozen at click time in ``generate``; the worker never
         re-queries evidence, so the fingerprint, the prompt evidence, and the
-        saved snapshot are always the same immutable set. It re-checks list
-        membership right before calling the model and fails safely (without
-        calling the model) if the company was removed.
+        saved snapshot are always the same immutable set. It re-checks the
+        scope membership right before calling the model and fails safely
+        (without calling the model) if the company left the selected list.
         """
         try:
-            if not self._web.company_in_research_lists(company_id):
-                self._repo.fail_generation(card_id, ERROR_NO_ELIGIBLE_EVIDENCE)
+            if selection.too_large:
+                self._repo.fail_generation(card_id, ERROR_RANGE_TOO_LARGE)
                 return
             identity = self._web.company_identity(company_id)
-            if identity is None:
+            if identity is None or not _company_in_scope(identity, scope):
                 self._repo.fail_generation(card_id, ERROR_NO_ELIGIBLE_EVIDENCE)
                 return
             system_prompt = build_system_prompt(language)
@@ -311,6 +360,17 @@ class ResearchService:
 
 def _error(code: str, message: str) -> Mapping[str, Any]:
     return {"status": "error", "code": code, "error": message, "card_id": None, "generation_id": None, "generated_at": None}
+
+
+_FIXED_LIST_SLUGS = frozenset({"holdings", "planned", "watchlist"})
+
+
+def _company_in_scope(identity: Mapping[str, Any], scope: ResearchScope) -> bool:
+    """True when the company belongs to the selected Research list scope."""
+    lists = set(identity.get("list_slugs") or ())
+    if scope.list_scope is not None:
+        return scope.list_scope in lists
+    return bool(lists & _FIXED_LIST_SLUGS)
 
 
 def _eligibility_error(
