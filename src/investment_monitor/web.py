@@ -82,6 +82,8 @@ from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
+from .research import ResearchSettings, card_from_json, validate_language
+from .research_service import ResearchService, validate_list_slug
 
 LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
@@ -199,6 +201,11 @@ class WebApplication:
             implemented_sources=self.implemented_sources,
             allowed_secret_keys=self.writable_env_keys,
         )
+        self.research = ResearchService(
+            self.repository,
+            settings.database_path,
+            ResearchSettings.from_environment(),
+        )
         # DB/UI-stored secrets take priority over .env for this process.
         self._load_credentials_to_environment()
         self.unavailable_sources = self._detect_unavailable_sources(
@@ -253,17 +260,22 @@ class WebApplication:
         method: str,
         target: str,
         body: bytes = b"",
+        headers: Optional[Mapping[str, str]] = None,
     ) -> WebResponse:
         parsed = urlparse(target)
         query = parse_qs(parsed.query)
         try:
+            if method == "POST" and headers is not None:
+                rejection = _same_origin_json_write_rejection(headers)
+                if rejection is not None:
+                    return rejection
             if method == "GET" and parsed.path == "/favicon.ico":
                 return WebResponse(204, b"", "image/x-icon")
             if method == "GET" and parsed.path.startswith("/static/"):
                 return self._static(parsed.path)
             if method == "GET" and (parsed.path in {
                 "/", "/today", "/information", "/search", "/activity",
-                "/sources", "/settings", "/manage",
+                "/sources", "/settings", "/manage", "/research",
             } or parsed.path.startswith("/lists/")):
                 return self._html(parsed.path)
             if method == "GET" and parsed.path == "/api/bootstrap":
@@ -296,6 +308,48 @@ class WebApplication:
                 ))
             if method == "GET" and parsed.path == "/api/sources":
                 return self._json({"sources": self.repository.connector_statuses()})
+            if method == "GET" and parsed.path == "/api/research/model":
+                return self._json({"model": self.research.model_status()})
+            if method == "GET" and parsed.path == "/api/research/companies":
+                list_slug = _first(query, "list") or None
+                try:
+                    list_slug = validate_list_slug(list_slug)
+                except ValueError:
+                    return self._json(
+                        {"error": "list must be one of: all, holdings, planned, watchlist"},
+                        400,
+                    )
+                language = _fallback_language(_first(query, "language"))
+                return self._json({
+                    "companies": self.research.companies(list_slug, language),
+                    "model": self.research.model_status(),
+                })
+            if method == "GET" and parsed.path.startswith("/api/research/cards/"):
+                card_id = _trailing_id(parsed.path, "/api/research/cards/")
+                card = self.research.card(card_id)
+                if card is None:
+                    return self._json({"error": "Card not found"}, 404)
+                if not self.repository.company_in_research_lists(
+                    int(card["company_id"])
+                ):
+                    return self._json({"error": "Card not found"}, 404)
+                return self._json(_research_card_payload(card))
+            if method == "POST" and parsed.path == "/api/research/generate":
+                payload = _decode_json(body)
+                company_id = int(payload["company_id"])
+                language = validate_language(payload.get("language") or "en")
+                force = _optional_bool(payload, "force", False)
+                result = self.research.generate(company_id, language, force)
+                status_code = 202 if result["status"] == "generating" else 200
+                return self._json(result, status_code)
+            if method == "GET" and parsed.path.startswith("/api/research/generations/"):
+                generation_id = _trailing_id(
+                    parsed.path, "/api/research/generations/"
+                )
+                status = self.research.generation_status(generation_id)
+                if status is None:
+                    return self._json({"error": "Generation not found"}, 404)
+                return self._json(status)
             if method == "POST" and parsed.path == "/api/lists":
                 payload = _decode_json(body)
                 return self._json(
@@ -1131,7 +1185,9 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
     def _dispatch(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length) if length else b""
-        response = self.application.handle(self.command, self.path, body)
+        response = self.application.handle(
+            self.command, self.path, body, headers=self.headers
+        )
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))
@@ -1177,6 +1233,10 @@ def main(arguments: Optional[Sequence[str]] = None) -> None:
     finally:
         if scheduler is not None:
             scheduler.stop()
+        # Graceful shutdown: wait for any in-flight model generation to finish
+        # so a card is not left stuck in "generating" and no model request keeps
+        # running after the server has gone away.
+        application.research.shutdown()
         server.server_close()
 
 
@@ -1185,6 +1245,97 @@ def _decode_json(body: bytes) -> Mapping[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("JSON body must be an object")
     return payload
+
+
+_CSRF_REJECTED = "research_csrf_rejected"
+
+
+def _header_value(headers: Mapping[str, Any], name: str) -> str:
+    value = headers.get(name)
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return str(value).strip()
+
+
+def _effective_port(parsed_url: Any, scheme: str) -> int:
+    """Return the port after applying the http/https default-port rule."""
+    if parsed_url.port is not None:
+        return int(parsed_url.port)
+    return 443 if scheme == "https" else 80
+
+
+def _expected_scheme() -> str:
+    """Return the externally-visible scheme, defaulting to http.
+
+    The scheme of the reverse-proxy entry point is explicitly configured via
+    ``WEB_EXTERNAL_SCHEME``; client-supplied ``X-Forwarded-Proto`` is never
+    trusted because the app cannot reliably tell a trusted proxy request from
+    a direct request.
+    """
+    value = os.environ.get("WEB_EXTERNAL_SCHEME", "http").strip().lower()
+    return value if value in {"http", "https"} else "http"
+
+
+def _same_origin_json_write_rejection(
+    headers: Mapping[str, Any],
+) -> Optional[WebResponse]:
+    """Reject a JSON POST that is not a same-origin, structured request.
+
+    A write endpoint with side effects (which may trigger paid model calls or
+    evidence exfiltration) must carry an ``application/json`` Content-Type and
+    an Origin (or, when absent, a Referer) whose scheme, hostname, and
+    effective port all match the request Host. Host/Origin/Referer are parsed
+    as URLs; no ``startswith`` guessing.
+    """
+    content_type = _header_value(headers, "Content-Type").split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
+        return _csrf_rejection("Content-Type must be application/json")
+
+    host = _header_value(headers, "Host")
+    parsed_host = urlparse("//" + host) if host else urlparse("//")
+    host_hostname = (parsed_host.hostname or "").lower()
+    if not host_hostname:
+        return _csrf_rejection("missing Host header")
+    scheme = _expected_scheme()
+    host_port = _effective_port(parsed_host, scheme)
+
+    origin = _header_value(headers, "Origin")
+    referer = _header_value(headers, "Referer")
+    if origin:
+        return _validate_origin_value(origin, scheme, host_hostname, host_port)
+    if referer:
+        return _validate_origin_value(referer, scheme, host_hostname, host_port)
+    return _csrf_rejection("missing Origin and Referer headers")
+
+
+def _validate_origin_value(
+    value: str,
+    scheme: str,
+    host_hostname: str,
+    host_port: int,
+) -> Optional[WebResponse]:
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"}:
+        return _csrf_rejection("origin must use http or https")
+    origin_hostname = (parsed.hostname or "").lower()
+    if not origin_hostname:
+        return _csrf_rejection("origin has no hostname")
+    if parsed.scheme != scheme:
+        return _csrf_rejection("cross-origin request rejected")
+    if origin_hostname != host_hostname:
+        return _csrf_rejection("cross-origin request rejected")
+    if _effective_port(parsed, parsed.scheme) != host_port:
+        return _csrf_rejection("cross-origin request rejected")
+    return None
+
+
+def _csrf_rejection(message: str) -> WebResponse:
+    return WebResponse(
+        403,
+        json.dumps({"error": message, "code": _CSRF_REJECTED}).encode("utf-8"),
+    )
 
 
 def _first(query: Mapping[str, Sequence[str]], key: str) -> Optional[str]:
@@ -1214,6 +1365,20 @@ def _shanghai_default_day(now: Optional[datetime] = None) -> date:
 
 def _required_bool(payload: Mapping[str, Any], key: str) -> bool:
     value = payload.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a JSON boolean")
+    return value
+
+
+def _optional_bool(payload: Mapping[str, Any], key: str, default: bool) -> bool:
+    """Return a strict JSON boolean, or ``default`` when the key is absent.
+
+    A string like ``"false"``, a number, an array, an object, or ``null`` is
+    rejected instead of being coerced by ``bool()``.
+    """
+    if key not in payload:
+        return default
+    value = payload[key]
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a JSON boolean")
     return value
@@ -1258,9 +1423,42 @@ def _filter_dict(filters: FeedFilters) -> Mapping[str, Any]:
 def _view_for_path(path: str) -> str:
     if path in {"/", "/today", "/information", "/search"}:
         return "today"
+    if path == "/research":
+        return "research"
     if path in {"/manage", "/activity", "/sources", "/settings"} or path.startswith("/lists/"):
         return "manage"
     return path.rsplit("/", 1)[-1]
+
+
+def _fallback_language(value: Optional[str]) -> str:
+    """Return a supported language, defaulting to ``en`` for read endpoints."""
+    if not value:
+        return "en"
+    try:
+        return validate_language(value)
+    except ValueError:
+        return "en"
+
+
+def _trailing_id(path: str, prefix: str) -> int:
+    segment = path[len(prefix):].split("/", 1)[0]
+    return int(segment)
+
+
+def _research_card_payload(card: Mapping[str, Any]) -> Mapping[str, Any]:
+    content = None
+    if card.get("content_json"):
+        content = card_from_json(card["content_json"])
+    return {
+        "id": int(card["id"]),
+        "company_id": int(card["company_id"]),
+        "language": card["language"],
+        "status": card["status"],
+        "generated_at": card["generated_at"],
+        "error_code": card["error_code"],
+        "content": content,
+        "evidence": list(card.get("evidence") or ()),
+    }
 
 
 def _daily_item_type(source_type: str) -> str:

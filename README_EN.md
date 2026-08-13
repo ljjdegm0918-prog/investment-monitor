@@ -622,6 +622,47 @@ These defaults can be adjusted in `.env`.
   coverage region, enabled state, latest attempt and success, and persisted
   failure summary.
 - Official links open in a new tab with `noopener` and `noreferrer`.
+- **Research** lists only companies in Holdings, Planned, or Watchlist and
+  generates an evidence-backed research card from the company's stored
+  disclosures, news, and community items. The model feature is off by default.
+
+## Research cards
+
+Research cards are research assistance only and are **not investment advice**.
+They never give buy/sell ratings, price targets, or price predictions.
+
+- Only companies already in Holdings / Planned / Watchlist are eligible.
+- Only evidence already stored in the monitor is used (official disclosures,
+  news, and community items); there is no external web search or IR scraping.
+- Original news, disclosure, and community text is **never translated or
+  rewritten**. Cards are generated per language (`en` or `zh-CN`) as separate
+  cache entries.
+- Fewer than `RESEARCH_MIN_EVIDENCE_ITEMS` items, or a community-only evidence
+  set, produces `insufficient_evidence` and never calls the model.
+- Cards are cached by an evidence fingerprint (company, language, model,
+  provider, prompt/schema/rule versions, and the ordered evidence set). New
+  evidence marks the previous card `stale`; `Regenerate` bypasses the cache.
+- The model feature is **off by default**. When enabled, generating a card
+  sends the selected public evidence to the configured OpenAI-compatible
+  provider. The API key is read only from the environment and is never stored
+  in SQLite, returned by an API, or written to logs.
+
+```text
+RESEARCH_AI_ENABLED=false
+RESEARCH_AI_BASE_URL=https://api.deepseek.com
+RESEARCH_AI_MODEL=deepseek-chat
+RESEARCH_AI_API_KEY=
+RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
+RESEARCH_LOOKBACK_DAYS=365
+RESEARCH_MAX_EVIDENCE_ITEMS=120
+RESEARCH_MIN_EVIDENCE_ITEMS=3
+
+# The scheme the browser sees at the reverse-proxy entry point ("http" for
+# local dev, "https" for production behind an HTTPS reverse proxy). Used for
+# same-origin CSRF checks; it reflects the external protocol, not the internal
+# listen protocol. Client-supplied X-Forwarded-Proto is never trusted.
+WEB_EXTERNAL_SCHEME=http
+```
 
 ### Japan sources (JP)
 

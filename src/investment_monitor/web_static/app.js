@@ -118,6 +118,54 @@ const MESSAGES = {
     "region.emf": "Europe (Funds)",
     "region.trq": "Turquoise (TRQ)",
     "region.eux": "Europe (Eurex)",
+    "nav.research": "Research",
+    "research.eyebrow": "RESEARCH ASSISTANT",
+    "research.heading": "Research",
+    "research.subtitle": "Evidence-backed summaries of the companies you already track in Holdings, Planned, or Watchlist.",
+    "research.disclaimer": "Research assistance only. This is not investment advice.",
+    "research.data_send": "Generating a card sends this company’s selected public evidence to your configured model provider.",
+    "research.list": "List",
+    "research.all_lists": "All lists",
+    "research.model_label": "Model",
+    "research.model_enabled": "enabled",
+    "research.model_disabled": "not configured",
+    "research.generate": "Generate research card",
+    "research.view": "View latest card",
+    "research.regenerate": "Regenerate",
+    "research.new_evidence": "New evidence available",
+    "research.evidence_coverage": "Evidence coverage",
+    "research.filings": "Filings",
+    "research.news": "News",
+    "research.community": "Community",
+    "research.latest_evidence": "Latest evidence",
+    "research.card_status": "Card status",
+    "research.last_generated": "Last generated",
+    "research.no_companies": "No companies in this list.",
+    "research.loading": "Loading research…",
+    "research.recent_changes": "Recent changes",
+    "research.main_risks": "Main risks",
+    "research.volatility_drivers": "Catalysts and volatility drivers",
+    "research.questions": "What to investigate next",
+    "research.evidence": "Evidence",
+    "research.limitations": "Coverage limitations",
+    "research.insufficient_evidence": "Insufficient evidence",
+    "research.model_not_configured": "Model not configured",
+    "research.generation_failed": "Generation failed",
+    "research.generating": "Generating…",
+    "research.no_card": "No card generated yet.",
+    "research.signals": "Signals to watch",
+    "research.claim.direct_disclosure_fact": "Disclosure fact",
+    "research.claim.reported_news": "Reported news",
+    "research.claim.community_viewpoint": "Community viewpoint",
+    "research.claim.cautious_inference": "Cautious inference",
+    "research.strength.high": "High",
+    "research.strength.medium": "Medium",
+    "research.strength.low": "Low",
+    "status.not_generated": "Not generated",
+    "status.ready": "Ready",
+    "status.generating": "Generating",
+    "status.cached": "Cached",
+    "status.stale": "Stale",
   },
   "zh-CN": {
     "nav.daily_info": "每日信息",
@@ -233,6 +281,54 @@ const MESSAGES = {
     "region.emf": "欧洲（基金）",
     "region.trq": "Turquoise (TRQ)",
     "region.eux": "欧洲（Eurex）",
+    "nav.research": "研究",
+    "research.eyebrow": "研究助手",
+    "research.heading": "研究",
+    "research.subtitle": "基于证据，梳理你已在持仓、计划或关注列表中的公司。",
+    "research.disclaimer": "仅供研究辅助，不构成投资建议。",
+    "research.data_send": "生成研究卡会把该公司的选定公开证据发送给你配置的模型服务。",
+    "research.list": "列表",
+    "research.all_lists": "所有列表",
+    "research.model_label": "模型",
+    "research.model_enabled": "已启用",
+    "research.model_disabled": "未配置",
+    "research.generate": "生成研究卡",
+    "research.view": "查看最新研究卡",
+    "research.regenerate": "重新生成",
+    "research.new_evidence": "有新证据可更新",
+    "research.evidence_coverage": "证据覆盖情况",
+    "research.filings": "申报",
+    "research.news": "新闻",
+    "research.community": "社区",
+    "research.latest_evidence": "最近证据",
+    "research.card_status": "研究卡状态",
+    "research.last_generated": "最近生成",
+    "research.no_companies": "此列表中没有公司。",
+    "research.loading": "正在加载研究…",
+    "research.recent_changes": "近期需要理解的变化",
+    "research.main_risks": "主要风险",
+    "research.volatility_drivers": "主要波动因素",
+    "research.questions": "待验证问题",
+    "research.evidence": "证据",
+    "research.limitations": "覆盖局限",
+    "research.insufficient_evidence": "证据不足",
+    "research.model_not_configured": "分析模型未配置",
+    "research.generation_failed": "生成失败",
+    "research.generating": "生成中…",
+    "research.no_card": "尚未生成研究卡。",
+    "research.signals": "需要关注的信号",
+    "research.claim.direct_disclosure_fact": "披露事实",
+    "research.claim.reported_news": "新闻报道",
+    "research.claim.community_viewpoint": "社区观点",
+    "research.claim.cautious_inference": "谨慎推断",
+    "research.strength.high": "高",
+    "research.strength.medium": "中",
+    "research.strength.low": "低",
+    "status.not_generated": "未生成",
+    "status.ready": "可生成",
+    "status.generating": "生成中",
+    "status.cached": "已缓存",
+    "status.stale": "有更新",
   },
 };
 
@@ -283,6 +379,8 @@ function applyStaticLabels() {
   if (dailyNav) dailyNav.textContent = t("nav.daily_info");
   const manageNav = document.querySelector('[data-nav="manage"]');
   if (manageNav) manageNav.textContent = t("nav.lists_sources");
+  const researchNav = document.querySelector('[data-nav="research"]');
+  if (researchNav) researchNav.textContent = t("nav.research");
   const skip = document.querySelector(".skip-link");
   if (skip) skip.textContent = t("skip.content");
   const initialLoading = document.querySelector("#page .loading");
@@ -305,12 +403,15 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   applyStaticLabels();
-  const view = document.body.dataset.view === "manage" ? "manage" : "today";
+  const view = document.body.dataset.view === "manage" ? "manage"
+    : document.body.dataset.view === "research" ? "research" : "today";
   document.querySelector(`[data-nav="${view}"]`)?.classList.add("active");
   try {
     state.bootstrap = await api(`/api/bootstrap${location.search}`);
     state.selectedList = new URLSearchParams(location.search).get("list") || state.bootstrap.lists[0]?.slug || "";
-    if (view === "manage") await renderManage(); else await renderDaily();
+    if (view === "manage") await renderManage();
+    else if (view === "research") await renderResearch();
+    else await renderDaily();
   } catch (error) { renderFatal(error); }
 }
 
@@ -406,6 +507,234 @@ function dailyCompany(company) {
     <header><div><h2>${esc(company.name)}</h2><p>${esc(company.ticker)} · ${esc(exchangeLabel(company.exchange))}${company.market ? ` · ${esc(String(company.market).toUpperCase())}` : ""}</p></div><span>${items.length} ${updateLabel}</span></header>
     <div class="information-list">${groups}</div>
   </section>`;
+}
+
+async function renderResearch() {
+  const params = new URLSearchParams(location.search);
+  const list = params.get("list") || "";
+  document.getElementById("page").innerHTML = `
+    <section class="page-heading">
+      <p class="eyebrow">${t("research.eyebrow")}</p>
+      <h1>${t("research.heading")}</h1>
+      <p>${t("research.subtitle")}</p>
+      <p class="disclaimer">${t("research.disclaimer")}</p>
+    </section>
+    <section class="research-toolbar">
+      <label>${t("research.list")}<select id="research-list"><option value="">${t("research.all_lists")}</option>${listOptions(list)}</select></label>
+      <p class="model-status" id="research-model"></p>
+      <p class="data-send-note">${t("research.data_send")}</p>
+    </section>
+    <div id="research-companies"><p class="loading">${t("research.loading")}</p></div>
+    <div id="research-card" class="research-card"></div>`;
+  document.getElementById("research-list").addEventListener("change", event => {
+    const next = withLang(new URLSearchParams());
+    if (event.target.value) next.set("list", event.target.value);
+    location.href = `/research?${next}`;
+  });
+  await loadResearchCompanies(list);
+}
+
+async function loadResearchCompanies(list) {
+  const query = withLang(new URLSearchParams());
+  if (list) query.set("list", list);
+  try {
+    const data = await api(`/api/research/companies?${query}`);
+    renderResearchModel(data.model);
+    renderResearchCompanies(data.companies);
+  } catch (error) {
+    document.getElementById("research-companies").innerHTML = errorState(t("common.request_failed"), error.message);
+  }
+}
+
+function renderResearchModel(model) {
+  const el = document.getElementById("research-model");
+  if (!el) return;
+  el.textContent = model && model.enabled && model.configured
+    ? `${t("research.model_label")}: ${String(model.model)}`
+    : t("research.model_not_configured");
+}
+
+function renderResearchCompanies(companies) {
+  const target = document.getElementById("research-companies");
+  if (!companies.length) {
+    target.innerHTML = `<div class="empty compact"><p>${t("research.no_companies")}</p></div>`;
+    return;
+  }
+  target.innerHTML = `<div class="table-wrap"><table class="research-table"><thead><tr>
+    <th>${t("manage.company")}</th><th>${t("manage.ticker")}</th><th>${t("manage.market")}</th>
+    <th>${t("research.evidence_coverage")}</th><th>${t("research.latest_evidence")}</th>
+    <th>${t("research.card_status")}</th><th>${t("research.last_generated")}</th><th></th>
+  </tr></thead><tbody>${companies.map(researchCompanyRow).join("")}</tbody></table></div>`;
+  bindResearchActions();
+}
+
+function researchCompanyRow(company) {
+  const coverage = `${company.filing_count} ${t("research.filings")} · ${company.news_count} ${t("research.news")} · ${company.community_count} ${t("research.community")}`;
+  const stale = company.stale ? `<span class="badge stale">${t("research.new_evidence")}</span>` : "";
+  const latest = company.latest_evidence_at ? formatDateTime(company.latest_evidence_at) : t("common.none_recorded");
+  const generated = company.latest_generated_at ? formatDateTime(company.latest_generated_at) : t("research.no_card");
+  return `<tr>
+    <td>${esc(company.name)}<br><small>${esc((company.lists || []).join(", "))}</small></td>
+    <td>${esc(company.ticker)}</td>
+    <td>${esc(String(company.market).toUpperCase())}</td>
+    <td>${coverage}</td>
+    <td>${latest}</td>
+    <td><span class="status rs-${escAttr(company.status)}">${esc(researchStatusLabel(company.status))}</span>${stale}</td>
+    <td>${generated}</td>
+    <td>${researchButtons(company)}</td>
+  </tr>`;
+}
+
+function researchStatusKey(status) {
+  const map = {
+    not_generated: "status.not_generated",
+    ready: "status.ready",
+    generating: "status.generating",
+    cached: "status.cached",
+    stale: "status.stale",
+    insufficient_evidence: "research.insufficient_evidence",
+    model_not_configured: "research.model_not_configured",
+    failed: "research.generation_failed",
+  };
+  return map[status] || status;
+}
+
+function researchStatusLabel(status) { return t(researchStatusKey(status)); }
+
+function researchButtons(company) {
+  const id = company.id;
+  if (company.status === "model_not_configured") {
+    return `<button class="button" disabled>${t("research.generate")}</button>`;
+  }
+  if (company.status === "generating") {
+    return `<button class="button" disabled>${t("research.generating")}</button>`;
+  }
+  if (company.status === "insufficient_evidence") {
+    return `<button class="button" disabled>${t("research.insufficient_evidence")}</button>`;
+  }
+  const hasCard = company.status === "cached" || company.status === "stale" || company.status === "failed";
+  const view = hasCard && company.latest_card_id
+    ? `<button class="button" data-action="view" data-id="${escAttr(id)}" data-card="${escAttr(company.latest_card_id)}">${t("research.view")}</button>`
+    : "";
+  const label = hasCard ? t("research.regenerate") : t("research.generate");
+  return `${view}<button class="button primary" data-action="generate" data-id="${escAttr(id)}" data-force="${hasCard}">${label}</button>`;
+}
+
+function bindResearchActions() {
+  document.querySelectorAll("[data-action='generate']").forEach(button => {
+    button.addEventListener("click", () => generateCard(button.dataset.id, button.dataset.force === "true", button));
+  });
+  document.querySelectorAll("[data-action='view']").forEach(button => {
+    button.addEventListener("click", () => viewCard(button.dataset.card));
+  });
+}
+
+async function generateCard(companyId, force, button) {
+  button.disabled = true;
+  const original = button.textContent;
+  button.textContent = t("research.generating");
+  try {
+    const result = await api("/api/research/generate", {
+      method: "POST",
+      body: JSON.stringify({ company_id: Number(companyId), language: lang, force }),
+    });
+    if (result.status === "cached" || result.status === "completed") {
+      if (result.card_id) await viewCard(result.card_id);
+      await loadResearchCompanies(new URLSearchParams(location.search).get("list") || "");
+    } else if (result.status === "generating") {
+      await pollGeneration(result.generation_id);
+      await loadResearchCompanies(new URLSearchParams(location.search).get("list") || "");
+    } else {
+      toast(result.error || t("research.generation_failed"), true);
+    }
+  } catch (error) {
+    toast(error.message, true);
+  }
+  button.disabled = false;
+  button.textContent = original;
+}
+
+async function pollGeneration(generationId) {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const status = await api(`/api/research/generations/${generationId}`);
+      if (status.status === "completed") { if (status.card_id) await viewCard(status.card_id); return; }
+      if (status.status === "failed") { toast(status.error_code || t("research.generation_failed"), true); return; }
+    } catch (_) { return; }
+  }
+  toast(t("research.generation_failed"), true);
+}
+
+async function viewCard(cardId) {
+  try {
+    const card = await api(`/api/research/cards/${cardId}`);
+    document.getElementById("research-card").innerHTML = researchCardContent(card);
+  } catch (error) {
+    document.getElementById("research-card").innerHTML = errorState(t("research.generation_failed"), error.message);
+  }
+}
+
+function researchCardContent(card) {
+  const content = card.content || {};
+  const coverage = content.coverage || {};
+  const sections = [
+    `<section class="research-card-inner">
+      <header><h2>${t("research.heading")}</h2><p class="disclaimer">${t("research.disclaimer")}</p></header>
+      <section><h3>${t("research.evidence_coverage")}</h3>
+        <p>${esc(coverage.summary || "")}</p>
+        ${(coverage.limitations || []).length ? `<ul>${coverage.limitations.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      </section>`,
+    researchChangeSection(content.recent_changes),
+    researchRiskSection(content.main_risks),
+    researchVolatilitySection(content.volatility_drivers),
+    researchQuestionSection(content.questions_to_investigate),
+    researchEvidenceList(card.evidence),
+    `</section>`,
+  ];
+  return sections.join("");
+}
+
+function refBadges(ids) { return (ids || []).map(id => `<span class="ref">${esc(id)}</span>`).join(" "); }
+function claimLabel(claim) {
+  const map = { direct_disclosure_fact: "research.claim.direct_disclosure_fact", reported_news: "research.claim.reported_news", community_viewpoint: "research.claim.community_viewpoint", cautious_inference: "research.claim.cautious_inference" };
+  return map[claim] ? t(map[claim]) : claim;
+}
+function strengthLabel(s) {
+  const map = { high: "research.strength.high", medium: "research.strength.medium", low: "research.strength.low" };
+  return map[s] ? t(map[s]) : s;
+}
+
+function researchChangeSection(changes) {
+  if (!changes || !changes.length) return "";
+  return `<section><h3>${t("research.recent_changes")}</h3>
+    <ul class="research-claims">${changes.map(c => `<li><strong>${esc(c.title)}</strong><p>${esc(c.summary)}</p><p class="meta">${claimLabel(c.claim_type)} · ${refBadges(c.evidence_ids)}</p></li>`).join("")}</ul></section>`;
+}
+
+function researchRiskSection(risks) {
+  if (!risks || !risks.length) return "";
+  return `<section><h3>${t("research.main_risks")}</h3>
+    <ul class="research-claims">${risks.map(r => `<li><strong>${esc(r.title)}</strong><span class="meta">${esc(r.category)} · ${strengthLabel(r.evidence_strength)}</span><p>${esc(r.explanation)}</p><p class="meta">${claimLabel(r.claim_type)} · ${refBadges(r.evidence_ids)}</p></li>`).join("")}</ul></section>`;
+}
+
+function researchVolatilitySection(drivers) {
+  if (!drivers || !drivers.length) return "";
+  return `<section><h3>${t("research.volatility_drivers")}</h3>
+    <ul class="research-claims">${drivers.map(d => `<li><strong>${esc(d.trigger)}</strong><p>${esc(d.why_it_matters)}</p>${(d.signals_to_watch || []).length ? `<p class="meta">${t("research.signals")}: ${d.signals_to_watch.map(esc).join(", ")}</p>` : ""}<p class="meta">${claimLabel(d.claim_type)} · ${refBadges(d.evidence_ids)}</p></li>`).join("")}</ul></section>`;
+}
+
+function researchQuestionSection(questions) {
+  if (!questions || !questions.length) return "";
+  return `<section><h3>${t("research.questions")}</h3>
+    <ul class="research-claims">${questions.map(q => `<li><strong>${esc(q.question)}</strong><p>${esc(q.reason)}</p><p class="meta">${refBadges(q.evidence_ids)}</p></li>`).join("")}</ul></section>`;
+}
+
+function researchEvidenceList(evidence) {
+  if (!evidence || !evidence.length) return "";
+  return `<details class="evidence-list"><summary>${t("research.evidence")} (${evidence.length})</summary>
+    <ul>${evidence.map(item => `<li><span class="ref">${esc(item.evidence_ref)}</span>
+      <a href="${escAttr(safeUrl(item.url_snapshot))}" target="_blank" rel="noopener noreferrer">${esc(item.title_snapshot)}</a>
+      <small>${esc(item.source)} · ${esc(item.information_type)} · ${formatDateTime(item.event_timestamp)}</small></li>`).join("")}</ul></details>`;
 }
 
 async function renderManage() {

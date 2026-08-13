@@ -427,6 +427,34 @@ Investment Monitor running at http://127.0.0.1:8765
 - 公司候选从本地官方 SEC 映射（按名称或 ticker）及已已知公司（按名称、ticker 或记录的 exchange）搜索。用户确认候选后才添加。
 - Source 卡片分别报告各已配置连接器，包括覆盖区域、启用状态、最近尝试与成功，以及持久化失败摘要。
 - 官方链接在新标签页打开，带 `noopener` 与 `noreferrer`。
+- **Research** 只列出 Holdings / Planned / Watchlist 中的公司，并基于该公司已入库的披露、新闻与社区内容生成研究卡。模型功能默认关闭。
+
+## 研究卡（Research cards）
+
+研究卡仅供研究辅助，**不构成投资建议**。它绝不给出买入/卖出评级、目标价或价格预测。
+
+- 只有已属于 Holdings / Planned / Watchlist 的公司才可生成。
+- 只使用监控器已入库的证据（官方披露、新闻与社区内容）；不做外部网页搜索或 IR 抓取。
+- 原始新闻、披露与社区文本**绝不翻译或改写**。卡片按语言（`en` 或 `zh-CN`）分别生成并分别缓存。
+- 证据少于 `RESEARCH_MIN_EVIDENCE_ITEMS` 条、或全部来自社区时，返回 `insufficient_evidence`，不调用模型。
+- 卡片按证据指纹缓存（公司、语言、模型、provider、prompt/schema/rule 版本及排序后的证据集合）。新证据会使旧卡变为 `stale`；`Regenerate` 绕过缓存。
+- 模型功能**默认关闭**。启用后，生成卡片会把选定的公开证据发送给你配置的 OpenAI-compatible 服务。API key 只从环境读取，绝不写入 SQLite、通过 API 返回或写入日志。
+
+```text
+RESEARCH_AI_ENABLED=false
+RESEARCH_AI_BASE_URL=https://api.deepseek.com
+RESEARCH_AI_MODEL=deepseek-chat
+RESEARCH_AI_API_KEY=
+RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
+RESEARCH_LOOKBACK_DAYS=365
+RESEARCH_MAX_EVIDENCE_ITEMS=120
+RESEARCH_MIN_EVIDENCE_ITEMS=3
+
+# 浏览器在反代入口看到的协议（本地开发 http，HTTPS 反代生产必须设为 https）。
+# 用于同源 CSRF 校验，代表外部协议而非内部监听协议。
+# 客户端发送的 X-Forwarded-Proto 永不被信任。
+WEB_EXTERNAL_SCHEME=http
+```
 
 ### 日本数据源（JP）
 

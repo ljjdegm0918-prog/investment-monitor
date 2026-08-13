@@ -30,6 +30,7 @@ from .daily import local_day_bounds
 from .dedupe import annotate_feed_items
 from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
+from .research_repository import ensure_research_schema
 
 EASTERN = ZoneInfo("America/New_York")
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -372,6 +373,7 @@ class WebRepository:
             connection.execute("PRAGMA foreign_keys = OFF")
             connection.executescript(sql)
             ensure_information_item_schema(connection)
+            ensure_research_schema(connection)
             self._ensure_companies_multi_market(connection)
             seeded = connection.execute(
                 "SELECT value FROM app_settings WHERE key = 'default_lists_seeded'"
@@ -551,6 +553,147 @@ class WebRepository:
                 parameters,
             ).fetchall()
         return [_company_dict(row) for row in rows]
+
+    def company_identity(self, company_id: int) -> Optional[Mapping[str, Any]]:
+        """Return one company's identity and list slugs, or None."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT c.id, c.ticker, c.name, c.exchange, c.cik, c.market,
+                       c.mapping_status,
+                       GROUP_CONCAT(l.slug, ',') AS list_slugs
+                FROM companies c
+                LEFT JOIN company_list_memberships m ON m.company_id = c.id
+                LEFT JOIN system_lists l ON l.id = m.list_id
+                WHERE c.id = ?
+                GROUP BY c.id
+                """,
+                (company_id,),
+            ).fetchone()
+        return _company_dict(row) if row else None
+
+    def company_in_research_lists(self, company_id: int) -> bool:
+        """True when the company belongs to Holdings, Planned, or Watchlist."""
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM company_list_memberships m
+                JOIN system_lists l ON l.id = m.list_id
+                WHERE m.company_id = ?
+                  AND l.slug IN ('holdings', 'planned', 'watchlist')
+                LIMIT 1
+                """,
+                (company_id,),
+            ).fetchone()
+        return row is not None
+
+    def research_companies(
+        self,
+        list_slug: Optional[str],
+    ) -> List[Mapping[str, Any]]:
+        """Return companies scoped strictly to Holdings / Planned / Watchlist.
+
+        ``list_slug`` is ``None`` or ``"all"`` for the union of the three fixed
+        lists, or one of ``holdings`` / ``planned`` / ``watchlist`` for a single
+        list. Companies with no membership, or only in a custom list, never
+        appear. Callers validate the slug before invoking this method.
+        """
+        having = ""
+        parameters: List[str] = []
+        if list_slug and list_slug != "all":
+            having = "HAVING SUM(CASE WHEN l.slug = ? THEN 1 ELSE 0 END) > 0"
+            parameters.append(list_slug)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT c.id, c.ticker, c.name, c.exchange, c.cik, c.market,
+                       c.mapping_status,
+                       GROUP_CONCAT(l.slug, ',') AS list_slugs
+                FROM companies c
+                JOIN company_list_memberships m ON m.company_id = c.id
+                JOIN system_lists l ON l.id = m.list_id
+                WHERE l.slug IN ('holdings', 'planned', 'watchlist')
+                GROUP BY c.id
+                {having}
+                ORDER BY c.ticker, c.market
+                """,
+                parameters,
+            ).fetchall()
+        return [_company_dict(row) for row in rows]
+
+    def research_items(self, company_id: int) -> Tuple[Mapping[str, Any], ...]:
+        """Return every eligible research evidence item for one company.
+
+        The query scopes to the current company strictly by ticker + market,
+        allowed sources, supported information types, and excludes generated
+        rows. A ``market = 'unknown'`` row is only eligible when the ticker
+        appears in a single market in ``companies`` (so no ambiguous cross-market
+        sharing can happen); otherwise the unknown row is excluded. This is the
+        single place evidence rows are fetched; ``research.select_evidence`` then
+        applies the time window, ordering, cap and eligibility rules.
+        """
+        with self._connect() as connection:
+            company = connection.execute(
+                "SELECT ticker, market FROM companies WHERE id = ?",
+                (company_id,),
+            ).fetchone()
+            if company is None:
+                return ()
+            ticker = str(company["ticker"])
+            market = str(company["market"] or MARKET_US)
+            source_placeholders = ",".join("?" for _ in self._allowed_sources)
+            if not source_placeholders:
+                return ()
+            rows = connection.execute(
+                f"""
+                SELECT i.id, i.source, i.source_type, i.external_id, i.issuer,
+                       i.published_at, i.title, i.document_type, i.url,
+                       i.collected_at, i.raw_metadata, i.market, i.summary,
+                       i.effective_at
+                FROM information_items i
+                JOIN information_item_tickers it ON it.item_id = i.id
+                WHERE it.ticker = ?
+                  AND (
+                      it.market = ?
+                      OR (
+                          it.market = 'unknown'
+                          AND (
+                              SELECT COUNT(DISTINCT market)
+                              FROM companies
+                              WHERE ticker = ?
+                          ) = 1
+                      )
+                  )
+                  AND i.source IN ({source_placeholders})
+                  AND i.source_type IN (
+                      'regulatory_filing', 'regulatory_disclosure',
+                      'news', 'community'
+                  )
+                  AND COALESCE(
+                      json_extract(i.raw_metadata, '$.generated'), 0
+                  ) != 1
+                ORDER BY i.id
+                """,
+                [ticker, market, ticker, *self._allowed_sources],
+            ).fetchall()
+        return tuple(self._research_item(row) for row in rows)
+
+    @staticmethod
+    def _research_item(row: sqlite3.Row) -> Mapping[str, Any]:
+        raw_metadata = json.loads(row["raw_metadata"])
+        return {
+            "id": int(row["id"]),
+            "source": row["source"],
+            "source_type": row["source_type"],
+            "external_id": row["external_id"],
+            "published_at": row["published_at"],
+            "title": row["title"],
+            "url": row["url"],
+            "summary": row["summary"],
+            "effective_at": row["effective_at"],
+            "raw_metadata": raw_metadata,
+        }
 
     def search_companies(self, query: str, *, limit: int = 20) -> List[Mapping[str, Any]]:
         """Search known companies by name, ticker, or recorded exchange."""
