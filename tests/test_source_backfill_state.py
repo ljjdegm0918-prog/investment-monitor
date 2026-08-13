@@ -1,5 +1,6 @@
 """Acceptance tests for source × ticker × market initial-backfill state."""
 
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from collections.abc import Iterable as IterableABC
 import json
@@ -26,6 +27,28 @@ from investment_monitor.sources.edinet import (
 )
 from investment_monitor.web import WebApplication
 from investment_monitor.web_repository import WebRepository
+
+
+@contextmanager
+def open_database(path):
+    """Open a SQLite connection that is closed on context exit.
+
+    ``sqlite3.connect`` used directly as a context manager only commits or
+    rolls back the transaction; it does not close the connection. On Windows
+    the still-open connection keeps the database file locked, so the surrounding
+    ``TemporaryDirectory`` cleanup fails with ``PermissionError`` (WinError 32)
+    until the connection object is garbage collected. Closing explicitly here
+    releases the file handle before the temporary directory is removed.
+    """
+    connection = sqlite3.connect(str(path))
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 class RecordingConnector:
@@ -312,7 +335,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                             row["needs_backfill"] == (outcome == "failure")
                             for row in states
                         ))
-                        with sqlite3.connect(result.database_path) as connection:
+                        with open_database(result.database_path) as connection:
                             run = connection.execute(
                                 "SELECT companies_processed, records_fetched, "
                                 "successful_companies, failed_companies "
@@ -373,7 +396,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                     self.assertEqual(len(result.events), 1)
                     self.assertEqual(result.events[0].ticker, "*")
                     self.assertEqual(result.events[0].records_read, 1)
-                    with sqlite3.connect(result.database_path) as connection:
+                    with open_database(result.database_path) as connection:
                         run = connection.execute(
                             "SELECT companies_processed, records_fetched "
                             "FROM ingestion_runs WHERE source = ?",
@@ -424,7 +447,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                         (result.events[0].ticker, result.events[0].status),
                         ("*", "empty"),
                     )
-                    with sqlite3.connect(result.database_path) as connection:
+                    with open_database(result.database_path) as connection:
                         run = connection.execute(
                             "SELECT companies_processed, records_fetched "
                             "FROM ingestion_runs WHERE source = ?",
@@ -468,7 +491,7 @@ class SourceBackfillStateTests(unittest.TestCase):
             (result.events[0].ticker, result.events[0].status),
             ("*", "empty"),
         )
-        with sqlite3.connect(result.database_path) as connection:
+        with open_database(result.database_path) as connection:
             run = connection.execute(
                 "SELECT companies_processed, records_fetched "
                 "FROM ingestion_runs WHERE source = ?",
@@ -534,7 +557,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                              for row in states},
                             {("7203", "jp", "failure")},
                         )
-                        with sqlite3.connect(result.database_path) as connection:
+                        with open_database(result.database_path) as connection:
                             run = connection.execute(
                                 "SELECT companies_processed, records_fetched "
                                 "FROM ingestion_runs WHERE source = ?",
@@ -602,7 +625,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                             ),
                             (),
                         )
-                        with sqlite3.connect(
+                        with open_database(
                             root / "data" / "web.sqlite3"
                         ) as connection:
                             run_count = connection.execute(
@@ -719,7 +742,7 @@ class SourceBackfillStateTests(unittest.TestCase):
         self.assertTrue(all(row["initial_status"] == "partial" for row in states))
         self.assertTrue(all(row["last_status"] == "partial" for row in states))
         self.assertTrue(all(row["needs_backfill"] for row in states))
-        with sqlite3.connect(result.database_path) as connection:
+        with open_database(result.database_path) as connection:
             run = connection.execute(
                 "SELECT status, companies_processed, failed_companies, "
                 "records_fetched FROM ingestion_runs WHERE source='edinet'"
@@ -868,7 +891,7 @@ class SourceBackfillStateTests(unittest.TestCase):
                         ),
                         (),
                     )
-                    with sqlite3.connect(
+                    with open_database(
                         root / "data" / "web.sqlite3"
                     ) as connection:
                         run_count = connection.execute(
@@ -1078,7 +1101,7 @@ class SourceBackfillStateTests(unittest.TestCase):
         application_holder["application"] = application
         # Remove the new table to reproduce a DB created before sync-state
         # migration. Reopening must recreate pending state without historical I/O.
-        with sqlite3.connect(
+        with open_database(
             self.project_root / "data" / "web.sqlite3"
         ) as connection:
             connection.execute("DROP TABLE source_ticker_sync_state")

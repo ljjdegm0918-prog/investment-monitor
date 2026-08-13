@@ -15,6 +15,24 @@ from investment_monitor.sqlite_repository import SQLiteInformationRepository
 from investment_monitor.web_repository import WebRepository
 
 
+class _NoneResolver:
+    """A resolver that never maps a ticker (non-US markets stay unmapped)."""
+
+    def resolve(self, ticker):
+        return None
+
+
+class _RecordingResolver:
+    """A resolver that records every ticker it is asked to resolve."""
+
+    def __init__(self):
+        self.calls = []
+
+    def resolve(self, ticker):
+        self.calls.append(ticker)
+        return None
+
+
 class WebApplicationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = TemporaryDirectory()
@@ -980,6 +998,127 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(marked.status, 200)
         self.assertTrue(read_feed["items"][0]["is_read"])
         self.assertEqual(unmarked.status, 200)
+
+    def test_batch_add_mixed_markets_single_request(self) -> None:
+        with patch.object(self.application, "hkexnews_resolver", _NoneResolver()), \
+             patch.object(self.application, "dart_resolver", _NoneResolver()):
+            response = self.application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": "AAPL.US 0700.HK 005930.KR RY.TO",
+                    "lists": ["watchlist"],
+                    "market": "us",
+                }).encode(),
+            )
+        self.assertEqual(response.status, 201)
+        payload = self.payload(response)
+        added_by_key = {(record["ticker"], record["market"]) for record in payload["added"]}
+        self.assertEqual(len(payload["added"]), 4)
+        self.assertEqual(
+            added_by_key,
+            {("AAPL", "us"), ("00700", "hk"), ("005930", "kr"), ("RY", "ca")},
+        )
+        # None of the explicit-suffix tokens were forced into the default us.
+        self.assertEqual(
+            {group["market"] for group in payload["groups"]},
+            {"us", "hk", "kr", "ca"},
+        )
+        # Every added company landed in the requested list.
+        companies = self.application.repository.companies()
+        for record in payload["added"]:
+            self.assertIn("watchlist", [
+                c["list_slugs"] for c in companies
+                if c["ticker"] == record["ticker"] and c["market"] == record["market"]
+            ][0])
+
+    def test_batch_add_same_ticker_two_markets(self) -> None:
+        with patch.object(self.application, "hkexnews_resolver", _NoneResolver()):
+            response = self.application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": "AAPL.US AAPL.HK",
+                    "lists": ["planned"],
+                    "market": "us",
+                }).encode(),
+            )
+        self.assertEqual(response.status, 201)
+        payload = self.payload(response)
+        added_by_key = {(record["ticker"], record["market"]) for record in payload["added"]}
+        self.assertEqual(added_by_key, {("AAPL", "us"), ("AAPL", "hk")})
+        companies = self.application.repository.companies()
+        self.assertEqual(
+            {(c["ticker"], c["market"]) for c in companies if c["ticker"] == "AAPL"},
+            {("AAPL", "us"), ("AAPL", "hk")},
+        )
+
+    def test_batch_add_brk_b_keeps_internal_dot(self) -> None:
+        resolver = _RecordingResolver()
+        with patch.object(self.application, "resolver", resolver):
+            response = self.application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": "BRK.B",
+                    "lists": ["holdings"],
+                    "market": "us",
+                }).encode(),
+            )
+        self.assertEqual(response.status, 201)
+        payload = self.payload(response)
+        # The resolver saw the whole "BRK.B", never "BRK" with a market "b".
+        self.assertEqual(resolver.calls, ["BRK.B"])
+        self.assertEqual(payload["parsed"][0]["ticker"], "BRK.B")
+        self.assertEqual(payload["parsed"][0]["market"], "us")
+        self.assertIsNone(payload["parsed"][0]["explicit_suffix"])
+
+    def test_batch_add_partial_success(self) -> None:
+        with patch.object(self.application, "hkexnews_resolver", _NoneResolver()):
+            response = self.application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": "AAPL.US 0700.HK BAD.XYZ",
+                    "lists": ["planned"],
+                    "market": "us",
+                }).encode(),
+            )
+        self.assertEqual(response.status, 201)
+        payload = self.payload(response)
+        added_by_key = {(record["ticker"], record["market"]) for record in payload["added"]}
+        self.assertIn(("AAPL", "us"), added_by_key)
+        self.assertIn(("00700", "hk"), added_by_key)
+        # BAD.XYZ is kept as a whole ticker (not "BAD") and fails readably via
+        # the existing US resolver path, without blocking the valid tokens.
+        self.assertTrue(any(f["ticker"] == "BAD.XYZ" for f in payload["failed"]))
+        for failure in payload["failed"]:
+            self.assertNotIn("Traceback", failure["error"])
+            self.assertNotIn("SECCompanyResolver", failure["error"])
+
+    def test_batch_add_rejects_cross_origin(self) -> None:
+        headers = {
+            "Content-Type": "application/json",
+            "Host": "127.0.0.1:8765",
+            "Origin": "https://evil.example.com",
+        }
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps({"tickers": "AAPL", "lists": ["holdings"]}).encode(),
+            headers=headers,
+        )
+        self.assertEqual(response.status, 403)
+
+    def test_batch_add_invalid_default_market_rejected(self) -> None:
+        response = self.application.handle(
+            "POST",
+            "/api/companies/batch",
+            json.dumps({"tickers": "AAPL", "lists": ["holdings"], "market": "mars"}).encode(),
+        )
+        self.assertEqual(response.status, 400)
+        self.assertIn("market", self.payload(response)["error"])
+
 
     def test_adding_nvda_immediately_backfills_sec_items(self) -> None:
         def nvda_collection_runner(**kwargs):

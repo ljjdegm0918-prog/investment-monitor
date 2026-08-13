@@ -29,6 +29,7 @@ from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_unive
 from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
 from .models import (
+    ALLOWED_MARKETS,
     MARKET_AU,
     MARKET_CA,
     MARKET_FR,
@@ -82,6 +83,7 @@ from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
 from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
+from .company_import import group_by_market, parse_company_inputs
 from .research import ResearchScope, ResearchSettings, card_from_json, validate_language
 from .research_repository import CARD_STATUS_COMPLETED
 from .research_service import ResearchService, validate_list_slug
@@ -387,123 +389,92 @@ class WebApplication:
                 )})
             if method == "POST" and parsed.path == "/api/companies/batch":
                 payload = _decode_json(body)
-                market = str(payload.get("market") or MARKET_US)
-                resolver = self._resolver_for(market)
-                name_fallback = None
-                if market == MARKET_KR:
-                    name_fallback = kr_universe_name_map()
-                elif market == MARKET_UK:
-                    name_fallback = uk_universe_name_map()
-                elif market == MARKET_HK:
-                    name_fallback = hk_universe_name_map()
-                elif market == MARKET_TW:
-                    name_fallback = tw_universe_name_map()
-                elif market == MARKET_AU:
-                    name_fallback = au_universe_name_map()
-                elif market == MARKET_BE:
-                    name_fallback = _warm_universe_on_first_add(
-                        market,
-                        be_universe_name_map,
-                        refresh_be_universe,
+                default_market = str(payload.get("market") or MARKET_US).strip().lower()
+                if default_market not in ALLOWED_MARKETS:
+                    return self._json(
+                        {
+                            "error": "market must be one of: "
+                            + ", ".join(sorted(ALLOWED_MARKETS))
+                        },
+                        400,
                     )
-                elif market == MARKET_FR:
-                    name_fallback = fr_universe_name_map()
-                elif market == MARKET_DE:
-                    name_fallback = _warm_universe_on_first_add(
-                        market,
-                        de_universe_name_map,
-                        refresh_de_universe,
-                    )
-                elif market == MARKET_NL:
-                    name_fallback = _warm_universe_on_first_add(
-                        market,
-                        nl_universe_name_map,
-                        refresh_nl_universe,
-                    )
-                elif market == MARKET_IT:
-                    name_fallback = _warm_universe_on_first_add(
-                        market,
-                        it_universe_name_map,
-                        refresh_it_universe,
-                    )
-                elif market == MARKET_ES:
-                    name_fallback = es_universe_name_map()
-                    if not name_fallback:
-                        LOGGER.warning(
-                            "es_universe cache is cold on add-company; "
-                            "synchronous refresh skipped because ticker enrichment "
-                            "can take several minutes"
-                        )
-                elif market == MARKET_SG:
-                    name_fallback = sg_universe_name_map()
-                elif market == MARKET_CH:
-                    name_fallback = ch_universe_name_map()
-                elif market == MARKET_PL:
-                    name_fallback = _warm_universe_on_first_add(
-                        market,
-                        pl_universe_name_map,
-                        refresh_pl_universe,
-                    )
-                elif market == MARKET_SE:
-                    name_fallback = se_universe_name_map()
-                elif market == MARKET_AQ:
-                    name_fallback = aq_universe_name_map()
-                elif market == MARKET_CXE:
-                    name_fallback = cxe_universe_name_map()
-                elif market == MARKET_EMF:
-                    name_fallback = emf_universe_name_map()
-                elif market == MARKET_TRQ:
-                    name_fallback = trq_universe_name_map()
-                elif market == MARKET_EUX:
-                    name_fallback = eux_universe_name_map()
-                elif market == MARKET_CA:
-                    name_fallback = ca_universe_name_map()
-                    if not name_fallback:
-                        # Cold cache: try one refresh so board/name backfill
-                        # works on first add without a manual universe warm-up.
-                        try:
-                            refresh_ca_universe()
-                        except CaUniverseError:
-                            pass
-                        except Exception:
-                            logging.getLogger(__name__).warning(
-                                "ca_universe refresh skipped on add-company",
-                                exc_info=True,
-                            )
-                        name_fallback = ca_universe_name_map() or None
-                result = dict(self.repository.add_companies_batch(
-                    str(payload.get("tickers", "")),
-                    tuple(payload.get("lists") or ()),
-                    resolver,
-                    market=market,
-                    name_fallback=name_fallback,
-                ))
-                added_tickers = tuple(
-                    str(record["ticker"]) for record in result["added"]
+                raw_tickers = str(payload.get("tickers", ""))
+                list_slugs = tuple(payload.get("lists") or ())
+                parsed = parse_company_inputs(raw_tickers, default_market)
+                if not parsed:
+                    return self._json({"error": "Enter at least one ticker"}, 400)
+                added = []
+                already_present = []
+                failed = []
+                collection_summaries = []
+                lookback_days = _environment_int(
+                    "INITIAL_BACKFILL_DAYS",
+                    365,
+                    minimum=1,
+                    maximum=3650,
                 )
-                if added_tickers:
-                    relevant_sources = self._relevant_sources(market)
-                    self.repository.ensure_source_ticker_sync_states(tuple(
-                        (source, ticker, market)
-                        for source in relevant_sources
-                        for ticker in added_tickers
-                    ))
-                    result["collection"] = _combine_collection_summaries(tuple(
-                        self.collect_tickers(
-                            added_tickers,
-                            lookback_days=_environment_int(
-                                "INITIAL_BACKFILL_DAYS",
-                                365,
-                                minimum=1,
-                                maximum=3650,
-                            ),
-                            markets={ticker: market for ticker in added_tickers},
-                            sources=(source,),
-                            initial_backfill=True,
+                for market, items in group_by_market(parsed):
+                    tickers = tuple(item.ticker for item in items)
+                    resolver = self._resolver_for(market)
+                    name_fallback = self._name_fallback_for(market)
+                    try:
+                        result = dict(self.repository.add_companies_batch(
+                            " ".join(tickers),
+                            list_slugs,
+                            resolver,
+                            market=market,
+                            name_fallback=name_fallback,
+                        ))
+                    except ValueError as error:
+                        failed.append(
+                            {"ticker": " ".join(tickers), "error": str(error)}
                         )
-                        for source in relevant_sources
-                    ))
-                return self._json(result, 201)
+                        continue
+                    added.extend(result["added"])
+                    already_present.extend(result["already_present"])
+                    failed.extend(result["failed"])
+                    added_tickers = tuple(
+                        str(record["ticker"]) for record in result["added"]
+                    )
+                    if added_tickers:
+                        relevant_sources = self._relevant_sources(market)
+                        self.repository.ensure_source_ticker_sync_states(tuple(
+                            (source, ticker, market)
+                            for source in relevant_sources
+                            for ticker in added_tickers
+                        ))
+                        collection_summaries.extend(
+                            self.collect_tickers(
+                                added_tickers,
+                                lookback_days=lookback_days,
+                                markets={ticker: market for ticker in added_tickers},
+                                sources=(source,),
+                                initial_backfill=True,
+                            )
+                            for source in relevant_sources
+                        )
+                response = {
+                    "added": added,
+                    "already_present": already_present,
+                    "failed": failed,
+                    "parsed": [
+                        {
+                            "ticker": item.ticker,
+                            "market": item.market,
+                            "explicit_suffix": item.explicit_suffix,
+                        }
+                        for item in parsed
+                    ],
+                    "groups": [
+                        {"market": market, "tickers": [item.ticker for item in items]}
+                        for market, items in group_by_market(parsed)
+                    ],
+                }
+                if collection_summaries:
+                    response["collection"] = _combine_collection_summaries(
+                        tuple(collection_summaries)
+                    )
+                return self._json(response, 201)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
                 removed = self.repository.remove_membership(
@@ -835,6 +806,101 @@ class WebApplication:
             # a Canadian symbol to a same-named US company.
             return None
         return self.resolver
+
+    def _name_fallback_for(
+        self,
+        market: str,
+    ) -> Optional[Mapping[str, Mapping[str, str]]]:
+        """Load the universe name fallback for a market, or None.
+
+        Extracted from the batch-add route so mixed-market adds reuse the exact
+        same per-market universe warm-up logic (including the one-time refreshes
+        for BE/DE/NL/IT/PL and the guarded CA refresh).
+        """
+        if market == MARKET_KR:
+            return kr_universe_name_map()
+        if market == MARKET_UK:
+            return uk_universe_name_map()
+        if market == MARKET_HK:
+            return hk_universe_name_map()
+        if market == MARKET_TW:
+            return tw_universe_name_map()
+        if market == MARKET_AU:
+            return au_universe_name_map()
+        if market == MARKET_BE:
+            return _warm_universe_on_first_add(
+                market,
+                be_universe_name_map,
+                refresh_be_universe,
+            )
+        if market == MARKET_FR:
+            return fr_universe_name_map()
+        if market == MARKET_DE:
+            return _warm_universe_on_first_add(
+                market,
+                de_universe_name_map,
+                refresh_de_universe,
+            )
+        if market == MARKET_NL:
+            return _warm_universe_on_first_add(
+                market,
+                nl_universe_name_map,
+                refresh_nl_universe,
+            )
+        if market == MARKET_IT:
+            return _warm_universe_on_first_add(
+                market,
+                it_universe_name_map,
+                refresh_it_universe,
+            )
+        if market == MARKET_ES:
+            name_fallback = es_universe_name_map()
+            if not name_fallback:
+                LOGGER.warning(
+                    "es_universe cache is cold on add-company; "
+                    "synchronous refresh skipped because ticker enrichment "
+                    "can take several minutes"
+                )
+            return name_fallback
+        if market == MARKET_SG:
+            return sg_universe_name_map()
+        if market == MARKET_CH:
+            return ch_universe_name_map()
+        if market == MARKET_PL:
+            return _warm_universe_on_first_add(
+                market,
+                pl_universe_name_map,
+                refresh_pl_universe,
+            )
+        if market == MARKET_SE:
+            return se_universe_name_map()
+        if market == MARKET_AQ:
+            return aq_universe_name_map()
+        if market == MARKET_CXE:
+            return cxe_universe_name_map()
+        if market == MARKET_EMF:
+            return emf_universe_name_map()
+        if market == MARKET_TRQ:
+            return trq_universe_name_map()
+        if market == MARKET_EUX:
+            return eux_universe_name_map()
+        if market == MARKET_CA:
+            name_fallback = ca_universe_name_map()
+            if not name_fallback:
+                # Cold cache: try one refresh so board/name backfill works on
+                # first add without a manual universe warm-up.
+                try:
+                    refresh_ca_universe()
+                except CaUniverseError:
+                    pass
+                except Exception:
+                    logging.getLogger(__name__).warning(
+                        "ca_universe refresh skipped on add-company",
+                        exc_info=True,
+                    )
+                name_fallback = ca_universe_name_map() or None
+            return name_fallback
+        return None
 
     @staticmethod
     def _detect_unavailable_sources(

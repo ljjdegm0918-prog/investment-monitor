@@ -94,6 +94,27 @@ startup, active memberships in SQLite are the collection source of truth. A
 company such as NVDA added in the web interface does not need to be added to
 the CSV.
 
+### Batch-add companies in Lists & sources
+
+The "Add ticker" box also accepts many symbols at once, each with its own
+market:
+
+```text
+AAPL.US, 0700.HK, 005930.KR, RY.TO, BHP.AX
+```
+
+Rules:
+
+- Separate items with commas, spaces, semicolons, or new lines.
+- The recommended format is `TICKER.MARKET` — for example `.US`, `.HK`, `.KR`;
+  common exchange suffixes are also supported, such as `.TO` (Canada), `.AX`
+  (Australia), `.KS` (Korea), `.L` (UK), `.T` (Japan), and `.SS`/`.SZ` (China
+  A-shares).
+- A ticker without a recognized suffix uses the market dropdown as its default.
+- Only supported suffixes are interpreted as a market/exchange; a dot inside a
+  ticker (for example `BRK.B` or `BF.B`) is never treated as a suffix.
+- The same ticker in two markets is stored as two separate companies.
+
 `config/settings.yaml` declares the logical sources (sec, news, community,
 research), their enabled state, and selects the local SQLite file:
 

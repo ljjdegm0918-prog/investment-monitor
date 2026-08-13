@@ -53,6 +53,9 @@ const MESSAGES = {
     "manage.market": "Market",
     "manage.search": "Search",
     "manage.add_ticker": "Add ticker",
+    "manage.add_placeholder": "e.g. AAPL.US, 0700.HK, RY.TO",
+    "manage.add_help": "Add one or more symbols as TICKER.MARKET, separated by commas, spaces, semicolons, or new lines. A recognized suffix (for example .US, .HK, .TO, .AX) selects that market; symbols without one use the market dropdown. A dot inside a ticker (for example BRK.B) is never treated as a suffix.",
+    "manage.added_multi": "Added: {items}",
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
@@ -241,6 +244,9 @@ const MESSAGES = {
     "manage.market": "市场",
     "manage.search": "搜索",
     "manage.add_ticker": "添加代码",
+    "manage.add_placeholder": "例如：AAPL.US、0700.HK、RY.TO",
+    "manage.add_help": "可一次输入多个“股票代码.市场/交易所缩写”，用逗号、空格、分号或换行分隔。可识别的后缀（如 .US、.HK、.TO、.AX）会指定对应市场；没有后缀的代码使用市场下拉框。代码本身含点（如 BRK.B）不会被误判为后缀。",
+    "manage.added_multi": "已添加：{items}",
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
@@ -953,10 +959,11 @@ async function renderManage() {
             <option value="trq">Turquoise (TRQ)</option>
             <option value="eux">Eurex Core (EUX)</option>
           </select>
-          <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
+          <input id="company-query" autocomplete="off" placeholder="${t("manage.add_placeholder")}" required>
           <button class="button primary" type="submit">${t("manage.search")}</button>
           <button class="button" id="add-ticker-direct" type="button">${t("manage.add_ticker")}</button>
         </div>
+        <small class="add-help">${t("manage.add_help")}</small>
         <small id="market-hint">${marketHint("us")}</small>
       </form>
       <div id="candidate-results"></div><div id="company-table"></div>
@@ -1113,8 +1120,11 @@ async function addTickerDirect() {
   const market = document.getElementById("market-select").value;
   try {
     const result = await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers, lists:[state.selectedList], market})});
-    const added = (result.added || []).map(row => row.ticker).join(", ") || tickers;
-    toast(t("manage.added_market", {tickers: added, market}));
+    const added = (result.added || []).map(row => `${esc(row.ticker)} (${esc(String(row.market).toUpperCase())})`);
+    if (added.length) toast(t("manage.added_multi", {items: added.join(", ")}));
+    for (const item of (result.failed || [])) {
+      toast(`${esc(item.ticker)}: ${esc(item.error)}`, true);
+    }
     document.getElementById("candidate-results").innerHTML = "";
     await reloadBootstrap();
     await refreshManagement();
