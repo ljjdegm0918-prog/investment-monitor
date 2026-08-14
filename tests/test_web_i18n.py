@@ -56,16 +56,15 @@ class WebI18nStaticTests(unittest.TestCase):
             self.assertIn(zh, js)
 
     def test_app_js_preserves_external_identifiers(self) -> None:
-        # Source ids, brand names and tickers must never be translated.
+        # Tickers must never be translated. Source ids and brand names are now
+        # served by /api/sources and rendered verbatim (never through the i18n
+        # table), so they no longer need to be hardcoded in app.js.
         js = self._app_js()
         for token in (
-            "seeking_alpha",
-            "Finnhub",
-            "Yahoo Finance US",
-            "Google News US",
-            "Xueqiu",
-            "Substack",
             "AAPL",
+            "0700",
+            "RY",
+            "BRK.B",
         ):
             self.assertIn(token, js)
 
