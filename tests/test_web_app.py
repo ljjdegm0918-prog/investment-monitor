@@ -1032,6 +1032,36 @@ class WebApplicationTests(unittest.TestCase):
                 if c["ticker"] == record["ticker"] and c["market"] == record["market"]
             ][0])
 
+    def test_batch_add_at_suffix_format(self) -> None:
+        with patch.object(self.application, "hkexnews_resolver", _NoneResolver()), \
+             patch.object(self.application, "dart_resolver", _NoneResolver()):
+            response = self.application.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": "AAPL@US 0700@HK 005930@KR RY@TO",
+                    "lists": ["watchlist"],
+                    "market": "us",
+                }).encode(),
+            )
+        self.assertEqual(response.status, 201)
+        payload = self.payload(response)
+        added_by_key = {(record["ticker"], record["market"]) for record in payload["added"]}
+        self.assertEqual(
+            added_by_key,
+            {("AAPL", "us"), ("00700", "hk"), ("005930", "kr"), ("RY", "ca")},
+        )
+        # The @ suffix is recorded exactly like the dot suffix.
+        self.assertEqual(
+            {parsed["explicit_suffix"] for parsed in payload["parsed"]},
+            {"us", "hk", "kr", "to"},
+        )
+        # @ and . are interchangeable for the same ticker + market.
+        self.assertEqual(
+            {group["market"] for group in payload["groups"]},
+            {"us", "hk", "kr", "ca"},
+        )
+
     def test_batch_add_same_ticker_two_markets(self) -> None:
         with patch.object(self.application, "hkexnews_resolver", _NoneResolver()):
             response = self.application.handle(

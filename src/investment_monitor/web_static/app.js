@@ -53,8 +53,8 @@ const MESSAGES = {
     "manage.market": "Market",
     "manage.search": "Search",
     "manage.add_ticker": "Add ticker",
-    "manage.add_placeholder": "e.g. AAPL.US, 0700.HK, RY.TO",
-    "manage.add_help": "Add one or more symbols as TICKER.MARKET, separated by commas, spaces, semicolons, or new lines. A recognized suffix (for example .US, .HK, .TO, .AX) selects that market; symbols without one use the market dropdown. A dot inside a ticker (for example BRK.B) is never treated as a suffix.",
+    "manage.add_placeholder": "e.g. AAPL@US, 0700@HK, RY@TO",
+    "manage.add_help": "Add one or more symbols, separated by commas, spaces, semicolons, or new lines. A market suffix selects that market: use @ (AAPL@US, 0700@HK) or a dot (AAPL.US, 0700.HK). A recognized suffix (for example .US, .HK, .TO, .AX, or the same code after @) selects the market; symbols without one use the market dropdown. A dot inside a ticker (for example BRK.B) is never treated as a suffix.",
     "manage.added_multi": "Added: {items}",
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
@@ -244,8 +244,8 @@ const MESSAGES = {
     "manage.market": "市场",
     "manage.search": "搜索",
     "manage.add_ticker": "添加代码",
-    "manage.add_placeholder": "例如：AAPL.US、0700.HK、RY.TO",
-    "manage.add_help": "可一次输入多个“股票代码.市场/交易所缩写”，用逗号、空格、分号或换行分隔。可识别的后缀（如 .US、.HK、.TO、.AX）会指定对应市场；没有后缀的代码使用市场下拉框。代码本身含点（如 BRK.B）不会被误判为后缀。",
+    "manage.add_placeholder": "例如：AAPL@US、0700@HK、RY@TO",
+    "manage.add_help": "可一次输入多个“股票代码@市场/交易所”或“股票代码.市场/交易所”，用逗号、空格、分号或换行分隔。@ 格式（如 0700@HK）不会与代码本身冲突，更推荐；. 格式（如 0700.HK）也支持。可识别的后缀（如 .US、.HK、.TO、.AX，或 @ 后的相同代码）会指定对应市场；没有后缀的代码使用市场下拉框。代码本身含点（如 BRK.B）不会被误判为后缀。",
     "manage.added_multi": "已添加：{items}",
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
@@ -931,7 +931,6 @@ async function renderManage() {
     <section class="management-section" aria-labelledby="companies-title">
       <div class="section-heading"><div><h2 id="companies-title">${t("manage.companies")}</h2><p id="company-context"></p></div></div>
       <form id="company-search" class="search-form">
-        <label for="company-query">${t("manage.search_by")}</label>
         <div>
           <select id="market-select" aria-label="${t("manage.market")}">
             <option value="us" selected>US</option>
@@ -960,13 +959,12 @@ async function renderManage() {
             <option value="eux">Eurex Core (EUX)</option>
           </select>
           <input id="company-query" autocomplete="off" placeholder="${t("manage.add_placeholder")}" required>
-          <button class="button primary" type="submit">${t("manage.search")}</button>
-          <button class="button" id="add-ticker-direct" type="button">${t("manage.add_ticker")}</button>
+          <button class="button primary" id="add-ticker-direct" type="submit">${t("manage.add_ticker")}</button>
         </div>
         <small class="add-help">${t("manage.add_help")}</small>
         <small id="market-hint">${marketHint("us")}</small>
       </form>
-      <div id="candidate-results"></div><div id="company-table"></div>
+      <div id="company-table"></div>
     </section>
     <section class="management-section" aria-labelledby="sources-title">
       <div class="section-heading"><div><h2 id="sources-title">${t("manage.information_sources")}</h2><p>${t("manage.sources_desc")}</p></div></div>
@@ -984,9 +982,8 @@ function bindManagement() {
       state.selectedList = result.list.slug; toast(t("manage.list_created")); await reloadBootstrap(); await refreshManagement();
     } catch (error) { toast(error.message, true); }
   });
-  document.getElementById("company-search").addEventListener("submit", searchCompanies);
+  document.getElementById("company-search").addEventListener("submit", addTickerDirect);
   document.getElementById("market-select").addEventListener("change", updateMarketHint);
-  document.getElementById("add-ticker-direct").addEventListener("click", addTickerDirect);
   updateMarketHint();
 }
 
@@ -1097,23 +1094,8 @@ function renderCompanies() {
   document.querySelectorAll(".remove-company").forEach(button => button.addEventListener("click", () => removeCompany(button.dataset.ticker, button.dataset.market)));
 }
 
-async function searchCompanies(event) {
+async function addTickerDirect(event) {
   event.preventDefault();
-  if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
-  const market = document.getElementById("market-select").value;
-  if (market !== "us") {
-    toast(t("manage.non_us_markets"), true);
-    return;
-  }
-  const target = document.getElementById("candidate-results"); target.innerHTML = `<p class="loading">${t("manage.searching_candidates")}</p>`;
-  try {
-    const data = await api(`/api/companies/search?q=${encodeURIComponent(document.getElementById("company-query").value.trim())}`);
-    target.innerHTML = data.candidates.length ? `<div class="candidate-list">${data.candidates.map(candidate => `<article><div><strong>${esc(candidate.name)}</strong><p>${esc(candidate.ticker)} · ${esc(candidate.exchange)} · ${esc(candidate.region)}</p></div><button class="button add-candidate" data-ticker="${escAttr(candidate.ticker)}" data-market="${escAttr(candidate.market)}">${t("manage.confirm_add")}</button></article>`).join("")}</div>` : `<div class="empty compact"><p>${t("manage.no_matching_candidates")}</p></div>`;
-    document.querySelectorAll(".add-candidate").forEach(button => button.addEventListener("click", () => addCandidate(button.dataset.ticker, button.dataset.market)));
-  } catch (error) { target.innerHTML = errorState(t("manage.search_no_results"), error.message); }
-}
-
-async function addTickerDirect() {
   if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
   const tickers = document.getElementById("company-query").value.trim();
   if (!tickers) { toast(t("manage.enter_ticker_first"), true); return; }
@@ -1125,16 +1107,8 @@ async function addTickerDirect() {
     for (const item of (result.failed || [])) {
       toast(`${esc(item.ticker)}: ${esc(item.error)}`, true);
     }
-    document.getElementById("candidate-results").innerHTML = "";
     await reloadBootstrap();
     await refreshManagement();
-  } catch (error) { toast(error.message, true); }
-}
-
-async function addCandidate(ticker, market) {
-  try {
-    await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers:ticker, lists:[state.selectedList], market})});
-    toast(t("manage.added", {ticker})); document.getElementById("candidate-results").innerHTML = ""; await reloadBootstrap(); await refreshManagement();
   } catch (error) { toast(error.message, true); }
 }
 

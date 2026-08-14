@@ -83,6 +83,54 @@ class CompanyImportParseTests(unittest.TestCase):
             pairs(parse_company_inputs("0700.hk", "us")), [("0700", "hk")]
         )
 
+    def test_at_suffix_format(self):
+        cases = {
+            "AAPL@US": ("AAPL", "us"),
+            "0700@HK": ("0700", "hk"),
+            "7203@JP": ("7203", "jp"),
+            "RY@CA": ("RY", "ca"),
+            "BHP@AU": ("BHP", "au"),
+            "005930@KS": ("005930", "kr"),
+            "600519@SS": ("600519", "cn"),
+            "NESN@SW": ("NESN", "ch"),
+        }
+        for token, (ticker, market) in cases.items():
+            with self.subTest(token=token):
+                self.assertEqual(
+                    pairs(parse_company_inputs(token, "us")), [(ticker, market)]
+                )
+
+    def test_at_suffix_is_case_insensitive(self):
+        self.assertEqual(
+            pairs(parse_company_inputs("aapl@us", "us")), [("aapl", "us")]
+        )
+        self.assertEqual(
+            pairs(parse_company_inputs("0700@hk", "us")), [("0700", "hk")]
+        )
+
+    def test_at_suffix_prefers_at_over_dot(self):
+        # ``@`` wins when both appear: the internal dot stays inside the ticker.
+        self.assertEqual(
+            pairs(parse_company_inputs("BRK.B@US", "us")), [("BRK.B", "us")]
+        )
+
+    def test_at_suffix_unknown_is_kept_as_ticker(self):
+        self.assertEqual(
+            pairs(parse_company_inputs("ABC@XYZ", "us")), [("ABC@XYZ", "us")]
+        )
+
+    def test_at_suffix_dedupes_against_dot_form(self):
+        self.assertEqual(
+            pairs(parse_company_inputs("AAPL@US AAPL.US AAPL", "us")),
+            [("AAPL", "us")],
+        )
+
+    def test_mixed_at_and_dot_separators(self):
+        self.assertEqual(
+            pairs(parse_company_inputs("AAPL@US 0700.HK 7203@JP RY.TO", "us")),
+            [("AAPL", "us"), ("0700", "hk"), ("7203", "jp"), ("RY", "ca")],
+        )
+
     def test_ticker_with_internal_dot_is_protected(self):
         self.assertEqual(
             pairs(parse_company_inputs("BRK.B", "us")), [("BRK.B", "us")]

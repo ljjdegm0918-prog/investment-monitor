@@ -1,16 +1,24 @@
-"""Pure parsing for the ``TICKER.MARKET`` mixed batch-add format.
+"""Pure parsing for the ``TICKER.MARKET`` / ``TICKER@MARKET`` mixed batch format.
 
 The Lists & sources page lets a user paste many symbols at once, each
 optionally carrying a market/exchange suffix (``AAPL.US``, ``0700.HK``,
-``RY.TO``). This module only splits and classifies that raw text into
-per-token ``(ticker, market)`` pairs; it has no HTTP, SQLite, resolver,
-collection, environment, or network dependency, so the rules stay testable and
-the web layer stays the sole place where HTTP payloads and persistence meet.
+``RY.TO``, or the ``@`` form ``0700@HK``). This module only splits and
+classifies that raw text into per-token ``(ticker, market)`` pairs; it has no
+HTTP, SQLite, resolver, collection, environment, or network dependency, so the
+rules stay testable and the web layer stays the sole place where HTTP payloads
+and persistence meet.
+
+Two separators are accepted between the ticker and its market suffix:
+
+* ``@`` is the preferred separator (``0700@HK``) because ``@`` never appears
+  inside a real ticker, so it can never be ambiguous.
+* ``.`` remains supported for backwards compatibility (``0700.HK``). When both
+  appear, ``@`` wins (``BRK.B@US`` is ticker ``BRK.B`` in market ``us``).
 
 Key rule — never corrupt a ticker that merely contains a dot: only the text
-after the *last* dot is treated as a candidate suffix, and only when it is in
-the explicit suffix/alias allowlist below. ``BRK.B`` keeps the ``.B`` inside the
-ticker and never becomes ``BRK`` in a market named ``b``.
+after the *last* separator is treated as a candidate suffix, and only when it
+is in the explicit suffix/alias allowlist below. ``BRK.B`` keeps the ``.B``
+inside the ticker and never becomes ``BRK`` in a market named ``b``.
 """
 
 from __future__ import annotations
@@ -138,6 +146,26 @@ def split_tokens(raw_text: str) -> List[str]:
     return [token for token in _TOKEN_SPLIT_RE.split(raw_text) if token]
 
 
+def _candidate_suffix(text: str) -> Tuple[str, Optional[str]]:
+    """Split one token into ``(ticker_part, candidate_suffix)``.
+
+    ``@`` is checked first and is therefore the preferred market separator
+    (``0700@HK``); ``.`` is the fallback (``0700.HK``). Only the text after the
+    *last* separator is a candidate suffix, and only when the text before it is
+    non-empty — so a leading separator (``.US`` / ``@HK``) keeps the whole
+    token intact. The returned suffix is lowercased; the caller decides whether
+    it is in the allowlist.
+    """
+    ticker = text.strip()
+    for separator in ("@", "."):
+        if separator in ticker:
+            head, suffix = ticker.rsplit(separator, 1)
+            if head.strip():
+                return head.strip(), suffix.lower()
+            return ticker, None
+    return ticker, None
+
+
 def market_for_suffix(suffix: str) -> Optional[str]:
     """Return the canonical market for a suffix, or None if not recognized."""
     return SUFFIX_TO_MARKET.get(suffix.strip().lower())
@@ -153,13 +181,15 @@ def parse_company_inputs(
 
     1. Split on whitespace / newline / comma / semicolon (and their full-width
        forms).
-    2. For each token, only the part after the *last* dot is a candidate
-       suffix. If it is in ``SUFFIX_TO_MARKET`` (case-insensitive) it selects
-       that market and the remainder becomes the ticker.
+    2. For each token, only the part after the *last* ``@`` (or, when there is
+       no ``@``, the last ``.``) is a candidate suffix. If it is in
+       ``SUFFIX_TO_MARKET`` (case-insensitive) it selects that market and the
+       remainder becomes the ticker.
     3. Otherwise the whole token is the ticker and ``default_market`` applies
        (so ``BRK.B`` stays ``BRK.B`` in the selected market).
     4. De-duplicate by ``(ticker.upper(), market)``, preserving first-seen
-       order. ``ABC.US`` and ``ABC.HK`` remain two distinct entries.
+       order. ``ABC.US`` and ``ABC.HK`` remain two distinct entries, and
+       ``ABC@US`` de-duplicates against ``ABC.US`` (same ticker + market).
     """
     parsed: List[ParsedCompanyInput] = []
     seen = set()
@@ -167,13 +197,13 @@ def parse_company_inputs(
         ticker = token.strip()
         market = default_market
         explicit_suffix: Optional[str] = None
-        if "." in ticker:
-            head, suffix = ticker.rsplit(".", 1)
-            canonical = SUFFIX_TO_MARKET.get(suffix.lower())
-            if canonical is not None and head.strip():
-                ticker = head.strip()
+        head, suffix = _candidate_suffix(ticker)
+        if suffix is not None:
+            canonical = SUFFIX_TO_MARKET.get(suffix)
+            if canonical is not None:
+                ticker = head
                 market = canonical
-                explicit_suffix = suffix.lower()
+                explicit_suffix = suffix
         key = (ticker.upper(), market)
         if key in seen:
             continue
