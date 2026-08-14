@@ -356,9 +356,10 @@ class SQLiteInformationRepository:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(str(self._database_path))
+        connection = sqlite3.connect(str(self._database_path), timeout=10.0)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA journal_mode = WAL")
         try:
             yield connection
             connection.commit()
