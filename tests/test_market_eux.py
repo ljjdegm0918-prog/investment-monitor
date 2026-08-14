@@ -179,23 +179,11 @@ class MarketEUXFinnhubSkipTests(unittest.TestCase):
 
 
 class MarketEUXDisclosureLockTests(unittest.TestCase):
-    def test_no_eux_disclosure_connector_is_registered_yet(self) -> None:
-        """Lock the EUX-1 spike decision until a key-free source lands.
-
-        EUX-1 spike (2026-08-11): Eurex circulars
-        (``eurex.com/ex-en/find/circulars``) are a JS-driven search
-        surface with no server-rendered per-product rows and no stable
-        JSON feed; Eurex derivatives have no issuer OAM (products are
-        exchange-listed contracts, not issuers). No circular connector is
-        wired and no stock OAM (eqs_dgap / investegate / uk / de / cxe)
-        is re-mapped onto market=eux. Remove this test when a real
-        key-free per-product Eurex notice feed lands.
-        """
+    def test_official_eurex_circulars_are_registered(self) -> None:
         registry = create_default_registry()
-
         names = registry.registered_names
+        self.assertIn("eurex_circulars", names)
         for blocked_name in (
-            "eurex_circulars",
             "eux_disclosure",
             "eux_circulars",
             "eurex_second_disclosure",
