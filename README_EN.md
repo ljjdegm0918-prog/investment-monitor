@@ -872,6 +872,44 @@ to a VPS or a container host, attach a persistent volume at `/app/data`, set
 appropriate for one small application instance; do not run several replicas
 against the same SQLite file.
 
+## Production reverse-proxy deployment requirements
+
+When the service listens on plain HTTP internally but browsers reach it through
+an HTTPS reverse proxy, **both** of the following requirements must be met. The
+service runs a same-origin check on **every** JSON POST request: the Origin
+header's scheme, hostname, and effective port must all match the Host header
+exactly (a header without an explicit port uses the default port of its scheme
+— 443 for `https`, 80 for `http`). Any mismatch is rejected with a `403`
+response whose JSON body says `"cross-origin request rejected"`. The result
+looks like a broken site: GET pages render fine, while every write endpoint —
+for example batch-adding companies via `POST /api/companies/batch` — fails with
+403.
+
+1. **Set `WEB_EXTERNAL_SCHEME=https` in the service environment.** The code
+   defaults to `http`, so behind an HTTPS proxy an `https://...` Origin is
+   compared against an expected scheme of `http` and every same-origin POST is
+   rejected. The scheme is taken from this variable only; client-supplied
+   `X-Forwarded-Proto` is never trusted.
+
+2. **Forward the client's original `Host` header, port included.** In nginx use
+   `proxy_set_header Host $http_host;` inside the `location` block. `$host`
+   drops the port, so with a non-standard external port the backend sees a
+   port-less Host, applies the https default port `443`, and rejects an Origin
+   that carries the real port.
+
+Minimal nginx `location` example:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8765;
+    proxy_set_header Host $http_host;   # keep the client's host:port
+}
+```
+
+Missing either requirement produces the same symptom: every JSON POST returns
+`403` with `"cross-origin request rejected"` while the site looks healthy in a
+browser.
+
 ## Suggested manual acceptance test
 
 1. Start the server and open Today.

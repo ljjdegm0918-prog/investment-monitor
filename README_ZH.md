@@ -352,10 +352,21 @@ RESEARCH_MIN_EVIDENCE_ITEMS=3
 
 ### HTTPS 反向代理部署
 
-如果 Web 服务在本机 HTTP 监听、但浏览器通过 HTTPS 反向代理访问，则在受保护的部署环境中设置：
+Web 服务在本机以 HTTP 监听、但浏览器通过 HTTPS 反向代理访问时，生产部署必须同时满足以下两点，缺一不可：
+
+1. 在受保护的部署环境中设置：
 
 ```env
 WEB_EXTERNAL_SCHEME=https
+```
+
+2. 反向代理转发时保留客户端的原始 Host 头（含端口）。以 nginx 为例，`location` 内应使用 `$http_host` 而不是 `$host`：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8765;
+    proxy_set_header Host $http_host;   # 保留客户端的 host:port
+}
 ```
 
 本地 `http://127.0.0.1:8765` 开发通常保持：
@@ -364,7 +375,7 @@ WEB_EXTERNAL_SCHEME=https
 WEB_EXTERNAL_SCHEME=http
 ```
 
-该变量用于同源 POST/CSRF 校验，表示浏览器实际看到的外部协议，不是 Python 进程内部监听协议。客户端传来的 `X-Forwarded-Proto` 不被信任。
+**原理与症状**：`WEB_EXTERNAL_SCHEME` 用于同源 POST/CSRF 校验，表示浏览器实际看到的外部协议，不是 Python 进程内部监听协议；客户端传来的 `X-Forwarded-Proto` 不被信任。服务端对**每一个** JSON POST 请求做同源校验：Origin 的 (scheme, hostname, 有效端口) 必须与 Host 完全一致，Host/Origin 不带端口时按协议默认端口计算（https→443、http→80）。缺少 `WEB_EXTERNAL_SCHEME=https` 时默认按 `http` 比对，`https://...` 的 Origin 会被拒绝；nginx 用 `$host` 转发会丢弃端口，对外暴露在非 443 端口时，后端按默认端口 443 计算、与真实端口不匹配。任一不满足都会让所有 JSON POST 写接口（例如批量添加公司 `POST /api/companies/batch`）返回 `403`，响应体为 `{"error": "cross-origin request rejected"}`，而 GET 页面一切正常——容易误判为服务故障，实际是反代配置问题。
 
 ## 10. 日常操作建议
 
