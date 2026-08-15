@@ -177,7 +177,29 @@ EXTRA_ENV_BLOCKED_EXACT = frozenset(
         "LOCALAPPDATA",
     }
 )
-EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
+# 白名单后缀：只允许无害的运行时调优项通过 Web Settings 写入。
+# 任何含密钥/上游地址/TLS 开关语义的名字都进不来。
+EXTRA_ENV_ALLOWED_SUFFIXES = (
+    "_TIMEOUT_SECONDS",
+    "_MAX_RETRIES",
+    "_REQUESTS_PER_SECOND",
+    "_LOOKBACK_DAYS",
+    "_BACKFILL_DAYS",
+)
+# 危险子串（大小写不敏感）：密钥、上游地址、TLS 校验、鉴权材料一律拒绝。
+EXTRA_ENV_BLOCKED_SUBSTRINGS = (
+    "KEY",
+    "TOKEN",
+    "COOKIE",
+    "SECRET",
+    "PASSWORD",
+    "URL",
+    "VERIFY",
+    "SSL",
+    "AUTH",
+    "BEARER",
+)
+EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("dart", "OpenDART", "filings"),
@@ -1944,7 +1966,12 @@ class WebRepository:
             return False
         if name in EXTRA_ENV_BLOCKED_EXACT:
             return False
-        return not name.startswith(EXTRA_ENV_BLOCKED_PREFIXES)
+        if name.startswith(EXTRA_ENV_BLOCKED_PREFIXES):
+            return False
+        upper = name.upper()
+        if any(substring in upper for substring in EXTRA_ENV_BLOCKED_SUBSTRINGS):
+            return False
+        return name.endswith(EXTRA_ENV_ALLOWED_SUFFIXES)
 
     def _feed_where(self, filters: FeedFilters) -> Tuple[str, List[Any]]:
         conditions: List[str] = []

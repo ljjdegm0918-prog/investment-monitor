@@ -433,34 +433,39 @@ class WebApplicationTests(unittest.TestCase):
         saved = self.payload(self.application.handle(
             "POST",
             "/api/settings",
-            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": "abc123"}).encode(),
+            json.dumps({"key": "extra_env:FOO_TIMEOUT_SECONDS", "value": "8"}).encode(),
         ))
         settings = self.payload(
             self.application.handle("GET", "/api/settings")
         )
 
         self.assertTrue(saved["configured"])
-        self.assertEqual(saved["hint"], "••••c123")
-        self.assertEqual(os.environ["MY_APP_TOKEN"], "abc123")
+        self.assertEqual(saved["hint"], "••••")
+        self.assertEqual(os.environ["FOO_TIMEOUT_SECONDS"], "8")
         self.assertEqual(
             settings["extra_env"],
-            [{"name": "MY_APP_TOKEN", "configured": True, "hint": "••••c123"}],
+            [{"name": "FOO_TIMEOUT_SECONDS", "configured": True, "hint": "••••"}],
         )
-        self.assertNotIn("abc123", json.dumps(settings))
+        self.assertNotIn("8", json.dumps(settings))
 
         cleared = self.payload(self.application.handle(
             "POST",
             "/api/settings",
-            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": ""}).encode(),
+            json.dumps({"key": "extra_env:FOO_TIMEOUT_SECONDS", "value": ""}).encode(),
         ))
         settings = self.payload(
             self.application.handle("GET", "/api/settings")
         )
         self.assertFalse(cleared["configured"])
-        self.assertNotIn("MY_APP_TOKEN", os.environ)
+        self.assertNotIn("FOO_TIMEOUT_SECONDS", os.environ)
         self.assertEqual(settings["extra_env"], [])
 
-        for bad_key in ("extra_env:PATH", "extra_env:LD_LIBRARY_PATH", "extra_env:1BAD"):
+        for bad_key in (
+            "extra_env:PATH",
+            "extra_env:LD_LIBRARY_PATH",
+            "extra_env:1BAD",
+            "extra_env:MY_APP_TOKEN",
+        ):
             response = self.application.handle(
                 "POST",
                 "/api/settings",
