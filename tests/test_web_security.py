@@ -162,6 +162,46 @@ class WebSecurityTests(unittest.TestCase):
             os.environ.pop(env_name, None)
             self.post_setting(f"extra_env:{env_name}", "")
 
+    # --- MED-05: backfill task history bound -----------------------------------
+
+    def test_backfill_task_history_keeps_at_most_100_terminal_tasks(self) -> None:
+        application = self.application
+        for index in range(105):
+            task_id = f"bf-{index}"
+            application._register_backfill_task(task_id, {"AAA": "us"}, "us")
+            application._set_backfill_task(
+                task_id,
+                status="success",
+                finished_at=f"2026-08-15T00:{index:02d}:00+00:00",
+                summary={"status": "success"},
+            )
+        application._register_backfill_task("bf-live", {"AAA": "us"}, "us")
+
+        terminal_tasks = [
+            task
+            for task in application._backfill_tasks.values()
+            if task["status"] in ("success", "partial", "failure")
+        ]
+        self.assertEqual(len(terminal_tasks), 100)
+        # 最老的 5 个终态任务被 LRU 淘汰，非终态任务不受影响。
+        for index in range(5):
+            self.assertNotIn(f"bf-{index}", application._backfill_tasks)
+        self.assertIn("bf-live", application._backfill_tasks)
+        self.assertEqual(application._backfill_tasks["bf-live"]["status"], "queued")
+
+    def test_backfill_concurrency_budget_is_two_slots(self) -> None:
+        application = self.application
+        # 同时运行的回填线程被 semaphore 限制为 2；这里是实现级断言。
+        self.assertEqual(
+            application._backfill_semaphore._value,
+            2,
+        )
+        self.assertTrue(application._backfill_semaphore.acquire(blocking=False))
+        self.assertTrue(application._backfill_semaphore.acquire(blocking=False))
+        self.assertFalse(application._backfill_semaphore.acquire(blocking=False))
+        application._backfill_semaphore.release()
+        application._backfill_semaphore.release()
+
     # --- MED-04: security response headers ------------------------------------
 
     def test_security_response_headers_served_on_http(self) -> None:

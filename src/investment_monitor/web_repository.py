@@ -304,9 +304,14 @@ class FeedFilters:
     page: int = 1
     page_size: int = 25
 
+    # Cap deep OFFSET pagination: beyond this the query degrades to O(n) scans.
+    MAX_PAGE = 1000
+
     def __post_init__(self) -> None:
         if self.page < 1:
             raise ValueError("page must be at least 1")
+        if self.page > self.MAX_PAGE:
+            raise ValueError(f"page must be at most {self.MAX_PAGE}")
         if not 1 <= self.page_size <= 100:
             raise ValueError("page_size must be between 1 and 100")
         if self.start_date and self.end_date and self.start_date > self.end_date:

@@ -929,6 +929,11 @@ class WebRepositoryTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=bad_name):
                 self.repository.set_setting(f"extra_env:{bad_name}", "x")
 
+    def test_feed_page_is_capped_at_one_thousand(self) -> None:
+        with self.assertRaises(ValueError):
+            FeedFilters(page=1001)
+        self.assertEqual(FeedFilters(page=1000).page, 1000)
+
     def test_news_status_aggregates_multiple_news_sources(self) -> None:
         repository = WebRepository(
             self.database_path,
