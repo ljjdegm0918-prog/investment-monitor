@@ -12,6 +12,7 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
+import uuid
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
@@ -257,6 +258,8 @@ class WebApplication:
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
+        self._backfill_tasks: Dict[str, Dict[str, Any]] = {}
+        self._backfill_tasks_lock = threading.Lock()
 
     def handle(
         self,
@@ -311,6 +314,12 @@ class WebApplication:
                 ))
             if method == "GET" and parsed.path == "/api/sources":
                 return self._json({"sources": self.repository.connector_statuses()})
+            if method == "GET" and parsed.path.startswith("/api/backfill-tasks/"):
+                task_id = parsed.path[len("/api/backfill-tasks/"):]
+                task = self._backfill_task_payload(task_id)
+                if task is None:
+                    return self._json({"error": "Backfill task not found"}, 404)
+                return self._json(task)
             if method == "GET" and parsed.path == "/api/research/model":
                 return self._json({"model": self.research.model_status()})
             if method == "GET" and parsed.path == "/api/research/companies":
@@ -406,13 +415,6 @@ class WebApplication:
                 added = []
                 already_present = []
                 failed = []
-                collection_summaries = []
-                lookback_days = _environment_int(
-                    "INITIAL_BACKFILL_DAYS",
-                    365,
-                    minimum=1,
-                    maximum=3650,
-                )
                 for market, items in group_by_market(parsed):
                     tickers = tuple(item.ticker for item in items)
                     resolver = self._resolver_for(market)
@@ -443,16 +445,10 @@ class WebApplication:
                             for source in relevant_sources
                             for ticker in added_tickers
                         ))
-                        collection_summaries.extend(
-                            self.collect_tickers(
-                                added_tickers,
-                                lookback_days=lookback_days,
-                                markets={ticker: market for ticker in added_tickers},
-                                sources=(source,),
-                                initial_backfill=True,
-                            )
-                            for source in relevant_sources
-                        )
+                markets_map = {
+                    str(record["ticker"]): str(record["market"])
+                    for record in added
+                }
                 response = {
                     "added": added,
                     "already_present": already_present,
@@ -469,11 +465,23 @@ class WebApplication:
                         {"market": market, "tickers": [item.ticker for item in items]}
                         for market, items in group_by_market(parsed)
                     ],
+                    "collection": None,
                 }
-                if collection_summaries:
-                    response["collection"] = _combine_collection_summaries(
-                        tuple(collection_summaries)
+                if markets_map:
+                    task_id = f"bf-{uuid.uuid4()}"
+                    self._register_backfill_task(
+                        task_id, markets_map, default_market
                     )
+                    threading.Thread(
+                        target=self._run_add_company_backfill,
+                        args=(task_id, markets_map, default_market),
+                        daemon=True,
+                    ).start()
+                    response["backfill_task_id"] = task_id
+                    response["backfill_status"] = "queued"
+                else:
+                    response["backfill_task_id"] = None
+                    response["backfill_status"] = "completed"
                 return self._json(response, 201)
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
@@ -672,6 +680,114 @@ class WebApplication:
 
     def _relevant_sources(self, market: str) -> Tuple[str, ...]:
         return relevant_sources_for_market(self.enabled_sources, market)
+
+    def _register_backfill_task(
+        self,
+        task_id: str,
+        markets_map: Mapping[str, str],
+        default_market: str,
+    ) -> Dict[str, Any]:
+        """Create the in-memory add-company backfill task in the queued state."""
+        task = {
+            "id": task_id,
+            "status": "queued",
+            "tickers": list(markets_map.keys()),
+            "market": default_market,
+            "markets": dict(markets_map),
+            "sources": None,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "summary": None,
+        }
+        with self._backfill_tasks_lock:
+            self._backfill_tasks[task_id] = task
+        return task
+
+    def _set_backfill_task(self, task_id: str, **updates: Any) -> None:
+        with self._backfill_tasks_lock:
+            task = self._backfill_tasks.get(task_id)
+            if task is not None:
+                task.update(updates)
+
+    def _backfill_task_payload(self, task_id: str) -> Optional[Dict[str, Any]]:
+        with self._backfill_tasks_lock:
+            task = self._backfill_tasks.get(task_id)
+        return dict(task) if task is not None else None
+
+    def _run_add_company_backfill(
+        self,
+        task_id: str,
+        markets_map: Mapping[str, str],
+        default_market: str,
+    ) -> None:
+        """Backfill newly added companies (across markets) in a background thread."""
+        del default_market  # markets_map 已含每个 ticker 的市场，无需再按默认市场分组
+        market_tickers: Dict[str, List[str]] = {}
+        for ticker, market in markets_map.items():
+            market_tickers.setdefault(market, []).append(ticker)
+        sources: List[str] = []
+        for market in market_tickers:
+            for source in self._relevant_sources(market):
+                if source not in sources:
+                    sources.append(source)
+
+        self._set_backfill_task(
+            task_id,
+            status="running",
+            started_at=datetime.now(timezone.utc).isoformat(),
+            sources=sources,
+        )
+        try:
+            lookback_days = _environment_int(
+                "ADD_COMPANY_BACKFILL_DAYS",
+                30,
+                minimum=1,
+                maximum=3650,
+            )
+            summaries = []
+            for market, tickers in market_tickers.items():
+                tickers_tuple = tuple(tickers)
+                for source in self._relevant_sources(market):
+                    summaries.append(self.collect_tickers(
+                        tickers_tuple,
+                        lookback_days=lookback_days,
+                        markets={ticker: market for ticker in tickers_tuple},
+                        sources=(source,),
+                        initial_backfill=True,
+                    ))
+            summary = _combine_collection_summaries(tuple(summaries))
+        except Exception as error:
+            LOGGER.exception("Add-company backfill %s failed", task_id)
+            status = "failure"
+            error_message = str(error) or error.__class__.__name__
+            summary = _empty_collection_summary(tuple(markets_map.keys()))
+        else:
+            combined_status = str(summary.get("status"))
+            if combined_status == "failure":
+                status = "failure"
+            elif combined_status == "partial":
+                status = "partial"
+            else:
+                status = "success"
+            failures = summary.get("failures") or []
+            error_message = (
+                "; ".join(
+                    f"{failure.get('source', 'unknown')}: "
+                    f"{failure.get('ticker', '?')}: "
+                    f"{failure.get('message', '')}"
+                    for failure in failures
+                )
+                if failures
+                else None
+            )
+        self._set_backfill_task(
+            task_id,
+            status=status,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            error=error_message,
+            summary=summary,
+        )
 
     def _ensure_active_sync_states(self) -> None:
         source_tickers = tuple(
