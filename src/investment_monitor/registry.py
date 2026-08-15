@@ -133,7 +133,7 @@ SOURCE_MARKETS = {
     "companies_house": "uk", "investegate": "uk", "yahoo_uk": "uk",
     "google_news_uk": "uk", "lse_share_chat": "uk",
     "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
-    "google_news_hk": "hk",
+    "google_news_hk": "hk", "xueqiu": frozenset({"cn", "hk"}),
     "yahoo_ca": "ca", "google_news_ca": "ca", "ceoca_ca": "ca",
     "sedar_plus": "ca", "cse_filings": "ca", "neo_filings": "ca",
     "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
@@ -172,11 +172,14 @@ def relevant_sources_for_market(
     names keep the legacy all-market behavior so an injected/custom registry
     connector is not silently dropped from collection.
     """
-    return tuple(
-        name
-        for name in names
-        if SOURCE_MARKETS.get(str(name)) in (None, market)
-    )
+    relevant = []
+    for name in names:
+        scope = SOURCE_MARKETS.get(str(name))
+        if scope is None or scope == market:
+            relevant.append(name)
+        elif isinstance(scope, (tuple, list, set, frozenset)) and market in scope:
+            relevant.append(name)
+    return tuple(relevant)
 
 
 class SourceRegistry:

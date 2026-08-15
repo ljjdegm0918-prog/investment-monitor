@@ -53,6 +53,18 @@ const MESSAGES = {
     "manage.market": "Market",
     "manage.search": "Search",
     "manage.add_ticker": "Add ticker",
+    "manage.manual_add": "Ticker input",
+    "manage.csv_add": "CSV / table import",
+    "manage.csv_desc": "Paste spreadsheet rows or upload a CSV/TSV file. Each row can use a different market and list.",
+    "manage.csv_rows": "CSV or spreadsheet rows",
+    "manage.csv_file": "Or choose a CSV/TSV file",
+    "manage.csv_import": "Import rows",
+    "manage.csv_help": "Required columns: ticker, market, list. List accepts an existing list name or slug. Up to 500 rows.",
+    "manage.csv_done": "CSV import completed.",
+    "manage.csv_added": "Added",
+    "manage.csv_existing": "Already present",
+    "manage.csv_failed": "Failed",
+    "manage.csv_row": "Row {row}",
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
@@ -168,6 +180,18 @@ const MESSAGES = {
     "manage.market": "市场",
     "manage.search": "搜索",
     "manage.add_ticker": "添加代码",
+    "manage.manual_add": "代码输入",
+    "manage.csv_add": "CSV / 表格导入",
+    "manage.csv_desc": "可粘贴表格行或上传 CSV/TSV 文件；每一行可指定不同市场和列表。",
+    "manage.csv_rows": "CSV 或表格内容",
+    "manage.csv_file": "或者选择 CSV/TSV 文件",
+    "manage.csv_import": "导入表格",
+    "manage.csv_help": "必需列：ticker、market、list。list 可填写现有列表名称或 slug，最多 500 行。",
+    "manage.csv_done": "CSV 导入完成。",
+    "manage.csv_added": "已添加",
+    "manage.csv_existing": "已存在",
+    "manage.csv_failed": "失败",
+    "manage.csv_row": "第 {row} 行",
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
@@ -300,6 +324,7 @@ function applyStaticLabels() {
   }
 }
 
+const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","aq","cxe","emf","trq","eux","unknown"];
 const state = { bootstrap: null, selectedList: "" };
 document.addEventListener("DOMContentLoaded", init);
 
@@ -418,9 +443,12 @@ async function renderManage() {
     </section>
     <section class="management-section" aria-labelledby="companies-title">
       <div class="section-heading"><div><h2 id="companies-title">${t("manage.companies")}</h2><p id="company-context"></p></div></div>
-      <form id="company-search" class="search-form">
-        <label for="company-query">${t("manage.search_by")}</label>
-        <div>
+      <div class="company-add-grid">
+        <div class="company-add-card">
+          <h3>${t("manage.manual_add")}</h3>
+          <form id="company-search" class="search-form">
+            <label for="company-query">${t("manage.search_by")}</label>
+            <div>
           <select id="market-select" aria-label="${t("manage.market")}">
             <option value="us" selected>US</option>
             <option value="jp">JP</option>
@@ -450,9 +478,21 @@ async function renderManage() {
           <input id="company-query" autocomplete="off" placeholder="e.g. Apple, AAPL, or RY.TO" required>
           <button class="button primary" type="submit">${t("manage.search")}</button>
           <button class="button" id="add-ticker-direct" type="button">${t("manage.add_ticker")}</button>
+            </div>
+            <small id="market-hint">${marketHint("us")}</small>
+          </form>
         </div>
-        <small id="market-hint">${marketHint("us")}</small>
-      </form>
+        <form id="company-csv" class="company-add-card csv-import-form">
+          <div><h3>${t("manage.csv_add")}</h3><p>${t("manage.csv_desc")}</p></div>
+          <label for="company-csv-input">${t("manage.csv_rows")}</label>
+          <textarea id="company-csv-input" spellcheck="false" placeholder="ticker,market,list&#10;AAPL,US,holdings&#10;7203,JP,watchlist&#10;RY,CA,planned&#10;BHP,AU,holdings"></textarea>
+          <small>${t("manage.csv_help")}<br><code>${MARKET_CODES.join(", ")}</code></small>
+          <label for="company-csv-file">${t("manage.csv_file")}</label>
+          <input id="company-csv-file" type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values">
+          <button class="button primary" type="submit">${t("manage.csv_import")}</button>
+        </form>
+      </div>
+      <div id="csv-import-result" aria-live="polite"></div>
       <div id="candidate-results"></div><div id="company-table"></div>
     </section>
     <section class="management-section" aria-labelledby="sources-title">
@@ -474,6 +514,8 @@ function bindManagement() {
   document.getElementById("company-search").addEventListener("submit", searchCompanies);
   document.getElementById("market-select").addEventListener("change", updateMarketHint);
   document.getElementById("add-ticker-direct").addEventListener("click", addTickerDirect);
+  document.getElementById("company-csv-file").addEventListener("change", loadCsvFile);
+  document.getElementById("company-csv").addEventListener("submit", importCompanyCsv);
   updateMarketHint();
 }
 
@@ -598,6 +640,40 @@ async function searchCompanies(event) {
     target.innerHTML = data.candidates.length ? `<div class="candidate-list">${data.candidates.map(candidate => `<article><div><strong>${esc(candidate.name)}</strong><p>${esc(candidate.ticker)} · ${esc(candidate.exchange)} · ${esc(candidate.region)}</p></div><button class="button add-candidate" data-ticker="${escAttr(candidate.ticker)}" data-market="${escAttr(candidate.market)}">${t("manage.confirm_add")}</button></article>`).join("")}</div>` : `<div class="empty compact"><p>${t("manage.no_matching_candidates")}</p></div>`;
     document.querySelectorAll(".add-candidate").forEach(button => button.addEventListener("click", () => addCandidate(button.dataset.ticker, button.dataset.market)));
   } catch (error) { target.innerHTML = errorState(t("manage.search_no_results"), error.message); }
+}
+
+async function loadCsvFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try { document.getElementById("company-csv-input").value = await file.text(); }
+  catch (_) { toast(t("common.request_failed"), true); }
+}
+
+async function importCompanyCsv(event) {
+  event.preventDefault();
+  const button = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  const target = document.getElementById("csv-import-result");
+  button.disabled = true;
+  try {
+    const result = await api("/api/companies/csv", {
+      method:"POST",
+      body:JSON.stringify({csv:document.getElementById("company-csv-input").value}),
+    });
+    target.innerHTML = csvImportResult(result);
+    toast(t("manage.csv_done"));
+    await reloadBootstrap();
+    await refreshManagement();
+  } catch (error) {
+    target.innerHTML = `<div class="csv-result error">${esc(error.message)}</div>`;
+  } finally { button.disabled = false; }
+}
+
+function csvImportResult(result) {
+  const sections = [];
+  if (result.added?.length) sections.push(`<strong>${t("manage.csv_added")}:</strong> ${result.added.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.already_present?.length) sections.push(`<strong>${t("manage.csv_existing")}:</strong> ${result.already_present.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.failed?.length) sections.push(`<strong>${t("manage.csv_failed")}:</strong> ${result.failed.map(item => `${item.row ? `${t("manage.csv_row", {row:item.row})}: ` : ""}${esc(item.ticker)} — ${esc(item.error)}`).join("; ")}`);
+  return `<div class="csv-result">${sections.join("<br>") || t("manage.csv_done")}</div>`;
 }
 
 async function addTickerDirect() {
