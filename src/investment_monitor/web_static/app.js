@@ -37,6 +37,7 @@ const MESSAGES = {
     "common.workspace_failed": "Workspace request failed",
     "common.request_failed_status": "Request failed ({status})",
     "common.asia_shanghai": "Asia/Shanghai",
+    "common.none_recorded": "None recorded",
     "cat.filings": "Filings",
     "cat.news": "News",
     "cat.community": "Community",
@@ -245,6 +246,7 @@ const MESSAGES = {
     "common.workspace_failed": "工作区请求失败",
     "common.request_failed_status": "请求失败（{status}）",
     "common.asia_shanghai": "上海时间",
+    "common.none_recorded": "无记录",
     "cat.filings": "申报",
     "cat.news": "新闻",
     "cat.community": "社区",
@@ -699,7 +701,7 @@ function researchCompanyRow(company) {
   const latest = company.latest_evidence_at ? formatDateTime(company.latest_evidence_at) : t("common.none_recorded");
   const generated = company.latest_generated_at ? formatDateTime(company.latest_generated_at) : t("research.no_card");
   return `<tr>
-    <td>${esc(company.name)}<br><small>${esc((company.lists || []).join(", "))}</small></td>
+    <td>${esc(company.name)}<br><small>${(company.lists || []).map(slug => esc(listDisplayName(slug))).join(", ")}</small></td>
     <td>${esc(company.ticker)}</td>
     <td>${esc(String(company.market).toUpperCase())}</td>
     <td>${coverage}</td>
@@ -856,7 +858,7 @@ function bindResearchPrint() {
 function listScopeLabel(slug) {
   if (!slug) return t("research.all_lists");
   const found = (state.bootstrap?.lists || []).find(l => l.slug === slug);
-  return found ? found.name : slug;
+  return found ? listDisplayName(found) : listDisplayName(slug);
 }
 
 function researchCardMeta(card) {
@@ -955,6 +957,25 @@ function researchInfoTypeLabel(type) {
 }
 
 const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","aq","cxe","emf","trq","eux","unknown"];
+
+// 固定列表名按当前语言显示；用户重命名的自定义列表始终显示用户的名字。
+const FIXED_LIST_LABELS = {
+  holdings: {en: "Holdings", "zh-CN": "持仓"},
+  planned: {en: "Planned Purchases", "zh-CN": "计划买入"},
+  watchlist: {en: "Watchlist", "zh-CN": "观察列表"},
+};
+function listDisplayName(list) {
+  if (typeof list === "string") {
+    const found = (state.bootstrap?.lists || []).find(item => item.slug === list);
+    if (found) return listDisplayName(found);
+    const label = FIXED_LIST_LABELS[list];
+    return label ? (label[lang] || label.en) : list;
+  }
+  if (list && list.is_fixed && FIXED_LIST_LABELS[list.slug]) {
+    return FIXED_LIST_LABELS[list.slug][lang] || FIXED_LIST_LABELS[list.slug].en;
+  }
+  return list ? list.name : "";
+}
 
 async function renderManage() {
   document.getElementById("page").innerHTML = `
@@ -1057,7 +1078,7 @@ function renderLists() {
   if (state.selectedList && !lists.some(list => list.slug === state.selectedList)) state.selectedList = lists[0]?.slug || "";
   document.getElementById("list-strip").innerHTML = lists.length ? lists.map(list => `
     <article class="list-card ${list.slug === state.selectedList ? "selected" : ""}" data-slug="${escAttr(list.slug)}">
-      <button class="list-select" type="button"><strong>${esc(list.name)}</strong><span>${t("manage.companies_count", {count: list.company_count})}</span></button>
+      <button class="list-select" type="button"><strong>${esc(listDisplayName(list))}</strong><span>${t("manage.companies_count", {count: list.company_count})}</span></button>
       <div><button class="text-button rename-list" type="button">${t("manage.rename")}</button><button class="text-button danger delete-list" type="button">${t("manage.delete")}</button></div>
     </article>`).join("") : `<div class="empty compact"><p>${t("manage.create_list_first")}</p></div>`;
   document.querySelectorAll(".list-select").forEach(button => button.addEventListener("click", () => { state.selectedList = button.closest(".list-card").dataset.slug; renderLists(); renderCompanies(); }));
@@ -1083,7 +1104,7 @@ async function deleteList(slug) {
 function renderCompanies() {
   const list = state.bootstrap.lists.find(item => item.slug === state.selectedList);
   const companies = state.bootstrap.companies.filter(company => company.list_slugs.includes(state.selectedList));
-  document.getElementById("company-context").textContent = list ? `${list.name} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
+  document.getElementById("company-context").textContent = list ? `${listDisplayName(list)} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
   document.getElementById("company-table").innerHTML = companies.length ? `<div class="table-wrap"><table><thead><tr><th>${t("manage.company")}</th><th>${t("manage.ticker")}</th><th>${t("manage.exchange")}</th><th>${t("manage.region")}</th><th></th></tr></thead><tbody>${companies.map(company => `<tr><td>${esc(company.name)}</td><td>${esc(company.ticker)}</td><td>${esc(exchangeLabel(company.exchange))}</td><td>${regionForMarket(company.market)}</td><td><button class="text-button danger remove-company" data-ticker="${escAttr(company.ticker)}" data-market="${escAttr(company.market)}">${t("manage.remove")}</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty compact"><p>${t("manage.no_companies")}</p></div>`;
   document.querySelectorAll(".remove-company").forEach(button => button.addEventListener("click", () => removeCompany(button.dataset.ticker, button.dataset.market)));
 }
@@ -1138,7 +1159,7 @@ function renderSources(sources) {
 }
 
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
-function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
+function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(listDisplayName(list))}</option>`).join(""); }
 function statusLabel(status) { const key = {connected:"status.connected", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
 function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
 function categoryLabel(type) { const key = {Filing:"cat.official_filings", News:"cat.news", Community:"cat.community"}[type]; return key ? t(key) : type; }
