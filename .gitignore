@@ -35,5 +35,8 @@ build/
 dist/
 *.egg-info/
 
+# Local-only Agents SDK programming environment
+/agents_sdk/
+
 # JavaScript dependencies
 node_modules/
