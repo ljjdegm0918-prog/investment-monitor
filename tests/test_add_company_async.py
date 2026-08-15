@@ -153,8 +153,10 @@ class AddCompanyAsyncTests(unittest.TestCase):
 
         self.assertEqual(
             list(sources),
-            ["sec", "yahoo_us", "google_news_us", "seeking_alpha", "substack", "xueqiu"],
+            ["sec", "yahoo_us", "google_news_us", "seeking_alpha", "substack"],
         )
+        # xueqiu 只服务 CN/HK（PR#34 收紧 SOURCE_MARKETS），不再进入 US 回填。
+        self.assertNotIn("xueqiu", sources)
         self.assertNotIn("yellowbrick", sources)
         self.assertNotIn("vic", sources)
         self.assertNotIn("x_community", sources)
