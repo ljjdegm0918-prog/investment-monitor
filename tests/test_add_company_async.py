@@ -100,6 +100,86 @@ class AddCompanyAsyncTests(unittest.TestCase):
             time.sleep(0.02)
         self.fail("backfill task did not reach a terminal state")
 
+    def _write_sources_settings(self, sources) -> None:
+        """以完整 sources 格式写 settings.yaml（显式 source_type）。"""
+        lines = ["sources:"]
+        for name, source_type in sources:
+            lines.append(f"  - name: {name}")
+            lines.append(f"    label: {name}")
+            lines.append(f"    source_type: {source_type}")
+            lines.append("    enabled: true")
+        lines.append("database_path: ../data/web.sqlite3")
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8",
+        )
+
+    def test_add_company_backfill_sources_hk_orders_filings_news_before_community(
+        self,
+    ) -> None:
+        self._write_sources_settings([
+            ("hkexnews", "filings"),
+            ("yahoo_hk", "news"),
+            ("google_news_hk", "news"),
+            ("xueqiu", "community"),
+        ])
+        application = WebApplication(self.project_root)
+
+        sources = application._add_company_backfill_sources("hk")
+
+        self.assertEqual(
+            list(sources),
+            ["hkexnews", "yahoo_hk", "google_news_hk", "xueqiu"],
+        )
+        for stub in ("hotcopper_au", "lse_share_chat", "yellowbrick", "vic", "x_community"):
+            self.assertNotIn(stub, sources)
+
+    def test_add_company_backfill_sources_us_drops_stubs_and_orders_live_community(
+        self,
+    ) -> None:
+        self._write_sources_settings([
+            ("sec", "filings"),
+            ("yahoo_us", "news"),
+            ("google_news_us", "news"),
+            ("seeking_alpha", "community"),
+            ("substack", "community"),
+            ("yellowbrick", "community"),
+            ("vic", "community"),
+            ("x_community", "community"),
+            ("xueqiu", "community"),
+        ])
+        application = WebApplication(self.project_root)
+
+        sources = application._add_company_backfill_sources("us")
+
+        self.assertEqual(
+            list(sources),
+            ["sec", "yahoo_us", "google_news_us", "seeking_alpha", "substack", "xueqiu"],
+        )
+        self.assertNotIn("yellowbrick", sources)
+        self.assertNotIn("vic", sources)
+        self.assertNotIn("x_community", sources)
+
+    def test_add_company_backfill_sources_multi_market_union(self) -> None:
+        self._write_sources_settings([
+            ("sec", "filings"),
+            ("hkexnews", "filings"),
+            ("yahoo_hk", "news"),
+        ])
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        slug = self._create_list(application)
+        with patch.object(application, "hkexnews_resolver", _NoneResolver()):
+            response = application.handle(
+                "POST", "/api/companies/batch",
+                json.dumps({"tickers": "AAPL 00700@HK", "lists": [slug]}).encode(),
+            )
+        payload = self.payload(response)
+        task = self._wait_for_backfill(application, payload["backfill_task_id"])
+
+        self.assertEqual(task["sources"], ["sec", "hkexnews", "yahoo_hk"])
+
     def test_batch_add_returns_fast_with_queued_backfill_task(self) -> None:
         slug = self._create_list(self.application)
         started = time.monotonic()

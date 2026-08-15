@@ -94,6 +94,19 @@ EASTERN = ZoneInfo("America/New_York")
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
 
+# Add-company 回填源过滤依据（大脑拍板）：
+# - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
+# - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
+ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
+    "hotcopper_au",
+    "lse_share_chat",
+    "yellowbrick",
+    "vic",
+    "x_community",
+})
+ADD_COMPANY_BACKFILL_COMMUNITY_TAIL = frozenset({"xueqiu"})
+COMMUNITY_SOURCE_TYPE = "community"
+
 
 def _warm_universe_on_first_add(
     market: str,
@@ -681,6 +694,35 @@ class WebApplication:
     def _relevant_sources(self, market: str) -> Tuple[str, ...]:
         return relevant_sources_for_market(self.enabled_sources, market)
 
+    def _add_company_backfill_sources(self, market: str) -> Tuple[str, ...]:
+        """Return add-company backfill sources, filtered and ordered.
+
+        从 self._relevant_sources(market) 出发（保持 enabled_sources 原有顺序），
+        然后：
+        - 永远排除注册 stub（collect() 恒空）；
+        - filings/disclosure/news 等非 community 源排在前段，LIVE community
+          源排在后段；xueqiu 保留但强制放在 community 末尾。
+        分类依据是 settings 里每个 source 的 source_type；无 source_type 或
+        归属不清的一律视为非 community（放前段），不凭名字猜测。
+        """
+        source_types = {
+            source.name: str(source.source_type)
+            for source in self.source_catalog
+        }
+        front: List[str] = []
+        community: List[str] = []
+        tail: List[str] = []
+        for source in self._relevant_sources(market):
+            if source in ADD_COMPANY_BACKFILL_SKIP_SOURCES:
+                continue
+            if source in ADD_COMPANY_BACKFILL_COMMUNITY_TAIL:
+                tail.append(source)
+            elif source_types.get(source) == COMMUNITY_SOURCE_TYPE:
+                community.append(source)
+            else:
+                front.append(source)
+        return tuple(front + community + tail)
+
     def _register_backfill_task(
         self,
         task_id: str,
@@ -728,7 +770,7 @@ class WebApplication:
             market_tickers.setdefault(market, []).append(ticker)
         sources: List[str] = []
         for market in market_tickers:
-            for source in self._relevant_sources(market):
+            for source in self._add_company_backfill_sources(market):
                 if source not in sources:
                     sources.append(source)
 
@@ -748,7 +790,7 @@ class WebApplication:
             summaries = []
             for market, tickers in market_tickers.items():
                 tickers_tuple = tuple(tickers)
-                for source in self._relevant_sources(market):
+                for source in self._add_company_backfill_sources(market):
                     summaries.append(self.collect_tickers(
                         tickers_tuple,
                         lookback_days=lookback_days,
