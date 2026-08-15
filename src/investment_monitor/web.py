@@ -6,6 +6,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
@@ -169,6 +170,50 @@ class WebResponse:
     content_type: str = "application/json; charset=utf-8"
 
 
+_WEB_AUTH_REQUIRED_CODE = "web_auth_required"
+
+# Security response headers applied to every HTTP response by the handler.
+SECURITY_HEADERS = (
+    ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "same-origin"),
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
+    ),
+)
+
+
+def _web_auth_rejection(
+    path: str,
+    headers: Optional[Mapping[str, Any]],
+) -> Optional[WebResponse]:
+    """Reject API requests that miss the configured bearer token.
+
+    Authentication is only enforced for real HTTP requests (headers is not
+    None) so internal ``self.handle(...)`` calls stay exempt. When
+    ``WEB_AUTH_TOKEN`` is unset or empty, local development keeps the legacy
+    no-auth behavior.
+    """
+    if headers is None or not path.startswith("/api/"):
+        return None
+    expected_token = os.environ.get("WEB_AUTH_TOKEN", "").strip()
+    if not expected_token:
+        return None
+    authorization = _header_value(headers, "Authorization")
+    expected = f"Bearer {expected_token}"
+    if not hmac.compare_digest(authorization, expected):
+        return WebResponse(
+            401,
+            json.dumps({
+                "error": "Authorization required",
+                "code": _WEB_AUTH_REQUIRED_CODE,
+            }).encode("utf-8"),
+        )
+    return None
+
+
 class WebApplication:
     """Pure request dispatcher used by both HTTP server and tests."""
 
@@ -287,6 +332,9 @@ class WebApplication:
         parsed = urlparse(target)
         query = parse_qs(parsed.query)
         try:
+            rejection = _web_auth_rejection(parsed.path, headers)
+            if rejection is not None:
+                return rejection
             if method == "POST" and headers is not None:
                 rejection = _same_origin_json_write_rejection(headers)
                 if rejection is not None:
@@ -1534,6 +1582,8 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
         self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "max-age=60")
         self.end_headers()
         self.wfile.write(response.body)
