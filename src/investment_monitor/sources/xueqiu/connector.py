@@ -63,6 +63,7 @@ class XueqiuConnector:
     def __init__(self) -> None:
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
         self._status = self._STUB_STATUS
+        self._live_path_attempted = False
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
@@ -71,6 +72,16 @@ class XueqiuConnector:
     @property
     def status(self) -> str:
         """Instance status: stub, or LIVE(cookie) after a successful live path."""
+        return self._status
+
+    @property
+    def live_path_attempted(self) -> bool:
+        """Whether a non-empty cookie actually triggered an HTTP attempt."""
+        return self._live_path_attempted
+
+    @property
+    def last_collection_status(self) -> str:
+        """Collection outcome hint consumed by the pipeline (stub or LIVE)."""
         return self._status
 
     @classmethod
@@ -104,6 +115,7 @@ class XueqiuConnector:
             f"https://xueqiu.com/statuses/search.json"
             f"?symbol={code}&count=20"
         )
+        self._live_path_attempted = True
         try:
             req = Request(
                 url,

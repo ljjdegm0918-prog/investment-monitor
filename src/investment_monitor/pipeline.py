@@ -383,6 +383,16 @@ class CollectionPipeline:
                             ticker,
                             connector_error,
                         )
+                    elif (
+                        status_hint == "stub"
+                        and not bool(getattr(connector, "live_path_attempted", False))
+                    ):
+                        event_status = "empty"
+                        self._logger.info(
+                            "collection source=%s ticker=%s status=stub treated_as=empty",
+                            connector.name,
+                            ticker,
+                        )
                     elif connector_error:
                         event_status = "failure"
                         failures.append(CollectionFailure(

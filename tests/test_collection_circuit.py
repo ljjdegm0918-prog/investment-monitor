@@ -45,6 +45,25 @@ class FailingConnector:
         ]
 
 
+class StubStatusConnector:
+    """A connector that honestly reports stub status with a per-ticker note."""
+
+    name = "stub-source"
+    last_collection_status = "stub"
+
+    def __init__(self, live_path_attempted=False) -> None:
+        self._live_path_attempted = live_path_attempted
+        self.last_errors: tuple = ()
+
+    @property
+    def live_path_attempted(self) -> bool:
+        return self._live_path_attempted
+
+    def collect(self, request: CollectionRequest) -> List[InformationItem]:
+        self.last_errors = ((request.tickers[0], "stub note: no live path"),)
+        return []
+
+
 class CollectionCircuitTests(unittest.TestCase):
     def setUp(self) -> None:
         self.start_date = date(2026, 1, 1)
@@ -109,6 +128,29 @@ class CollectionCircuitTests(unittest.TestCase):
         statuses = [event.status for event in pipeline.last_events]
         self.assertIn("success", statuses)
         self.assertIn("failure", statuses)
+
+    def test_stub_status_without_live_attempt_is_informational_empty(self) -> None:
+        connector = StubStatusConnector(live_path_attempted=False)
+        pipeline = CollectionPipeline([connector])
+
+        items = pipeline.collect(self._request(("AAPL",)))
+
+        self.assertEqual(items, [])
+        self.assertEqual(pipeline.last_failures, ())
+        self.assertEqual(len(pipeline.last_events), 1)
+        event = pipeline.last_events[0]
+        self.assertEqual(event.status, "empty")
+        self.assertIn("stub note", event.error_message or "")
+
+    def test_stub_status_with_live_attempt_still_fails(self) -> None:
+        connector = StubStatusConnector(live_path_attempted=True)
+        pipeline = CollectionPipeline([connector])
+
+        items = pipeline.collect(self._request(("AAPL",)))
+
+        self.assertEqual(items, [])
+        self.assertEqual(len(pipeline.last_failures), 1)
+        self.assertEqual(pipeline.last_events[0].status, "failure")
 
 
 if __name__ == "__main__":
