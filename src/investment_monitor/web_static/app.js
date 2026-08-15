@@ -92,6 +92,11 @@ const MESSAGES = {
     "manage.latest_attempt": "Latest attempt",
     "manage.none_recorded": "None recorded",
     "manage.failure_details": "Failure details",
+    "manage.adding_company": "Adding…",
+    "manage.added_collecting_background": "{items} added. Collecting in background…",
+    "manage.collection_complete": "Collection complete.",
+    "manage.collection_partial": "Collection partial. {error}",
+    "manage.collection_failed": "Collection failed. {error}",
     "status.connected": "Connected",
     "status.data_stale": "Data stale",
     "status.not_connected": "Not connected",
@@ -283,6 +288,11 @@ const MESSAGES = {
     "manage.latest_attempt": "最近尝试",
     "manage.none_recorded": "无记录",
     "manage.failure_details": "失败详情",
+    "manage.adding_company": "正在添加…",
+    "manage.added_collecting_background": "{items} 已添加，正在后台采集…",
+    "manage.collection_complete": "采集完成。",
+    "manage.collection_partial": "采集部分完成。{error}",
+    "manage.collection_failed": "采集失败。{error}",
     "status.connected": "已连接",
     "status.data_stale": "数据过期",
     "status.not_connected": "未连接",
@@ -1003,19 +1013,42 @@ function renderCompanies() {
 
 async function addTickerDirect(event) {
   event.preventDefault();
+  const button = document.getElementById("add-ticker-direct");
+  if (button.disabled) return;
   if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
   const tickers = document.getElementById("company-query").value.trim();
   if (!tickers) { toast(t("manage.enter_ticker_first"), true); return; }
+  button.disabled = true;
+  toast(t("manage.adding_company"));
   try {
     const result = await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers, lists:[state.selectedList]})});
     const added = (result.added || []).map(row => `${esc(row.ticker)} (${esc(String(row.market).toUpperCase())})`);
-    if (added.length) toast(t("manage.added_multi", {items: added.join(", ")}));
+    if (added.length) toast(t("manage.added_collecting_background", {items: added.join(", ")}));
     for (const item of (result.failed || [])) {
       toast(`${esc(item.ticker)}: ${esc(item.error)}`, true);
     }
     await reloadBootstrap();
     await refreshManagement();
+    if (result.backfill_task_id) await pollBackfill(result.backfill_task_id);
   } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function pollBackfill(taskId) {
+  let consecutiveFailures = 0;
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const task = await api(`/api/backfill-tasks/${encodeURIComponent(taskId)}`);
+      if (task.status === "success") { toast(t("manage.collection_complete")); return; }
+      if (task.status === "partial") { toast(t("manage.collection_partial", {error: task.error || ""}).trim(), true); return; }
+      if (task.status === "failure") { toast(t("manage.collection_failed", {error: task.error || ""}).trim(), true); return; }
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= 3) return;
+    }
+  }
 }
 
 async function removeCompany(ticker, market) {
