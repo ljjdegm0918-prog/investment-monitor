@@ -39,9 +39,16 @@ server {
 }
 ```
 
-6. **浏览器 token**：部署后在浏览器控制台执行
-   `localStorage.setItem("im_web_auth_token", "<WEB_AUTH_TOKEN 的值>")`，
-   token 只存在浏览器 localStorage，不会写回服务端数据库。
+6. **浏览器 token**：打开站点时：
+   - 若 nginx 配置了 basic auth，先输入 basic 账号密码（第一道闸）；
+   - 页面检测到 API 返回 `401 web_auth_required` 时会显示「输入网站访问令牌」面板（中/英双语），
+     粘贴 `WEB_AUTH_TOKEN` 的值并点击「保存并重试」即可；token 只存浏览器 localStorage（键 `im_web_auth_token`），
+     不会写回服务端数据库。
+   - 控制台 `localStorage.setItem("im_web_auth_token", "<WEB_AUTH_TOKEN 的值>")` 仅作备用方式。
+
+7. **静态资源不鉴权**：`/static/*`（app.css/app.js）与 HTML 页面**不得**要求 Bearer 或 Web token；
+   浏览器加载样式表不会携带 `Authorization` 头。应用侧只对 `/api/*` 校验 Bearer，nginx 侧也不要在
+   `/static/` 单独加鉴权（basic auth 可与 HTML 同一 realm，浏览器会自动带 Basic）。
 
 ## 部署后自检
 

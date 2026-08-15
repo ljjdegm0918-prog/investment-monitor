@@ -38,6 +38,14 @@ const MESSAGES = {
     "common.request_failed_status": "Request failed ({status})",
     "common.asia_shanghai": "Asia/Shanghai",
     "common.none_recorded": "None recorded",
+    "auth.eyebrow": "ACCESS",
+    "auth.title": "Enter the Web access token",
+    "auth.desc": "This server requires a WEB_AUTH_TOKEN for every API request. The token is only stored in this browser.",
+    "auth.token_label": "Web Auth Token",
+    "auth.token_placeholder": "paste the WEB_AUTH_TOKEN value",
+    "auth.save_retry": "Save & retry",
+    "auth.clear_token": "Clear saved token",
+    "auth.help": "Get the token from the server owner (.env WEB_AUTH_TOKEN). It is never written back to the server or the database.",
     "cat.filings": "Filings",
     "cat.news": "News",
     "cat.community": "Community",
@@ -247,6 +255,14 @@ const MESSAGES = {
     "common.request_failed_status": "请求失败（{status}）",
     "common.asia_shanghai": "上海时间",
     "common.none_recorded": "无记录",
+    "auth.eyebrow": "访问",
+    "auth.title": "输入网站访问令牌",
+    "auth.desc": "此服务器要求所有 API 请求携带 WEB_AUTH_TOKEN。令牌只保存在当前浏览器中。",
+    "auth.token_label": "访问令牌",
+    "auth.token_placeholder": "粘贴 WEB_AUTH_TOKEN 的值",
+    "auth.save_retry": "保存并重试",
+    "auth.clear_token": "清除已保存令牌",
+    "auth.help": "向服务器管理员索取令牌（.env 中的 WEB_AUTH_TOKEN）。它绝不会被写回服务器或数据库。",
     "cat.filings": "申报",
     "cat.news": "新闻",
     "cat.community": "社区",
@@ -513,7 +529,10 @@ async function init() {
     if (view === "manage") await renderManage();
     else if (view === "research") await renderResearch();
     else await renderDaily();
-  } catch (error) { renderFatal(error); }
+  } catch (error) {
+    if (error && error.code === "web_auth_required") renderAuthPrompt();
+    else renderFatal(error);
+  }
 }
 
 async function renderDaily() {
@@ -1170,9 +1189,35 @@ function formatRange(start, end) { return start === end ? formatDay(start) : `${
 function formatTime(value) { return new Intl.DateTimeFormat(localeFor(), {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
-async function api(url, options={}) { const headers = {"Content-Type":"application/json", ...(options.headers||{})}; let token=""; try { token = localStorage.getItem("im_web_auth_token") || ""; } catch (_) { /* localStorage unavailable */ } if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(url, {...options, headers}); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || t("common.request_failed_status", {status: response.status})); return payload; }
+async function api(url, options={}) { const headers = {"Content-Type":"application/json", ...(options.headers||{})}; let token=""; try { token = localStorage.getItem("im_web_auth_token") || ""; } catch (_) { /* localStorage unavailable */ } if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(url, {...options, headers}); const payload = await response.json(); if (!response.ok) { const error = new Error(payload.error || t("common.request_failed_status", {status: response.status})); error.status = response.status; error.code = payload.code || ""; throw error; } return payload; }
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
 function safeUrl(value) { try { const url = new URL(String(value)); return ["http:", "https:"].includes(url.protocol) ? url.href : "#"; } catch (_) { return "#"; } }
+function renderAuthPrompt() {
+  const hasSaved = (() => { try { return Boolean(localStorage.getItem("im_web_auth_token")); } catch (_) { return false; } })();
+  document.getElementById("page").innerHTML = `
+    <section class="page-heading"><p class="eyebrow">${t("auth.eyebrow")}</p><h1>${t("auth.title")}</h1><p>${t("auth.desc")}</p></section>
+    <section class="management-section" aria-label="${escAttr(t("auth.title"))}">
+      <form id="web-auth-form" class="inline-form">
+        <label>${t("auth.token_label")}<input id="web-auth-token-input" type="password" autocomplete="off" placeholder="${escAttr(t("auth.token_placeholder"))}" required></label>
+        <button class="button primary" type="submit">${t("auth.save_retry")}</button>
+        ${hasSaved ? `<button class="button" id="web-auth-clear" type="button">${t("auth.clear_token")}</button>` : ""}
+      </form>
+      <p class="add-help">${t("auth.help")}</p>
+    </section>`;
+  document.getElementById("web-auth-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const value = document.getElementById("web-auth-token-input").value.trim();
+    if (!value) return;
+    try { localStorage.setItem("im_web_auth_token", value); } catch (_) { /* ignore */ }
+    location.reload();
+  });
+  const clearButton = document.getElementById("web-auth-clear");
+  if (clearButton) clearButton.addEventListener("click", () => {
+    try { localStorage.removeItem("im_web_auth_token"); } catch (_) { /* ignore */ }
+    location.reload();
+  });
+}
+
 function renderFatal(error) { document.getElementById("page").innerHTML = errorState(t("common.workspace_failed"), error.message); }
