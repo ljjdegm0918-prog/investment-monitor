@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import argparse
+import csv
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 import logging
 import mimetypes
 import os
 from pathlib import Path
 import threading
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -51,6 +53,7 @@ from .models import (
     MARKET_NL,
     MARKET_TW,
     MARKET_UK,
+    MARKET_UNKNOWN,
     MARKET_US,
 )
 from .tw_universe import tw_universe_name_map
@@ -475,6 +478,12 @@ class WebApplication:
                         tuple(collection_summaries)
                     )
                 return self._json(response, 201)
+            if method == "POST" and parsed.path == "/api/companies/csv":
+                payload = _decode_json(body)
+                return self._json(
+                    self._add_companies_csv(str(payload.get("csv", ""))),
+                    201,
+                )
             if method == "POST" and parsed.path == "/api/memberships/remove":
                 payload = _decode_json(body)
                 removed = self.repository.remove_membership(
@@ -537,6 +546,72 @@ class WebApplication:
             return self._json(
                 {"error": "The request could not be completed. Please retry."}, 500
             )
+
+    def _add_companies_csv(self, raw_csv: str) -> Mapping[str, Any]:
+        """Import mixed-market rows through the same path as manual adds."""
+        entries, parse_failures = _parse_company_csv(
+            raw_csv,
+            self.repository.fixed_lists(),
+        )
+        groups: Dict[Tuple[str, Tuple[str, ...]], List[Mapping[str, Any]]] = {}
+        for entry in entries:
+            key = (str(entry["market"]), tuple(entry["lists"]))
+            groups.setdefault(key, []).append(entry)
+
+        added: List[Mapping[str, Any]] = []
+        already_present: List[Mapping[str, Any]] = []
+        failed: List[Mapping[str, Any]] = list(parse_failures)
+        collection_summaries: List[Mapping[str, Any]] = []
+        for (market, lists), group in groups.items():
+            tickers = "\n".join(str(entry["ticker"]) for entry in group)
+            response = self.handle(
+                "POST",
+                "/api/companies/batch",
+                json.dumps({
+                    "tickers": tickers,
+                    "lists": list(lists),
+                    "market": market,
+                }).encode(),
+            )
+            payload = json.loads(response.body.decode("utf-8"))
+            if response.status >= 400:
+                for entry in group:
+                    failed.append({
+                        "row": entry["row"],
+                        "ticker": entry["ticker"],
+                        "error": str(payload.get("error") or "Import failed"),
+                    })
+                continue
+
+            row_by_ticker: Dict[str, int] = {}
+            for entry in group:
+                parsed_entries = parse_company_inputs(str(entry["ticker"]), market)
+                normalized = parsed_entries[0].ticker if parsed_entries else str(entry["ticker"])
+                row_by_ticker[normalized] = int(entry["row"])
+            for target, records in (
+                (added, payload.get("added") or ()),
+                (already_present, payload.get("already_present") or ()),
+                (failed, payload.get("failed") or ()),
+            ):
+                for record in records:
+                    enriched = dict(record)
+                    row = row_by_ticker.get(str(record.get("ticker") or ""))
+                    if row is not None:
+                        enriched["row"] = row
+                    target.append(enriched)
+            if payload.get("collection"):
+                collection_summaries.append(payload["collection"])
+
+        result: Dict[str, Any] = {
+            "added": added,
+            "already_present": already_present,
+            "failed": sorted(failed, key=lambda item: int(item.get("row", 0))),
+        }
+        if collection_summaries:
+            result["collection"] = _combine_collection_summaries(
+                collection_summaries
+            )
+        return result
 
     def collect_tickers(
         self,
@@ -805,7 +880,10 @@ class WebApplication:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
             return None
-        return self.resolver
+        if market in (MARKET_US, MARKET_UNKNOWN):
+            return self.resolver
+        # Keep any newly declared non-US market from falling through to SEC.
+        return None
 
     def _name_fallback_for(
         self,
@@ -1353,6 +1431,124 @@ def _decode_json(body: bytes) -> Mapping[str, Any]:
     return payload
 
 
+_MARKET_ALIASES = {
+    "usa": "us", "united states": "us",
+    "japan": "jp",
+    "hong kong": "hk",
+    "china": "cn",
+    "korea": "kr", "south korea": "kr",
+    "gb": "uk", "united kingdom": "uk",
+    "taiwan": "tw",
+    "canada": "ca",
+    "australia": "au",
+    "belgium": "be",
+    "france": "fr",
+    "germany": "de",
+    "netherlands": "nl",
+    "italy": "it",
+    "spain": "es",
+    "singapore": "sg",
+    "switzerland": "ch",
+    "poland": "pl",
+    "sweden": "se",
+    "aqse": "aq", "aquis": "aq",
+    "cboe europe": "cxe",
+    "european mutual funds": "emf",
+    "turquoise": "trq",
+    "eurex": "eux",
+}
+
+
+def _parse_company_csv(
+    raw_csv: str,
+    lists: Sequence[Mapping[str, Any]],
+) -> Tuple[List[Mapping[str, Any]], List[Mapping[str, Any]]]:
+    """Parse ticker/market/list CSV or spreadsheet rows with partial errors."""
+    text = raw_csv.lstrip("\ufeff").strip()
+    if not text:
+        raise ValueError("Paste CSV data or choose a CSV file")
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",\t;")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text), dialect))
+    if not rows:
+        raise ValueError("CSV must include a header row")
+    if len(rows) > 501:
+        raise ValueError("CSV can contain at most 500 data rows")
+
+    header_aliases = {
+        "ticker": "ticker", "symbol": "ticker", "code": "ticker",
+        "market": "market", "region": "market",
+        "list": "list", "list_type": "list", "list name": "list",
+    }
+    header = [
+        header_aliases.get(cell.strip().lower(), cell.strip().lower())
+        for cell in rows[0]
+    ]
+    missing = [name for name in ("ticker", "market", "list") if name not in header]
+    if missing:
+        raise ValueError(
+            "CSV header must contain ticker, market, list; missing: "
+            + ", ".join(missing)
+        )
+    indexes = {name: header.index(name) for name in ("ticker", "market", "list")}
+    max_index = max(indexes.values())
+    list_aliases: Dict[str, str] = {}
+    for record in lists:
+        slug = str(record["slug"])
+        list_aliases[slug.casefold()] = slug
+        list_aliases[str(record["name"]).casefold()] = slug
+
+    aggregated: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    failures: List[Mapping[str, Any]] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        if not any(cell.strip() for cell in row):
+            continue
+        padded = row + [""] * max(0, max_index + 1 - len(row))
+        ticker = padded[indexes["ticker"]].strip().upper()
+        raw_market = padded[indexes["market"]].strip().casefold()
+        market = _MARKET_ALIASES.get(raw_market, raw_market)
+        raw_list = padded[indexes["list"]].strip()
+        list_slug = list_aliases.get(raw_list.casefold(), "")
+        error = ""
+        if not ticker:
+            error = "Ticker is required."
+        elif not all(character.isalnum() or character in ".-_" for character in ticker):
+            error = "Ticker may contain only letters, numbers, dot, hyphen, or underscore."
+        elif len(ticker) > 32:
+            error = "Ticker must be 32 characters or fewer."
+        elif not raw_market:
+            error = "Market is required."
+        elif market not in ALLOWED_MARKETS:
+            error = "Market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS)) + "."
+        elif not raw_list:
+            error = "List is required."
+        elif not list_slug:
+            error = "List was not found. Use an existing list slug or name."
+        if error:
+            failures.append({
+                "row": row_number,
+                "ticker": ticker or "—",
+                "error": error,
+            })
+            continue
+
+        key = (ticker, market)
+        entry = aggregated.setdefault(key, {
+            "row": row_number,
+            "ticker": ticker,
+            "market": market,
+            "lists": [],
+        })
+        if list_slug not in entry["lists"]:
+            entry["lists"].append(list_slug)
+
+    if not aggregated and not failures:
+        raise ValueError("CSV must include at least one data row")
+    return list(aggregated.values()), failures
+
+
 _CSRF_REJECTED = "research_csrf_rejected"
 
 
@@ -1797,21 +1993,23 @@ def _combine_collection_summaries(
         status = "success"
     else:
         status = "empty"
+    start_dates = [
+        str(summary["start_date"])
+        for summary in summaries
+        if summary["start_date"] is not None
+    ]
+    end_dates = [
+        str(summary["end_date"])
+        for summary in summaries
+        if summary["end_date"] is not None
+    ]
     return {
         "status": status,
         "tickers": [
             ticker for summary in summaries for ticker in summary["tickers"]
         ],
-        "start_date": min(
-            str(summary["start_date"])
-            for summary in summaries
-            if summary["start_date"] is not None
-        ),
-        "end_date": max(
-            str(summary["end_date"])
-            for summary in summaries
-            if summary["end_date"] is not None
-        ),
+        "start_date": min(start_dates) if start_dates else None,
+        "end_date": max(end_dates) if end_dates else None,
         "records_fetched": sum(int(summary["records_fetched"]) for summary in summaries),
         "inserted": sum(int(summary["inserted"]) for summary in summaries),
         "updated": sum(int(summary["updated"]) for summary in summaries),

@@ -1149,6 +1149,87 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(response.status, 400)
         self.assertIn("market", self.payload(response)["error"])
 
+    def test_csv_import_preserves_all_declared_markets_and_routes_sources(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n"
+            "  - yahoo_jp\n"
+            "  - yahoo_ca\n"
+            "  - asx_announcements\n"
+            "  - xueqiu\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        with patch(
+            "investment_monitor.web.ca_universe_name_map",
+            return_value={"RY": {"name": "Royal Bank", "exchange": "TSX"}},
+        ):
+            response = application.handle(
+                "POST",
+                "/api/companies/csv",
+                json.dumps({
+                    "csv": (
+                        "ticker,market,list\n"
+                        "7203,Japan,watchlist\n"
+                        "RY.TO,Canada,Planned Purchases\n"
+                        "BHP.AX,Australia,holdings\n"
+                        "600519,China,watchlist\n"
+                    )
+                }).encode(),
+            )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(
+            {(row["ticker"], row["market"]) for row in payload["added"]},
+            {("7203", "jp"), ("RY", "ca"), ("BHP", "au"), ("600519", "cn")},
+        )
+        self.assertNotIn("unknown", {row["market"] for row in payload["added"]})
+        self.assertEqual(
+            {call["sources"] for call in self.collection_calls},
+            {("yahoo_jp",), ("yahoo_ca",), ("asx_announcements",), ("xueqiu",)},
+        )
+        self.assertTrue(all(call["initial_backfill"] for call in self.collection_calls))
+
+    def test_csv_import_accepts_custom_list_name_and_reports_invalid_market(self) -> None:
+        custom = self.application.repository.create_list("High Conviction")
+        response = self.application.handle(
+            "POST",
+            "/api/companies/csv",
+            json.dumps({
+                "csv": (
+                    "ticker\tmarket\tlist\n"
+                    "7203\tJP\tHigh Conviction\n"
+                    "SAP\tZZ\tholdings\n"
+                )
+            }).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(payload["added"][0]["market"], "jp")
+        self.assertEqual(payload["failed"][0]["row"], 3)
+        self.assertIn("Market must be one of", payload["failed"][0]["error"])
+        company = next(
+            row
+            for row in self.application.repository.companies()
+            if row["ticker"] == "7203"
+        )
+        self.assertIn(custom["slug"], company["list_slugs"])
+
+    def test_non_us_markets_never_fall_through_to_sec_resolver(self) -> None:
+        for market in ("jp", "cn", "fr", "sg", "se"):
+            with self.subTest(market=market):
+                self.assertIsNone(self.application._resolver_for(market))
+        self.assertIs(self.application._resolver_for("us"), self.application.resolver)
+        self.assertIs(
+            self.application._resolver_for("unknown"),
+            self.application.resolver,
+        )
+
 
     def test_adding_nvda_immediately_backfills_sec_items(self) -> None:
         def nvda_collection_runner(**kwargs):
