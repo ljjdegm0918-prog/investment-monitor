@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import logging
+import os
 from typing import Iterable, List, Mapping, Optional, Tuple
 
 from .connectors.base import SourceConnector
@@ -49,6 +50,48 @@ class CollectionEvent:
     initial_backfill: bool = False
 
 
+def _circuit_breaker_threshold() -> int:
+    """Read the per-source circuit breaker threshold (default 2)."""
+    raw = os.environ.get("COLLECTION_CIRCUIT_BREAKER_THRESHOLD")
+    if raw is None:
+        return 2
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 2
+
+
+class _SourceCircuitBreaker:
+    """Per-source consecutive-failure circuit breaker for one collect() round.
+
+    同一 source 连续失败达到阈值后熔断，本轮跳过该 source 剩余 ticker；
+    一次成功（或非失败）尝试即重置连续失败计数。
+    """
+
+    def __init__(self, threshold: int) -> None:
+        self._threshold = max(1, int(threshold))
+        self._consecutive_failures: dict[str, int] = {}
+        self._open: set[str] = set()
+
+    def is_open(self, source: str) -> bool:
+        return source in self._open
+
+    def record_failure(self, source: str) -> None:
+        count = self._consecutive_failures.get(source, 0) + 1
+        self._consecutive_failures[source] = count
+        if count >= self._threshold:
+            self._open.add(source)
+
+    def record_success(self, source: str) -> None:
+        self._consecutive_failures[source] = 0
+
+    def message(self, source: str) -> str:
+        return (
+            f"circuit_open: {source} skipped remaining tickers after "
+            f"{self._threshold} consecutive failures"
+        )
+
+
 class CollectionPipeline:
     """Collect and persist each source/ticker pair independently."""
 
@@ -87,6 +130,7 @@ class CollectionPipeline:
         failures: List[CollectionFailure] = []
         events: List[CollectionEvent] = []
         save_result = SaveResult()
+        breaker = _SourceCircuitBreaker(_circuit_breaker_threshold())
 
         for connector in self._connectors:
             if bool(getattr(connector, "source_wide_collection", False)):
@@ -230,6 +274,40 @@ class CollectionPipeline:
                 )
             )
             for ticker in connector_tickers:
+                if breaker.is_open(connector.name):
+                    message = breaker.message(connector.name)
+                    skipped_at = datetime.now(timezone.utc)
+                    failures.append(CollectionFailure(
+                        source=connector.name,
+                        ticker=ticker,
+                        message=message,
+                    ))
+                    events.append(CollectionEvent(
+                        source=connector.name,
+                        ticker=ticker,
+                        started_at=skipped_at,
+                        finished_at=skipped_at,
+                        status="failure",
+                        records_read=0,
+                        records_written=0,
+                        records_inserted=0,
+                        records_updated=0,
+                        duplicate_records=0,
+                        error_message=message,
+                        market=request.market_for(ticker),
+                        requested_start_date=request.start_date,
+                        requested_end_date=request.end_date,
+                        effective_start_date=request.start_date,
+                        effective_end_date=request.end_date,
+                        coverage_kind="unknown",
+                        initial_backfill=self._initial_backfill,
+                    ))
+                    self._logger.warning(
+                        "collection source=%s ticker=%s circuit_open",
+                        connector.name,
+                        ticker,
+                    )
+                    continue
                 started_at = datetime.now(timezone.utc)
                 ticker_start_date = self._clamped_start_date(
                     connector,
@@ -362,6 +440,10 @@ class CollectionPipeline:
                         ),
                         initial_backfill=self._initial_backfill,
                     ))
+                    if event_status == "failure":
+                        breaker.record_failure(connector.name)
+                    else:
+                        breaker.record_success(connector.name)
                 except Exception as error:
                     message = str(error) or error.__class__.__name__
                     failure_details = self._connector_failure_details(connector)
@@ -416,6 +498,7 @@ class CollectionPipeline:
                         ),
                         initial_backfill=self._initial_backfill,
                     ))
+                    breaker.record_failure(connector.name)
 
         self._last_failures = tuple(failures)
         self._last_save_result = save_result

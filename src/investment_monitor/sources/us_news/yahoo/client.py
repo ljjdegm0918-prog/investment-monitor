@@ -44,7 +44,7 @@ class YahooUsNewsClient:
     def __init__(
         self,
         base_url: str = DEFAULT_BASE_URL,
-        timeout: float = 20.0,
+        timeout: float = 8.0,
         max_retries: int = 1,
         requests_per_second: float = 1.0,
         user_agent: str = "InvestmentMonitor/0.1 (internal workspace)",
@@ -78,7 +78,7 @@ class YahooUsNewsClient:
         return cls(
             base_url=os.environ.get("YAHOO_US_NEWS_URL", DEFAULT_BASE_URL),
             timeout=_read_float_environment(
-                "YAHOO_US_NEWS_TIMEOUT_SECONDS", 20.0
+                "YAHOO_US_NEWS_TIMEOUT_SECONDS", 8.0
             ),
             max_retries=_read_int_environment(
                 "YAHOO_US_NEWS_MAX_RETRIES", 1
