@@ -135,6 +135,17 @@ class WebSecurityTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn(b"Investment Monitor", response.body)
 
+    def test_static_assets_never_require_bearer(self) -> None:
+        os.environ["WEB_AUTH_TOKEN"] = "test-secret"
+        for asset in ("/static/app.css", "/static/app.js"):
+            with self.subTest(asset=asset):
+                response = self.application.handle(
+                    "GET",
+                    asset,
+                    headers={"Host": "127.0.0.1:8765"},
+                )
+                self.assertEqual(response.status, 200, asset)
+
     # --- HIGH-03: extra_env whitelist -------------------------------------------
 
     def test_extra_env_rejects_secret_and_url_and_tls_names(self) -> None:
