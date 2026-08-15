@@ -6,6 +6,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
@@ -169,6 +170,57 @@ class WebResponse:
     content_type: str = "application/json; charset=utf-8"
 
 
+_WEB_AUTH_REQUIRED_CODE = "web_auth_required"
+
+# Backfill task resource bounds: keep at most this many terminal tasks in
+# memory (LRU by finished_at) and run at most two backfills at once; extra
+# requests queue on the semaphore instead of being dropped.
+MAX_TERMINAL_BACKFILL_TASKS = 100
+MAX_CONCURRENT_BACKFILLS = 2
+BACKFILL_TERMINAL_STATUSES = frozenset({"success", "partial", "failure"})
+
+# Security response headers applied to every HTTP response by the handler.
+SECURITY_HEADERS = (
+    ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "same-origin"),
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
+    ),
+)
+
+
+def _web_auth_rejection(
+    path: str,
+    headers: Optional[Mapping[str, Any]],
+) -> Optional[WebResponse]:
+    """Reject API requests that miss the configured bearer token.
+
+    Authentication is only enforced for real HTTP requests (headers is not
+    None) so internal ``self.handle(...)`` calls stay exempt. When
+    ``WEB_AUTH_TOKEN`` is unset or empty, local development keeps the legacy
+    no-auth behavior.
+    """
+    if headers is None or not path.startswith("/api/"):
+        return None
+    expected_token = os.environ.get("WEB_AUTH_TOKEN", "").strip()
+    if not expected_token:
+        return None
+    authorization = _header_value(headers, "Authorization")
+    expected = f"Bearer {expected_token}"
+    if not hmac.compare_digest(authorization, expected):
+        return WebResponse(
+            401,
+            json.dumps({
+                "error": "Authorization required",
+                "code": _WEB_AUTH_REQUIRED_CODE,
+            }).encode("utf-8"),
+        )
+    return None
+
+
 class WebApplication:
     """Pure request dispatcher used by both HTTP server and tests."""
 
@@ -276,6 +328,9 @@ class WebApplication:
         self._collection_lock = threading.Lock()
         self._backfill_tasks: Dict[str, Dict[str, Any]] = {}
         self._backfill_tasks_lock = threading.Lock()
+        self._backfill_semaphore = threading.BoundedSemaphore(
+            MAX_CONCURRENT_BACKFILLS
+        )
 
     def handle(
         self,
@@ -287,6 +342,9 @@ class WebApplication:
         parsed = urlparse(target)
         query = parse_qs(parsed.query)
         try:
+            rejection = _web_auth_rejection(parsed.path, headers)
+            if rejection is not None:
+                return rejection
             if method == "POST" and headers is not None:
                 rejection = _same_origin_json_write_rejection(headers)
                 if rejection is not None:
@@ -821,10 +879,31 @@ class WebApplication:
         return task
 
     def _set_backfill_task(self, task_id: str, **updates: Any) -> None:
+        terminal = False
         with self._backfill_tasks_lock:
             task = self._backfill_tasks.get(task_id)
             if task is not None:
                 task.update(updates)
+                terminal = task.get("status") in BACKFILL_TERMINAL_STATUSES
+        if terminal:
+            self._prune_backfill_tasks()
+
+    def _prune_backfill_tasks(self) -> None:
+        """Drop oldest terminal tasks so memory stays bounded (LRU cap)."""
+        with self._backfill_tasks_lock:
+            terminal_tasks = [
+                (task_id, task)
+                for task_id, task in self._backfill_tasks.items()
+                if task.get("status") in BACKFILL_TERMINAL_STATUSES
+            ]
+            excess = len(terminal_tasks) - MAX_TERMINAL_BACKFILL_TASKS
+            if excess <= 0:
+                return
+            terminal_tasks.sort(
+                key=lambda pair: (pair[1].get("finished_at") or "", pair[0])
+            )
+            for task_id, _task in terminal_tasks[:excess]:
+                self._backfill_tasks.pop(task_id, None)
 
     def _backfill_task_payload(self, task_id: str) -> Optional[Dict[str, Any]]:
         with self._backfill_tasks_lock:
@@ -848,6 +927,16 @@ class WebApplication:
                 if source not in sources:
                     sources.append(source)
 
+        with self._backfill_semaphore:
+            self._run_backfill_locked(task_id, market_tickers, sources)
+
+    def _run_backfill_locked(
+        self,
+        task_id: str,
+        market_tickers: Mapping[str, List[str]],
+        sources: List[str],
+    ) -> None:
+        """Run one backfill while holding a slot of the concurrency budget."""
         self._set_backfill_task(
             task_id,
             status="running",
@@ -1534,6 +1623,8 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
         self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "max-age=60")
         self.end_headers()
         self.wfile.write(response.body)

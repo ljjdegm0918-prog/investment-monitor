@@ -33,6 +33,11 @@ OFFICIAL_CODE_LIST_URL = (
     "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 )
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+# Hard byte cap for any EDINET response body, mirroring the research client's
+# bounded read. Official JSON/ZIP/PDF documents stay far below this; the cap
+# only exists so a hostile or broken upstream cannot exhaust memory or disk.
+EDINET_MAX_RESPONSE_BYTES = 50 * 1024 * 1024
+EDINET_READ_CHUNK_BYTES = 64 * 1024
 ROLE_FIELDS = (
     ("filer", "edinetCode"), ("issuer", "issuerEdinetCode"),
     ("subject", "subjectEdinetCode"), ("subsidiary", "subsidiaryEdinetCode"),
@@ -51,6 +56,41 @@ class EDINETRequestError(EDINETError):
 
 class EDINETDataError(EDINETError):
     """Official response did not satisfy the documented shape."""
+
+
+def _read_limited_response(response: Any) -> bytes:
+    """Read an EDINET response body with a hard byte cap.
+
+    A declared Content-Length is checked first; the body is then read in
+    chunks and aborted as soon as the cap is exceeded, before the payload
+    can be persisted or parsed.
+    """
+    content_length = None
+    headers = getattr(response, "headers", None)
+    if headers is not None and hasattr(headers, "get"):
+        raw_length = headers.get("Content-Length")
+        if raw_length:
+            try:
+                content_length = int(raw_length)
+            except (TypeError, ValueError):
+                content_length = None
+    if content_length is not None and content_length > EDINET_MAX_RESPONSE_BYTES:
+        raise EDINETDataError("EDINET response exceeded the size limit.")
+    chunks: List[bytes] = []
+    total = 0
+    while True:
+        try:
+            chunk = response.read(EDINET_READ_CHUNK_BYTES)
+        except TypeError:
+            # A fake response whose read() takes no size argument.
+            chunk = response.read()
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > EDINET_MAX_RESPONSE_BYTES:
+            raise EDINETDataError("EDINET response exceeded the size limit.")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @dataclass(frozen=True)
@@ -204,7 +244,10 @@ class EDINETClient:
             })
             try:
                 with self._opener(request, timeout=self._timeout) as response:
-                    return bytes(response.read()), str(response.headers.get("Content-Type") or "")
+                    return (
+                        _read_limited_response(response),
+                        str(response.headers.get("Content-Type") or ""),
+                    )
             except HTTPError as error:
                 if error.code not in RETRYABLE_STATUS_CODES or attempt == self._max_retries:
                     raise EDINETRequestError(
@@ -813,6 +856,6 @@ def _download_public_official_file(
     request = Request(url, headers={"User-Agent": "InvestmentMonitor/0.1 EDINET connector"})
     try:
         with opener(request, timeout=timeout) as response:
-            return bytes(response.read())
+            return _read_limited_response(response)
     except (HTTPError, URLError, TimeoutError) as error:
         raise EDINETRequestError("Official EDINET public-file download failed.") from error

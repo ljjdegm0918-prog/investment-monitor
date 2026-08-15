@@ -554,7 +554,7 @@ OK (skipped=1)
 
 生产模式是在常开 Linux 服务器或带持久磁盘的容器托管平台上运行同一服务。随附的 `Dockerfile` 将 Web 服务与每日采集器打包在一起。
 
-本地容器快速验证：
+本地容器快速验证（仅本机访问）：
 
 ```bash
 docker build -t investment-monitor .
@@ -562,12 +562,20 @@ docker run -d \
   --name investment-monitor \
   --restart unless-stopped \
   --env-file .env \
-  -p 8765:8765 \
+  -p 127.0.0.1:8765:8765 \
   -v investment-monitor-data:/app/data \
   investment-monitor
 ```
 
-在本机运行该命令仍要求电脑保持开机。若要让他人持续访问，将镜像部署至 VPS 或容器主机，在 `/app/data` 挂载持久卷，设置 `SEC_USER_AGENT`，并在前方配置 HTTPS/访问控制。SQLite 适用于单个小应用实例；勿对同一 SQLite 文件运行多个副本。
+生产部署必须满足（详见 `docs/security/HARDENING_CHECKLIST.md`）：
+
+1. **端口隔离**：容器/进程只映射到 `127.0.0.1`，由 Nginx/Caddy 在前方终结 HTTPS 并反代；云安全组**禁止**对公网放行 `8765`。
+2. **访问鉴权**：设置强随机的 `WEB_AUTH_TOKEN`。设置后所有 `/api/*` 请求必须携带 `Authorization: Bearer <WEB_AUTH_TOKEN>`，否则返回 401。浏览器端在控制台执行
+   `localStorage.setItem("im_web_auth_token", "<token>")` 后页面请求会自动带上。
+3. **同源校验**：设置 `WEB_EXTERNAL_SCHEME=https`（CSRF 同源校验依赖外部协议）。
+4. **数据安全**：为 `/app/data` 挂持久卷并纳入备份；SQLite 适用于单个小应用实例，勿对同一 SQLite 文件运行多个副本。
+
+在服务器上运行该服务仍要求持续供电联网；若需他人访问，按上述清单配置即可。
 
 ## 建议的手动验收测试
 
