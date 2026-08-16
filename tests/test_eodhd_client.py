@@ -101,21 +101,37 @@ class EodhdClientTests(unittest.TestCase):
         }
         opener = _FakeOpener(responses)
         opener.responses["default"] = ConnectionError("boom")
+        budget = {"limit": 20, "used_calls": 0, "refreshed_exchanges": []}
         rows, used = collect_eodhd_symbols(
             {"de": "XETRA", "fr": "PAR"},
-            {"limit": 20, "used_calls": 0, "refreshed_exchanges": []},
+            budget,
             opener=opener,
         )
         self.assertEqual(used, 2)
         self.assertEqual([r["symbol"] for r in rows], ["SAP"])
+        # 只有成功刷完的交易所进入已刷新集合。
+        self.assertEqual(budget["refreshed_exchanges"], ["XETRA"])
 
-    def test_total_failure_raises(self):
+    def test_duplicate_exchange_codes_are_fetched_once(self):
+        budget = {"limit": 20, "used_calls": 0, "refreshed_exchanges": []}
+        rows, used = collect_eodhd_symbols(
+            {"gb": "LSE", "uk": "LSE"},
+            budget,
+            opener=_FakeOpener({"default": []}),
+        )
+        self.assertEqual((rows, used), ([], 1))
+        self.assertEqual(budget["refreshed_exchanges"], ["LSE"])
+
+    def test_total_failure_raises_and_consumes_budget(self):
+        budget = {"limit": 5, "used_calls": 0, "refreshed_exchanges": []}
         with self.assertRaises(EodhdClientError):
             collect_eodhd_symbols(
-                {"de": "XETRA"},
-                {"limit": 20, "used_calls": 0, "refreshed_exchanges": []},
+                {"de": "XETRA", "fr": "PAR"},
+                budget,
                 opener=_FakeOpener({"default": ConnectionError("boom")}),
             )
+        self.assertEqual(budget["used_calls"], 2)
+        self.assertEqual(budget["refreshed_exchanges"], [])
 
 
 if __name__ == "__main__":

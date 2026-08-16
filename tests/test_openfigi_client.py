@@ -84,6 +84,25 @@ class OpenFigiClientTests(unittest.TestCase):
         self.assertEqual(len(rows), 25)
         self.assertEqual(opener.calls, 3)
 
+    def test_symbol_and_isin_empty_row_is_skipped_without_misalignment(self):
+        candidates = [
+            {"market": "de", "symbol": "", "name": "", "isin": "",
+             "instrument_type": "etf", "exchange": "XETRA"},
+            {"market": "de", "symbol": "EUNL", "name": "EUNL", "isin": "",
+             "instrument_type": "etf", "exchange": "XETRA"},
+        ]
+        payload = [
+            {"data": [{"figi": "BBG00EUNL", "name": "EUNL ETF",
+                       "exchCode": "XETRA", "securityType": "ETF"}]},
+        ]
+        rows = enrich_with_openfigi(
+            candidates,
+            opener=_FakeOpener(payload),
+            pause_seconds=0,
+        )
+        self.assertNotIn("figi", rows[0])
+        self.assertEqual(rows[1]["figi"], "BBG00EUNL")
+
 
 if __name__ == "__main__":
     unittest.main()

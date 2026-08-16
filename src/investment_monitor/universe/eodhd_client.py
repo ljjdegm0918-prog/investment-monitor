@@ -131,17 +131,18 @@ def collect_eodhd_symbols(
         return [], 0
 
     refreshed = set(budget.get("refreshed_exchanges") or [])
+    fetched_this_run: set = set()
     rows: List[Dict[str, Any]] = []
     used = 0
     errors: List[str] = []
     for market in sorted(exchanges):
         exchange = str(exchanges[market] or "").strip()
-        if not exchange or exchange in refreshed:
+        if not exchange or exchange in refreshed or exchange in fetched_this_run:
             continue
         if used >= remaining:
             break
         used += 1
-        budget["refreshed_exchanges"].append(exchange)
+        fetched_this_run.add(exchange)
         query = urlencode(
             {"api_token": token, "fmt": "json"}
         )
@@ -174,7 +175,11 @@ def collect_eodhd_symbols(
                 "eodhd exchange=%s failed: %s", exchange, error
             )
             errors.append(f"{exchange}:{error}")
+        else:
+            # 只有成功刷完的交易所才标记已刷新；失败的允许下次重试。
+            budget["refreshed_exchanges"].append(exchange)
     if errors and not rows:
+        budget["used_calls"] += used
         raise EodhdClientError(
             "EODHD exchange-symbol-list failed for all exchanges: "
             + "; ".join(errors[:3])

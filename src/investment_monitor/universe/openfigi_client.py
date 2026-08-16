@@ -114,6 +114,10 @@ def enrich_with_openfigi(
             continue
         if row.get("figi") and row.get("isin"):
             continue
+        isin = str(row.get("isin") or "").strip()
+        symbol = str(row.get("symbol") or "").strip()
+        if not isin and not symbol:
+            continue
         target_rows.append(row)
         if len(target_rows) >= max_candidates:
             break
@@ -130,8 +134,6 @@ def enrich_with_openfigi(
             exchange = str(
                 row.get("exchange") or row.get("board") or ""
             ).strip()
-            if not symbol:
-                continue
             job = {"idType": "ID_EXCH_SYMBOL", "idValue": symbol}
             if exchange:
                 job["exchCode"] = exchange
