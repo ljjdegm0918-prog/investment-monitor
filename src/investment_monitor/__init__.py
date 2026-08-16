@@ -521,6 +521,13 @@ from .universe.trq_universe import (
     search_trq_universe,
     trq_universe_name_map,
 )
+from .universe.il_universe import (
+    IlUniverseError,
+    il_universe_name_map,
+    load_il_universe,
+    refresh_il_universe,
+    search_il_universe,
+)
 from .universe.mx_universe import (
     MxUniverseError,
     load_mx_universe,
@@ -783,6 +790,11 @@ __all__ = [
     "AtUniverseError",
     "InUniverseError",
     "MxUniverseError",
+    "IlUniverseError",
+    "il_universe_name_map",
+    "load_il_universe",
+    "refresh_il_universe",
+    "search_il_universe",
     "load_mx_universe",
     "mx_universe_name_map",
     "refresh_mx_universe",
