@@ -42,6 +42,7 @@ from .sources.au_news import (
     YahooAuNewsConnector,
 )
 from .sources.ceoca_ca import CeocaCaConnector
+from .sources.ceoca_sedar import CeocaSedarConnector
 from .sources.hotcopper_au import HotCopperAuConnector
 from .sources.stockhead_au import StockheadAuConnector
 from .sources.lse_share_chat import LseShareChatConnector
@@ -105,6 +106,50 @@ from .sources.ch_news import (
     GoogleChNewsConnector,
     YahooChNewsConnector,
 )
+from .sources.ee_news import (
+    GoogleEeNewsConnector,
+    YahooEeNewsConnector,
+)
+from .sources.lv_news import (
+    GoogleLvNewsConnector,
+    YahooLvNewsConnector,
+)
+from .sources.lt_news import (
+    GoogleLtNewsConnector,
+    YahooLtNewsConnector,
+)
+from .sources.no_news import (
+    GoogleNoNewsConnector,
+    YahooNoNewsConnector,
+)
+from .sources.nse_announcements import NseAnnouncementsConnector
+from .sources.bmv_relevant_events import BmvRelevantEventsConnector
+from .sources.maya_announcements import MayaAnnouncementsConnector
+from .sources.bse_hu_announcements import BseHuAnnouncementsConnector
+from .sources.hu_news import (
+    GoogleHuNewsConnector,
+    YahooHuNewsConnector,
+)
+from .sources.il_news import (
+    GoogleIlNewsConnector,
+    YahooIlNewsConnector,
+)
+from .sources.mx_news import (
+    GoogleMxNewsConnector,
+    YahooMxNewsConnector,
+)
+from .sources.in_news import (
+    GoogleInNewsConnector,
+    YahooInNewsConnector,
+)
+from .sources.at_news import (
+    GoogleAtNewsConnector,
+    YahooAtNewsConnector,
+)
+from .sources.pt_news import (
+    GooglePtNewsConnector,
+    YahooPtNewsConnector,
+)
 from .sources.pl_news import (
     GooglePlNewsConnector,
     YahooPlNewsConnector,
@@ -122,6 +167,12 @@ from .sources.emf_news import GoogleEmfNewsConnector
 from .sources.trq_news import GoogleTrqNewsConnector
 from .sources.eux_news import GoogleEuxNewsConnector
 from .sources.gpw_espi import GpwEspiConnector
+from .sources.wiener_boerse_news import WienerBoerseNewsConnector
+from .sources.no_pt_disclosures import (
+    EuronextLisbonNewsConnector,
+    NewswebNoConnector,
+)
+from .sources.nasdaq_baltic_news import NasdaqBalticNewsConnector
 from .sources.nasdaq_se import NasdaqSeFilingsConnector
 from .sources.eurex_circulars import EurexCircularsConnector
 
@@ -137,6 +188,7 @@ SOURCE_MARKETS = {
     "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
     "google_news_hk": "hk", "xueqiu": frozenset({"cn", "hk"}),
     "yahoo_ca": "ca", "google_news_ca": "ca", "ceoca_ca": "ca",
+    "ceoca_sedar": "ca",
     "sedar_plus": "ca", "cse_filings": "ca", "neo_filings": "ca",
     "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
     "google_news_tw": "tw",
@@ -158,7 +210,19 @@ SOURCE_MARKETS = {
     "google_news_be": "be",
     "eqs_ch": "ch", "six_official_notices": "ch", "yahoo_ch": "ch",
     "google_news_ch": "ch",
-    "gpw_espi": "pl", "yahoo_pl": "pl", "google_news_pl": "pl",
+    "gpw_espi": "pl",
+    "nasdaq_baltic_news": frozenset({"ee", "lv", "lt"}),
+    "newsweb_no": "no", "euronext_lisbon_news": "pt", "yahoo_pl": "pl", "google_news_pl": "pl",
+    "yahoo_ee": "ee", "google_news_ee": "ee",
+    "yahoo_lv": "lv", "google_news_lv": "lv",
+    "yahoo_lt": "lt", "google_news_lt": "lt",
+    "yahoo_no": "no", "google_news_no": "no",
+    "yahoo_pt": "pt", "google_news_pt": "pt",
+    "wiener_boerse_news": "at", "yahoo_at": "at", "google_news_at": "at",
+    "nse_announcements": "in", "yahoo_in": "in", "google_news_in": "in",
+    "bmv_relevant_events": "mx", "yahoo_mx": "mx", "google_news_mx": "mx",
+    "maya_announcements": "il", "yahoo_il": "il", "google_news_il": "il",
+    "bse_hu_announcements": "hu", "yahoo_hu": "hu", "google_news_hu": "hu",
     "fi_oam": "se", "nasdaq_se_filings": "se",
     "yahoo_se": "se", "google_news_se": "se",
     "eurex_circulars": "eux", "google_news_eux": "eux",
@@ -317,6 +381,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
+    registry.register(CeocaSedarConnector.name, CeocaSedarConnector)
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
     registry.register(StockheadAuConnector.name, StockheadAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)
@@ -361,6 +426,31 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooChNewsConnector.name, YahooChNewsConnector)
     registry.register(GoogleChNewsConnector.name, GoogleChNewsConnector)
     registry.register(YahooPlNewsConnector.name, YahooPlNewsConnector)
+    registry.register(YahooEeNewsConnector.name, YahooEeNewsConnector)
+    registry.register(GoogleEeNewsConnector.name, GoogleEeNewsConnector)
+    registry.register(YahooLvNewsConnector.name, YahooLvNewsConnector)
+    registry.register(GoogleLvNewsConnector.name, GoogleLvNewsConnector)
+    registry.register(YahooLtNewsConnector.name, YahooLtNewsConnector)
+    registry.register(GoogleLtNewsConnector.name, GoogleLtNewsConnector)
+    registry.register(YahooNoNewsConnector.name, YahooNoNewsConnector)
+    registry.register(GoogleNoNewsConnector.name, GoogleNoNewsConnector)
+    registry.register(YahooPtNewsConnector.name, YahooPtNewsConnector)
+    registry.register(GooglePtNewsConnector.name, GooglePtNewsConnector)
+    registry.register(WienerBoerseNewsConnector.name, WienerBoerseNewsConnector)
+    registry.register(YahooAtNewsConnector.name, YahooAtNewsConnector)
+    registry.register(GoogleAtNewsConnector.name, GoogleAtNewsConnector)
+    registry.register(NseAnnouncementsConnector.name, NseAnnouncementsConnector)
+    registry.register(YahooInNewsConnector.name, YahooInNewsConnector)
+    registry.register(GoogleInNewsConnector.name, GoogleInNewsConnector)
+    registry.register(BmvRelevantEventsConnector.name, BmvRelevantEventsConnector)
+    registry.register(YahooMxNewsConnector.name, YahooMxNewsConnector)
+    registry.register(GoogleMxNewsConnector.name, GoogleMxNewsConnector)
+    registry.register(MayaAnnouncementsConnector.name, MayaAnnouncementsConnector)
+    registry.register(YahooIlNewsConnector.name, YahooIlNewsConnector)
+    registry.register(GoogleIlNewsConnector.name, GoogleIlNewsConnector)
+    registry.register(BseHuAnnouncementsConnector.name, BseHuAnnouncementsConnector)
+    registry.register(YahooHuNewsConnector.name, YahooHuNewsConnector)
+    registry.register(GoogleHuNewsConnector.name, GoogleHuNewsConnector)
     registry.register(GooglePlNewsConnector.name, GooglePlNewsConnector)
     registry.register(YahooSeNewsConnector.name, YahooSeNewsConnector)
     registry.register(GoogleSeNewsConnector.name, GoogleSeNewsConnector)
@@ -373,6 +463,12 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleEuxNewsConnector.name, GoogleEuxNewsConnector)
     registry.register(EurexCircularsConnector.name, EurexCircularsConnector)
     registry.register(GpwEspiConnector.name, GpwEspiConnector)
+    registry.register(NasdaqBalticNewsConnector.name, NasdaqBalticNewsConnector)
+    registry.register(NewswebNoConnector.name, NewswebNoConnector)
+    registry.register(
+        EuronextLisbonNewsConnector.name,
+        EuronextLisbonNewsConnector,
+    )
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(

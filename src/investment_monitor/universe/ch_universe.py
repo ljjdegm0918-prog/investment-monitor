@@ -30,6 +30,18 @@ from typing import Any, List, Mapping, Optional
 
 DEFAULT_CACHE_PATH = ".cache/investment_monitor/ch_universe.json"
 
+# Phase 4 锁边（2026-08-16 live 复验）：six-group.com 股票/ETF 页面与
+# api.six-group.com/api/marketdata/* 全部 404；SIX 官方目录仍不可接。
+# 披露保留 eqs_ch（partial，非官方）；universe 保持 stub。
+PHASE4_BOUNDARY = {
+    "universe": "stub",
+    "disclosure": "partial",
+    "evidence": (
+        "six-group.com shares/etf pages: 404; "
+        "api.six-group.com/api/marketdata/*: JSON 404"
+    ),
+}
+
 
 class ChUniverseError(RuntimeError):
     """Raised when the CH universe cannot be refreshed at all."""

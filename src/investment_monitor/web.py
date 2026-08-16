@@ -6,6 +6,7 @@ import argparse
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
@@ -14,6 +15,7 @@ import mimetypes
 import os
 from pathlib import Path
 import threading
+import uuid
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
@@ -49,6 +51,16 @@ from .models import (
     MARKET_EMF,
     MARKET_TRQ,
     MARKET_EUX,
+    MARKET_EE,
+    MARKET_LV,
+    MARKET_LT,
+    MARKET_NO,
+    MARKET_PT,
+    MARKET_AT,
+    MARKET_IN,
+    MARKET_MX,
+    MARKET_IL,
+    MARKET_HU,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -72,6 +84,12 @@ from .universe.cxe_universe import cxe_universe_name_map
 from .universe.emf_universe import emf_universe_name_map
 from .universe.trq_universe import trq_universe_name_map
 from .universe.eux_universe import eux_universe_name_map
+from .universe.global_equity_reference import (
+    DEFAULT_CACHE_PATH as GLOBAL_EQUITY_REFERENCE_CACHE_PATH,
+    search_global_equity_reference,
+)
+from .universe.exchange_catalog import catalog_summary
+from .universe.coverage_report import coverage_report
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -85,7 +103,16 @@ from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
-from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
+from .web_repository import (
+    EXTRA_ENV_PREFIX,
+    FeedFilters,
+    WebRepository,
+    normalize_be_ticker,
+    normalize_de_ticker,
+    normalize_fr_ticker,
+    normalize_it_ticker,
+    normalize_nl_ticker,
+)
 from .company_import import group_by_market, parse_company_inputs
 from .research import ResearchScope, ResearchSettings, card_from_json, validate_language
 from .research_repository import CARD_STATUS_COMPLETED
@@ -95,6 +122,20 @@ LOGGER = logging.getLogger(__name__)
 EASTERN = ZoneInfo("America/New_York")
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 CollectionRunner = Callable[..., ConfiguredCollectionResult]
+
+# Add-company 回填源过滤依据（大脑拍板）：
+# - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
+# - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
+ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
+    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news", "bmv_relevant_events", "maya_announcements", "bse_hu_announcements",
+    "hotcopper_au",
+    "lse_share_chat",
+    "yellowbrick",
+    "vic",
+    "x_community",
+})
+ADD_COMPANY_BACKFILL_COMMUNITY_TAIL = frozenset({"xueqiu"})
+COMMUNITY_SOURCE_TYPE = "community"
 
 
 def _warm_universe_on_first_add(
@@ -153,6 +194,57 @@ class WebResponse:
     status: int
     body: bytes
     content_type: str = "application/json; charset=utf-8"
+
+
+_WEB_AUTH_REQUIRED_CODE = "web_auth_required"
+
+# Backfill task resource bounds: keep at most this many terminal tasks in
+# memory (LRU by finished_at) and run at most two backfills at once; extra
+# requests queue on the semaphore instead of being dropped.
+MAX_TERMINAL_BACKFILL_TASKS = 100
+MAX_CONCURRENT_BACKFILLS = 2
+BACKFILL_TERMINAL_STATUSES = frozenset({"success", "partial", "failure"})
+
+# Security response headers applied to every HTTP response by the handler.
+SECURITY_HEADERS = (
+    ("X-Frame-Options", "DENY"),
+    ("X-Content-Type-Options", "nosniff"),
+    ("Referrer-Policy", "same-origin"),
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
+    ),
+)
+
+
+def _web_auth_rejection(
+    path: str,
+    headers: Optional[Mapping[str, Any]],
+) -> Optional[WebResponse]:
+    """Reject API requests that miss the configured bearer token.
+
+    Authentication is only enforced for real HTTP requests (headers is not
+    None) so internal ``self.handle(...)`` calls stay exempt. When
+    ``WEB_AUTH_TOKEN`` is unset or empty, local development keeps the legacy
+    no-auth behavior.
+    """
+    if headers is None or not path.startswith("/api/"):
+        return None
+    expected_token = os.environ.get("WEB_AUTH_TOKEN", "").strip()
+    if not expected_token:
+        return None
+    authorization = _header_value(headers, "Authorization")
+    expected = f"Bearer {expected_token}"
+    if not hmac.compare_digest(authorization, expected):
+        return WebResponse(
+            401,
+            json.dumps({
+                "error": "Authorization required",
+                "code": _WEB_AUTH_REQUIRED_CODE,
+            }).encode("utf-8"),
+        )
+    return None
 
 
 class WebApplication:
@@ -260,6 +352,11 @@ class WebApplication:
         self.static_root = Path(__file__).parent / "web_static"
         self._collection_runner = collection_runner
         self._collection_lock = threading.Lock()
+        self._backfill_tasks: Dict[str, Dict[str, Any]] = {}
+        self._backfill_tasks_lock = threading.Lock()
+        self._backfill_semaphore = threading.BoundedSemaphore(
+            MAX_CONCURRENT_BACKFILLS
+        )
 
     def handle(
         self,
@@ -271,6 +368,9 @@ class WebApplication:
         parsed = urlparse(target)
         query = parse_qs(parsed.query)
         try:
+            rejection = _web_auth_rejection(parsed.path, headers)
+            if rejection is not None:
+                return rejection
             if method == "POST" and headers is not None:
                 rejection = _same_origin_json_write_rejection(headers)
                 if rejection is not None:
@@ -314,6 +414,12 @@ class WebApplication:
                 ))
             if method == "GET" and parsed.path == "/api/sources":
                 return self._json({"sources": self.repository.connector_statuses()})
+            if method == "GET" and parsed.path.startswith("/api/backfill-tasks/"):
+                task_id = parsed.path[len("/api/backfill-tasks/"):]
+                task = self._backfill_task_payload(task_id)
+                if task is None:
+                    return self._json({"error": "Backfill task not found"}, 404)
+                return self._json(task)
             if method == "GET" and parsed.path == "/api/research/model":
                 return self._json({"model": self.research.model_status()})
             if method == "GET" and parsed.path == "/api/research/companies":
@@ -409,17 +515,14 @@ class WebApplication:
                 added = []
                 already_present = []
                 failed = []
-                collection_summaries = []
-                lookback_days = _environment_int(
-                    "INITIAL_BACKFILL_DAYS",
-                    365,
-                    minimum=1,
-                    maximum=3650,
-                )
                 for market, items in group_by_market(parsed):
                     tickers = tuple(item.ticker for item in items)
                     resolver = self._resolver_for(market)
                     name_fallback = self._name_fallback_for(market)
+                    name_fallback = self._with_global_reference_fallback(
+                        market,
+                        name_fallback,
+                    )
                     try:
                         result = dict(self.repository.add_companies_batch(
                             " ".join(tickers),
@@ -446,16 +549,10 @@ class WebApplication:
                             for source in relevant_sources
                             for ticker in added_tickers
                         ))
-                        collection_summaries.extend(
-                            self.collect_tickers(
-                                added_tickers,
-                                lookback_days=lookback_days,
-                                markets={ticker: market for ticker in added_tickers},
-                                sources=(source,),
-                                initial_backfill=True,
-                            )
-                            for source in relevant_sources
-                        )
+                markets_map = {
+                    str(record["ticker"]): str(record["market"])
+                    for record in added
+                }
                 response = {
                     "added": added,
                     "already_present": already_present,
@@ -472,11 +569,23 @@ class WebApplication:
                         {"market": market, "tickers": [item.ticker for item in items]}
                         for market, items in group_by_market(parsed)
                     ],
+                    "collection": None,
                 }
-                if collection_summaries:
-                    response["collection"] = _combine_collection_summaries(
-                        tuple(collection_summaries)
+                if markets_map:
+                    task_id = f"bf-{uuid.uuid4()}"
+                    self._register_backfill_task(
+                        task_id, markets_map, default_market
                     )
+                    threading.Thread(
+                        target=self._run_add_company_backfill,
+                        args=(task_id, markets_map, default_market),
+                        daemon=True,
+                    ).start()
+                    response["backfill_task_id"] = task_id
+                    response["backfill_status"] = "queued"
+                else:
+                    response["backfill_task_id"] = None
+                    response["backfill_status"] = "completed"
                 return self._json(response, 201)
             if method == "POST" and parsed.path == "/api/companies/csv":
                 payload = _decode_json(body)
@@ -510,6 +619,19 @@ class WebApplication:
                 filters = _filters_from_mapping(payload.get("filters") or {})
                 updated = self.repository.bulk_set_read(filters, _required_bool(payload, "is_read"))
                 return self._json({"updated": updated})
+            if method == "GET" and parsed.path == "/api/coverage":
+                # Independent per-country information-source coverage board.
+                # The static venue benchmark is not a broker integration.
+                try:
+                    return self._json({
+                        "catalog": catalog_summary(),
+                        "report": coverage_report(),
+                    })
+                except Exception:  # noqa: BLE001 - 目录损坏要给出 500 而不是空表
+                    LOGGER.exception("coverage payload failed")
+                    return self._json(
+                        {"error": "Coverage data is unavailable"}, 500
+                    )
             if method == "GET" and parsed.path == "/api/settings":
                 return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
@@ -748,6 +870,174 @@ class WebApplication:
     def _relevant_sources(self, market: str) -> Tuple[str, ...]:
         return relevant_sources_for_market(self.enabled_sources, market)
 
+    def _add_company_backfill_sources(self, market: str) -> Tuple[str, ...]:
+        """Return add-company backfill sources, filtered and ordered.
+
+        从 self._relevant_sources(market) 出发（保持 enabled_sources 原有顺序），
+        然后：
+        - 永远排除注册 stub（collect() 恒空）；
+        - filings/disclosure/news 等非 community 源排在前段，LIVE community
+          源排在后段；xueqiu 保留但强制放在 community 末尾。
+        分类依据是 settings 里每个 source 的 source_type；无 source_type 或
+        归属不清的一律视为非 community（放前段），不凭名字猜测。
+        """
+        source_types = {
+            source.name: str(source.source_type)
+            for source in self.source_catalog
+        }
+        front: List[str] = []
+        community: List[str] = []
+        tail: List[str] = []
+        for source in self._relevant_sources(market):
+            if source in ADD_COMPANY_BACKFILL_SKIP_SOURCES:
+                continue
+            if source in ADD_COMPANY_BACKFILL_COMMUNITY_TAIL:
+                tail.append(source)
+            elif source_types.get(source) == COMMUNITY_SOURCE_TYPE:
+                community.append(source)
+            else:
+                front.append(source)
+        return tuple(front + community + tail)
+
+    def _register_backfill_task(
+        self,
+        task_id: str,
+        markets_map: Mapping[str, str],
+        default_market: str,
+    ) -> Dict[str, Any]:
+        """Create the in-memory add-company backfill task in the queued state."""
+        task = {
+            "id": task_id,
+            "status": "queued",
+            "tickers": list(markets_map.keys()),
+            "market": default_market,
+            "markets": dict(markets_map),
+            "sources": None,
+            "started_at": None,
+            "finished_at": None,
+            "error": None,
+            "summary": None,
+        }
+        with self._backfill_tasks_lock:
+            self._backfill_tasks[task_id] = task
+        return task
+
+    def _set_backfill_task(self, task_id: str, **updates: Any) -> None:
+        terminal = False
+        with self._backfill_tasks_lock:
+            task = self._backfill_tasks.get(task_id)
+            if task is not None:
+                task.update(updates)
+                terminal = task.get("status") in BACKFILL_TERMINAL_STATUSES
+        if terminal:
+            self._prune_backfill_tasks()
+
+    def _prune_backfill_tasks(self) -> None:
+        """Drop oldest terminal tasks so memory stays bounded (LRU cap)."""
+        with self._backfill_tasks_lock:
+            terminal_tasks = [
+                (task_id, task)
+                for task_id, task in self._backfill_tasks.items()
+                if task.get("status") in BACKFILL_TERMINAL_STATUSES
+            ]
+            excess = len(terminal_tasks) - MAX_TERMINAL_BACKFILL_TASKS
+            if excess <= 0:
+                return
+            terminal_tasks.sort(
+                key=lambda pair: (pair[1].get("finished_at") or "", pair[0])
+            )
+            for task_id, _task in terminal_tasks[:excess]:
+                self._backfill_tasks.pop(task_id, None)
+
+    def _backfill_task_payload(self, task_id: str) -> Optional[Dict[str, Any]]:
+        with self._backfill_tasks_lock:
+            task = self._backfill_tasks.get(task_id)
+        return dict(task) if task is not None else None
+
+    def _run_add_company_backfill(
+        self,
+        task_id: str,
+        markets_map: Mapping[str, str],
+        default_market: str,
+    ) -> None:
+        """Backfill newly added companies (across markets) in a background thread."""
+        del default_market  # markets_map 已含每个 ticker 的市场，无需再按默认市场分组
+        market_tickers: Dict[str, List[str]] = {}
+        for ticker, market in markets_map.items():
+            market_tickers.setdefault(market, []).append(ticker)
+        sources: List[str] = []
+        for market in market_tickers:
+            for source in self._add_company_backfill_sources(market):
+                if source not in sources:
+                    sources.append(source)
+
+        with self._backfill_semaphore:
+            self._run_backfill_locked(task_id, market_tickers, sources)
+
+    def _run_backfill_locked(
+        self,
+        task_id: str,
+        market_tickers: Mapping[str, List[str]],
+        sources: List[str],
+    ) -> None:
+        """Run one backfill while holding a slot of the concurrency budget."""
+        self._set_backfill_task(
+            task_id,
+            status="running",
+            started_at=datetime.now(timezone.utc).isoformat(),
+            sources=sources,
+        )
+        try:
+            lookback_days = _environment_int(
+                "ADD_COMPANY_BACKFILL_DAYS",
+                30,
+                minimum=1,
+                maximum=3650,
+            )
+            summaries = []
+            for market, tickers in market_tickers.items():
+                tickers_tuple = tuple(tickers)
+                for source in self._add_company_backfill_sources(market):
+                    summaries.append(self.collect_tickers(
+                        tickers_tuple,
+                        lookback_days=lookback_days,
+                        markets={ticker: market for ticker in tickers_tuple},
+                        sources=(source,),
+                        initial_backfill=True,
+                    ))
+            summary = _combine_collection_summaries(tuple(summaries))
+        except Exception as error:
+            LOGGER.exception("Add-company backfill %s failed", task_id)
+            status = "failure"
+            error_message = str(error) or error.__class__.__name__
+            summary = _empty_collection_summary(tuple(markets_map.keys()))
+        else:
+            combined_status = str(summary.get("status"))
+            if combined_status == "failure":
+                status = "failure"
+            elif combined_status == "partial":
+                status = "partial"
+            else:
+                status = "success"
+            failures = summary.get("failures") or []
+            error_message = (
+                "; ".join(
+                    f"{failure.get('source', 'unknown')}: "
+                    f"{failure.get('ticker', '?')}: "
+                    f"{failure.get('message', '')}"
+                    for failure in failures
+                )
+                if failures
+                else None
+            )
+        self._set_backfill_task(
+            task_id,
+            status=status,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            error=error_message,
+            summary=summary,
+        )
+
     def _ensure_active_sync_states(self) -> None:
         source_tickers = tuple(
             (source, ticker, market)
@@ -876,13 +1166,43 @@ class WebApplication:
             # EUX stays unmapped via SEC; Eurex derivatives are product
             # codes, never SEC CIKs.
             return None
+        if market in (MARKET_EE, MARKET_LV, MARKET_LT):
+            # Baltic companies stay unmapped; Nasdaq Baltic disclosures are
+            # matched by ISIN/name from the Baltic universe, never SEC CIKs.
+            return None
+        if market in (MARKET_NO, MARKET_PT):
+            # Oslo/Lisbon companies stay unmapped; disclosure matching is
+            # by ISIN/name from the local Euronext universe, never SEC CIKs.
+            return None
+        if market == MARKET_AT:
+            # Vienna companies stay unmapped; never let SEC map an Austrian
+            # symbol to a same-named US company.
+            return None
+        if market == MARKET_IN:
+            # Indian companies stay unmapped; NSE announcements carry their
+            # own symbol/ISIN and never need an SEC CIK.
+            return None
+        if market == MARKET_MX:
+            # Mexican companies stay unmapped; never let SEC map a BMV
+            # symbol to a same-named US company.
+            return None
+        if market == MARKET_IL:
+            # Israeli companies stay unmapped; TASE/MAYA announcements carry
+            # their own symbol/ISIN and never need an SEC CIK.
+            return None
+        if market == MARKET_HU:
+            # Hungarian companies stay unmapped; BSE/BET announcements carry
+            # their own symbol/ISIN and never need an SEC CIK.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
             return None
         if market in (MARKET_US, MARKET_UNKNOWN):
             return self.resolver
-        # Keep any newly declared non-US market from falling through to SEC.
+        # Every other declared market keeps its own identity. This also
+        # protects newly added markets from accidentally resolving a
+        # same-named US ticker before a market-specific resolver is wired.
         return None
 
     def _name_fallback_for(
@@ -962,6 +1282,30 @@ class WebApplication:
             return trq_universe_name_map()
         if market == MARKET_EUX:
             return eux_universe_name_map()
+        if market in (MARKET_EE, MARKET_LV, MARKET_LT):
+            from .universe.nasdaq_baltic_universe import baltic_universe_name_map
+            return baltic_universe_name_map(market)
+        if market == MARKET_NO:
+            from .universe.no_universe import no_universe_name_map
+            return no_universe_name_map()
+        if market == MARKET_PT:
+            from .universe.pt_universe import pt_universe_name_map
+            return pt_universe_name_map()
+        if market == MARKET_AT:
+            from .universe.at_universe import at_universe_name_map
+            return at_universe_name_map()
+        if market == MARKET_IN:
+            from .universe.in_universe import in_universe_name_map
+            return in_universe_name_map()
+        if market == MARKET_MX:
+            from .universe.mx_universe import mx_universe_name_map
+            return mx_universe_name_map()
+        if market == MARKET_IL:
+            from .universe.il_universe import il_universe_name_map
+            return il_universe_name_map()
+        if market == MARKET_HU:
+            from .universe.hu_universe import hu_universe_name_map
+            return hu_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:
@@ -979,6 +1323,72 @@ class WebApplication:
                 name_fallback = ca_universe_name_map() or None
             return name_fallback
         return None
+
+    def _with_global_reference_fallback(
+        self,
+        market: str,
+        name_fallback: Optional[Mapping[str, Mapping[str, str]]],
+    ) -> Optional[Mapping[str, Mapping[str, str]]]:
+        """Merge Phase 1 global equity reference entries below the official map.
+
+        Official universe fields always win (same ticker keeps the official
+        entry). The third-party reference only backfills tickers the official
+        universe does not know — today that is mostly ETF candidates for
+        Euronext markets while the EODHD key is configured.
+        """
+        env_cache_path = os.environ.get(
+            "GLOBAL_EQUITY_REFERENCE_CACHE_PATH"
+        )
+        cache_path = (
+            Path(env_cache_path)
+            if env_cache_path
+            else Path(self.project_root) / GLOBAL_EQUITY_REFERENCE_CACHE_PATH
+        )
+        try:
+            items = search_global_equity_reference(
+                "", market=market, path=cache_path
+            )
+        except Exception:  # noqa: BLE001 - 参考层损坏不阻断添加
+            LOGGER.warning(
+                "global_equity_reference lookup failed for market=%s",
+                market,
+                exc_info=True,
+            )
+            return name_fallback
+        if not items:
+            return name_fallback
+        merged = dict(name_fallback or {})
+        for item in items:
+            symbol = str(item.get("symbol") or "").strip()
+            normalized = self._normalize_global_reference_symbol(
+                market, symbol
+            )
+            if not normalized or normalized in merged:
+                continue
+            board = str(item.get("board") or item.get("exchange") or "")
+            merged[normalized] = {
+                "name": str(item.get("name") or normalized),
+                "exchange": board,
+                "board": board,
+                "isin": str(item.get("isin") or ""),
+                "instrument_type": str(item.get("instrument_type") or ""),
+            }
+        return merged or None
+
+    @staticmethod
+    def _normalize_global_reference_symbol(market: str, symbol: str) -> str:
+        """Normalize a third-party symbol the same way add-company normalizes it."""
+        if market == MARKET_BE:
+            return normalize_be_ticker(symbol)
+        if market == MARKET_DE:
+            return normalize_de_ticker(symbol)
+        if market == MARKET_FR:
+            return normalize_fr_ticker(symbol)
+        if market == MARKET_IT:
+            return normalize_it_ticker(symbol)
+        if market == MARKET_NL:
+            return normalize_nl_ticker(symbol)
+        return str(symbol or "").strip().upper()
 
     @staticmethod
     def _detect_unavailable_sources(
@@ -1375,6 +1785,8 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))
+        for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
         self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "max-age=60")
         self.end_headers()
         self.wfile.write(response.body)
@@ -1638,6 +2050,122 @@ def _csrf_rejection(message: str) -> WebResponse:
         403,
         json.dumps({"error": message, "code": _CSRF_REJECTED}).encode("utf-8"),
     )
+_MARKET_ALIASES = {
+    "usa": "us", "united states": "us",
+    "japan": "jp",
+    "hong kong": "hk",
+    "china": "cn",
+    "korea": "kr", "south korea": "kr",
+    "gb": "uk", "united kingdom": "uk",
+    "taiwan": "tw",
+    "canada": "ca",
+    "australia": "au",
+    "belgium": "be",
+    "france": "fr",
+    "germany": "de",
+    "netherlands": "nl",
+    "italy": "it",
+    "spain": "es",
+    "singapore": "sg",
+    "switzerland": "ch",
+    "poland": "pl",
+    "sweden": "se",
+    "aqse": "aq", "aquis": "aq",
+    "cboe europe": "cxe",
+    "european mutual funds": "emf",
+    "turquoise": "trq",
+    "eurex": "eux",
+}
+
+
+def _parse_company_csv(
+    raw_csv: str,
+    lists: Sequence[Mapping[str, Any]],
+) -> Tuple[List[Mapping[str, Any]], List[Mapping[str, Any]]]:
+    """Parse ticker/market/list CSV or spreadsheet rows with partial errors."""
+    text = raw_csv.lstrip("\ufeff").strip()
+    if not text:
+        raise ValueError("Paste CSV data or choose a CSV file")
+    try:
+        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",\t;")
+    except csv.Error:
+        dialect = csv.excel
+    rows = list(csv.reader(io.StringIO(text), dialect))
+    if not rows:
+        raise ValueError("CSV must include a header row")
+    if len(rows) > 501:
+        raise ValueError("CSV can contain at most 500 data rows")
+
+    header_aliases = {
+        "ticker": "ticker", "symbol": "ticker", "code": "ticker",
+        "market": "market", "region": "market",
+        "list": "list", "list_type": "list", "list name": "list",
+    }
+    header = [
+        header_aliases.get(cell.strip().lower(), cell.strip().lower())
+        for cell in rows[0]
+    ]
+    missing = [name for name in ("ticker", "market", "list") if name not in header]
+    if missing:
+        raise ValueError(
+            "CSV header must contain ticker, market, list; missing: "
+            + ", ".join(missing)
+        )
+    indexes = {name: header.index(name) for name in ("ticker", "market", "list")}
+    max_index = max(indexes.values())
+    list_aliases: Dict[str, str] = {}
+    for record in lists:
+        slug = str(record["slug"])
+        list_aliases[slug.casefold()] = slug
+        list_aliases[str(record["name"]).casefold()] = slug
+
+    aggregated: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    failures: List[Mapping[str, Any]] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        if not any(cell.strip() for cell in row):
+            continue
+        padded = row + [""] * max(0, max_index + 1 - len(row))
+        ticker = padded[indexes["ticker"]].strip().upper()
+        raw_market = padded[indexes["market"]].strip().casefold()
+        market = _MARKET_ALIASES.get(raw_market, raw_market)
+        raw_list = padded[indexes["list"]].strip()
+        list_slug = list_aliases.get(raw_list.casefold(), "")
+        error = ""
+        if not ticker:
+            error = "Ticker is required."
+        elif not all(character.isalnum() or character in ".-_" for character in ticker):
+            error = "Ticker may contain only letters, numbers, dot, hyphen, or underscore."
+        elif len(ticker) > 32:
+            error = "Ticker must be 32 characters or fewer."
+        elif not raw_market:
+            error = "Market is required."
+        elif market not in ALLOWED_MARKETS:
+            error = "Market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS)) + "."
+        elif not raw_list:
+            error = "List is required."
+        elif not list_slug:
+            error = "List was not found. Use an existing list slug or name."
+        if error:
+            failures.append({
+                "row": row_number,
+                "ticker": ticker or "—",
+                "error": error,
+            })
+            continue
+
+        key = (ticker, market)
+        entry = aggregated.setdefault(key, {
+            "row": row_number,
+            "ticker": ticker,
+            "market": market,
+            "lists": [],
+        })
+        if list_slug not in entry["lists"]:
+            entry["lists"].append(list_slug)
+
+    if not aggregated and not failures:
+        raise ValueError("CSV must include at least one data row")
+    return list(aggregated.values()), failures
 
 
 def _first(query: Mapping[str, Sequence[str]], key: str) -> Optional[str]:

@@ -174,6 +174,7 @@ class XueqiuConnectorTests(unittest.TestCase):
         items = connector.collect(request)
         self.assertEqual(items, [])
         self.assertEqual(connector.status, "stub")
+        self.assertFalse(connector.live_path_attempted)
         self.assertTrue(connector.last_errors)
         self.assertIn("400016", connector.last_errors[0][1])
 
@@ -187,6 +188,8 @@ class XueqiuConnectorTests(unittest.TestCase):
         )
         items = connector.collect(request)
         self.assertEqual(items, [])
+        self.assertEqual(connector.status, "stub")
+        self.assertFalse(connector.live_path_attempted)
         self.assertTrue(connector.last_errors)
         self.assertIn("HK00700", connector.last_errors[0][0])
 
@@ -276,6 +279,25 @@ class XueqiuConnectorTests(unittest.TestCase):
             items = connector.collect(request)
             self.assertEqual(items, [])
             self.assertEqual(connector.status, "stub")
+
+    @patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=invalid_token"})
+    def test_collect_cookie_http_error_marks_live_path_attempted(self) -> None:
+        """Cookie 配置但 HTTP 真正失败：仍如实走 failure 路径（live_path_attempted=True）。"""
+        connector = XueqiuConnector()
+        with patch(
+            "investment_monitor.sources.xueqiu.connector.urlopen",
+            side_effect=OSError("blocked"),
+        ):
+            request = CollectionRequest(
+                tickers=("600519",),
+                start_date=date(2026, 2, 17),
+                end_date=date(2026, 2, 17),
+                markets={"600519": "cn"},
+            )
+            items = connector.collect(request)
+        self.assertEqual(items, [])
+        self.assertTrue(connector.live_path_attempted)
+        self.assertEqual(connector.status, "stub")
 
     @patch.dict(os.environ, {"XUEQIU_COOKIE": "   "}, clear=False)
     def test_blank_cookie_stays_stub(self) -> None:

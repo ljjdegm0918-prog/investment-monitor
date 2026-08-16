@@ -64,6 +64,41 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For Hungary (hu) the disclosure primary chain is an honest stub (no
+rows are produced), so no filing pairing exists yet; HU news
+(yahoo_hu / google_news_hu) pairs across sources on ticker +
+Budapest day + normalized title.
+
+For Israel (il) the disclosure primary chain is an honest stub (no
+rows are produced), so no filing pairing exists yet; IL news
+(yahoo_il / google_news_il) pairs across sources on ticker +
+Jerusalem day + normalized title.
+
+For Mexico (mx) the disclosure primary chain is an honest stub (no
+rows are produced), so no filing pairing exists yet; MX news
+(yahoo_mx / google_news_mx) pairs across sources on ticker +
+Mexico City day + normalized title.
+
+For India (in), the NSE disclosure source pairs on its stable seq_id
+and IN news (yahoo_in / google_news_in) pairs across sources on
+ticker + Kolkata day + normalized title.
+
+For Austria (at) the disclosure primary chain is an honest stub
+(no rows are produced), so no filing pairing exists yet; AT news
+(yahoo_at / google_news_at) pairs across sources on ticker + Vienna
+day + normalized title.
+
+For Norway (no) and Portugal (pt) the disclosure primary chains are
+honest stubs (no rows are produced), so no filing pairing exists yet;
+NO/PT news (yahoo_no / google_news_no, yahoo_pt / google_news_pt)
+pairs across sources on ticker + Oslo/Lisbon day + normalized title.
+
+For Baltic (ee/lv/lt), the only wired disclosure source is
+nasdaq_baltic_news, which pairs on its stable disclosure id with a
+source-scoped Tallinn-day title fallback; Baltic news (yahoo_ee /
+google_news_ee, yahoo_lv / google_news_lv, yahoo_lt / google_news_lt)
+pairs across sources on ticker + Tallinn day + normalized title.
+
 For PL, the only wired disclosure source is gpw_espi, which pairs on its
 stable GPW report id (``geru_id``), or on a source-scoped title fallback
 (ticker + Warsaw day + normalized title); PL news (yahoo_pl /
@@ -131,12 +166,21 @@ MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
 WARSAW = ZoneInfo("Europe/Warsaw")
+TALLINN = ZoneInfo("Europe/Tallinn")
+OSLO = ZoneInfo("Europe/Oslo")
+LISBON = ZoneInfo("Europe/Lisbon")
+VIENNA = ZoneInfo("Europe/Vienna")
+KOLKATA = ZoneInfo("Asia/Kolkata")
+MEXICO_CITY = ZoneInfo("America/Mexico_City")
+JERUSALEM = ZoneInfo("Asia/Jerusalem")
+BUDAPEST = ZoneInfo("Europe/Budapest")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
 LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
 FILING_SOURCE_PRIORITY = {
+    "ceoca_sedar": 19,
     "dart": 0,
     "investegate": 1,
     "companies_house": 2,
@@ -190,6 +234,31 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_pl": 29,
     "yahoo_se": 30,
     "google_news_se": 31,
+    "nasdaq_baltic_news": 32,
+    "yahoo_ee": 33,
+    "google_news_ee": 34,
+    "yahoo_lv": 35,
+    "google_news_lv": 36,
+    "yahoo_lt": 37,
+    "google_news_lt": 38,
+    "yahoo_no": 39,
+    "google_news_no": 40,
+    "yahoo_pt": 41,
+    "google_news_pt": 42,
+    "yahoo_at": 43,
+    "google_news_at": 44,
+    "nse_announcements": 45,
+    "yahoo_in": 46,
+    "google_news_in": 47,
+    "bmv_relevant_events": 48,
+    "yahoo_mx": 49,
+    "google_news_mx": 50,
+    "maya_announcements": 51,
+    "yahoo_il": 52,
+    "google_news_il": 53,
+    "bse_hu_announcements": 54,
+    "yahoo_hu": 55,
+    "google_news_hu": 56,
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
@@ -218,6 +287,7 @@ COMMUNITY_SOURCE_PRIORITY = {
     "vic": 0,
 }
 SOURCE_DISPLAY_LABELS = {
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "dart": "OpenDART",
     "investegate": "Investegate",
     "companies_house": "Companies House",
@@ -269,6 +339,34 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_pl": "Google News (PL)",
     "yahoo_se": "Yahoo Finance SE",
     "google_news_se": "Google News (SE)",
+    "nasdaq_baltic_news": "Nasdaq Baltic",
+    "yahoo_ee": "Yahoo Finance EE",
+    "google_news_ee": "Google News (EE)",
+    "yahoo_lv": "Yahoo Finance LV",
+    "google_news_lv": "Google News (LV)",
+    "yahoo_lt": "Yahoo Finance LT",
+    "google_news_lt": "Google News (LT)",
+    "newsweb_no": "NewsWeb (Oslo Bors)",
+    "euronext_lisbon_news": "Euronext Lisbon",
+    "yahoo_no": "Yahoo Finance NO",
+    "google_news_no": "Google News (NO)",
+    "yahoo_pt": "Yahoo Finance PT",
+    "google_news_pt": "Google News (PT)",
+    "wiener_boerse_news": "Wiener Börse",
+    "yahoo_at": "Yahoo Finance AT",
+    "google_news_at": "Google News (AT)",
+    "nse_announcements": "NSE announcements",
+    "yahoo_in": "Yahoo Finance IN",
+    "google_news_in": "Google News (IN)",
+    "bmv_relevant_events": "BMV relevant events",
+    "yahoo_mx": "Yahoo Finance MX",
+    "google_news_mx": "Google News (MX)",
+    "maya_announcements": "MAYA (TASE)",
+    "yahoo_il": "Yahoo Finance IL",
+    "google_news_il": "Google News (IL)",
+    "bse_hu_announcements": "BSE (Budapest)",
+    "yahoo_hu": "Yahoo Finance HU",
+    "google_news_hu": "Google News (HU)",
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
@@ -317,7 +415,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "aq", "cxe", "emf", "trq", "eux",
+        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "at", "in", "mx", "il", "hu", "aq", "cxe", "emf", "trq", "eux",
         "cn", "us", "jp",
     }:
         return None
@@ -450,6 +548,30 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "ch":
         return _ch_filing_key(item)
+    if market == "in":
+        return _in_filing_key(item)
+    if market == "mx":
+        # Disclosure primary chain is an honest stub (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market == "il":
+        # Disclosure primary chain is an honest stub (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market == "hu":
+        # Disclosure primary chain is an honest stub (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market == "at":
+        # Disclosure primary chain is an honest stub (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market in ("no", "pt"):
+        # Disclosure primary chains are honest stubs (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market in ("ee", "lv", "lt"):
+        return _baltic_filing_key(item)
     if market == "pl":
         return _pl_filing_key(item)
     if market == "au":
@@ -544,6 +666,46 @@ def _be_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"be:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _baltic_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """Baltic filings pair on the stable Nasdaq Baltic disclosure id.
+
+    ``nasdaq_baltic_news`` is the only wired Baltic disclosure source; its
+    ``external_id`` (``baltic:<disclosureId>``) is the primary identity.
+    Without one, the fallback is source-scoped (source + ticker + Tallinn
+    day + normalized title), so a hypothetical second Baltic disclosure
+    source is never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"{item.get('market')}:filing:baltic:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, TALLINN)
+    if title and day:
+        return (
+            f"{item.get('market')}:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _in_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """IN filings pair on the stable NSE seq_id, with a source-scoped
+    Kolkata-day title fallback."""
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"in:filing:nse:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, KOLKATA)
+    if title and day:
+        return (
+            f"in:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -803,6 +965,22 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "ch"
         else WARSAW
         if market == "pl"
+        else TALLINN
+        if market in ("ee", "lv", "lt")
+        else OSLO
+        if market == "no"
+        else LISBON
+        if market == "pt"
+        else VIENNA
+        if market == "at"
+        else KOLKATA
+        if market == "in"
+        else MEXICO_CITY
+        if market == "mx"
+        else JERUSALEM
+        if market == "il"
+        else BUDAPEST
+        if market == "hu"
         else STOCKHOLM
         if market == "se"
         else BRUSSELS

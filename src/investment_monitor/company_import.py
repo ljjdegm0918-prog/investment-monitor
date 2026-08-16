@@ -55,6 +55,16 @@ _CANONICAL_SUFFIXES: Dict[str, str] = {
     "emf": "emf",
     "trq": "trq",
     "eux": "eux",
+    "ee": "ee",
+    "lv": "lv",
+    "lt": "lt",
+    "no": "no",
+    "pt": "pt",
+    "at": "at",
+    "in": "in",
+    "mx": "mx",
+    "il": "il",
+    "hu": "hu",
 }
 
 # Common exchange / quote suffix aliases, mapped to a canonical market. This is
@@ -92,6 +102,24 @@ _EXCHANGE_ALIASES: Dict[str, str] = {
     "sgx": "sg",
     # Poland
     "wa": "pl",
+    # Baltic (Nasdaq Tallinn / Riga / Vilnius quote suffixes)
+    "tl": "ee",
+    "rg": "lv",
+    "vl": "lt",
+    # Norway / Portugal (Oslo Bors / Euronext Lisbon quote suffixes)
+    "ol": "no",
+    "ls": "pt",
+    # Austria (Vienna Stock Exchange quote suffix)
+    "vi": "at",
+    # India (NSE / BSE quote suffixes)
+    "ns": "in",
+    "bo": "in",
+    # Mexico (BMV quote suffix)
+    "mx": "mx",
+    # Israel (TASE quote suffix)
+    "ta": "il",
+    # Hungary (Budapest Stock Exchange quote suffix)
+    "bu": "hu",
     "wse": "pl",
     "gpw": "pl",
     # Sweden

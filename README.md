@@ -6,6 +6,20 @@
 
 Investment Monitor 是一个以列表为中心的本地金融信息监控工作区。首个 Web MVP 使用本项目已有的 SEC EDGAR 连接器，并为 News 与 Community 连接器预留清晰的数据源边界。
 
+## 独立全球市场覆盖总览（Draft PR #35）
+
+产品目标是独立覆盖全球市场信息。公开经纪商市场清单只作为一次性的范围 benchmark：**美洲、欧洲、亚洲 3 个地区，28 个国家、87 个交易场所标签**；产品不需要 IBKR 账号、API、Gateway、TWS、Client Portal 或 `conid`，也不判断用户能否下单。真实数据直接来自交易所、监管机构和正规第三方。接口按“国家证券目录、法定/交易所披露、新闻、ETF 目录、ETF 专属披露”计数，不把同一主上市证券经过的每个 MTF/ATS 路由伪装成独立发行人接口。
+
+| 地区 | 国家 / 参考场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
+|---|---:|---|---|---|
+| 美洲 | 3 / 31 | 0 live、2 partial、1 stub | 1 live、1 partial、1 stub | 加拿大 CSE/NEO 与官方 SEDAR+ 完整性；墨西哥 BMV 稳定接口；美国 OTC/Pink |
+| 欧洲 | 19 / 44 | 12 live、2 partial、5 stub | 9 live、4 partial、5 stub、1 unavailable | AT/CH/HU/IL/MX 的证券主数据；NO/PT 等法定披露；RU 仅只读 |
+| 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 unavailable | 日本股票全目录/PTS；新加坡官方公告；香港/台湾完整证券目录 |
+
+全局自动报告当前为：证券目录 **14 live、7 partial、6 stub、1 unavailable**；公司披露 **15 live、5 partial、6 stub、2 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、13 unknown、12 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
+
+本 PR 已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
+
 Web 界面为英文，包含三个固定列表：
 
 - Holdings（持仓）
@@ -145,7 +159,7 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 
 ### 加拿大数据源（CA）
 
-**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存 + Yahoo/Google CA news + 软去重。**未接入：** SEDAR+ 披露、CSE universe/filings、NEO universe/filings（见下方边界说明）。
+**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存、CEO.ca SEDAR PDF 镜像、Yahoo/Google CA news 与软去重。**未接入：** SEDAR+ 官方全量、CSE universe/filings、NEO universe/filings（见下方边界说明）。
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -153,11 +167,12 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 | yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); may be loosely related and break without notice |
 | google_news_ca | news | none | Key-free Google News RSS search (`hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
 | ceoca_ca | community | none | CEO.ca channel spiels via key-free JSON API (`new-api.ceo.ca`; spike 2026-08-11). API returns ~50 spiels/page (`limit` ignored); paginate with `until`. Toronto calendar-day filter; channel page URL only — no per-spiel deep link. Undocumented API may change without notice. |
-| sedar_plus / cse_filings / neo_filings | filings | — | Listed in Settings as **Not implemented**. Regulatory disclosure is **deliberately not wired** (CA-1 spike, re-verified CA-4): SEDAR+ has no stable free public API (Radware 403); CSE/NEO filings share the same network blockers as their directories |
+| ceoca_sedar | filings | none | **partial**：按请求 ticker 读取 CEO.ca 公司频道中的 `#sedar` bot 消息并保留实际 PDF 深链接，不扫描全局 SEDAR 历史；只接受精确 bot 身份、消息格式和 `ceo.ca/content/sedar/*.pdf`，日期最多 31 天且分页上限会失败关闭。这是 SEDAR+ 的第三方镜像，端点未文档化且无法证明无漏页，所以绝不标 official/live。 |
+| sedar_plus / cse_filings / neo_filings | filings | — | 官方 SEDAR+ 仍受 Radware 403；CSE/NEO 目录和 filings 仍缺稳定入口。它们保留为未实现边界，不会被 CEO.ca 镜像冒充。 |
 
 `market=ca` 公司使用规范根 ticker（`RY` / `RY.TO` / `RY-TO` 均存为 `RY`）。Board 在 universe 温热时由 `ca_universe_name_map()` 写入 `exchange`，冷启动时从输入后缀推断。公司保持 unmapped。Finnhub **仅 US**，不对 CA 查询。
 
-CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。监管 filings 无 CA 披露连接器，永不标注。Community 软去重使用 CEO.ca spiel id（或同源 scoped 标题回退）；仅接入 `ceoca_ca` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
+CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。`ceoca_sedar` 以 spiel id 生成稳定 external id；Community 软去重继续使用 `ceoca_ca` spiel id（或同源 scoped 标题回退）。
 
 ### 台湾数据源（TW）
 
@@ -197,7 +212,7 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 
 ### 德国数据源（DE）
 
-「German ETF's」深化沿用现有 `market=de` 代码 — **无** `market=etf` / `de_etf` / `xetra_etf`。目标为 Xetra / Deutsche Börse Cash Market ETF（及同 CSV 的 ETN/ETC）工具，与现有普通股（CS）universe 并存；**非** Eurex 衍生品，**非**付费 Deutsche Börse 数据产品。最终状态：universe 现接受 CSV Instrument Types `CS`、`ETF`、`ETN`、`ETC`（与 IBKR "German ETF's" 包同一交易所家族），每条记录存储 `instrument_type`，CSV 本身为 Cash Market 文件，不含 Eurex 衍生品。
+德国 ETF 深化沿用现有 `market=de` 代码 — **无** `market=etf` / `de_etf` / `xetra_etf`。目标为 Xetra / Deutsche Börse Cash Market ETF（及同 CSV 的 ETN/ETC）工具，与现有普通股（CS）universe 并存；**非** Eurex 衍生品，**非**付费 Deutsche Börse 数据产品。最终状态：universe 现接受 CSV Instrument Types `CS`、`ETF`、`ETN`、`ETC`（同属 Xetra / Deutsche Börse Cash Market 交易所家族），每条记录存储 `instrument_type`，CSV 本身为 Cash Market 文件，不含 Eurex 衍生品。
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -214,7 +229,7 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). NL-4 re-verified (2026-08-10): AFM registers are HTML-only, Euronext announcement pages use Drupal antibot and the guessed JSON endpoint 404s — no second free disclosure source. Needs ISIN from the NL universe cache or a typed Dutch ISIN. |
-| nl_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Amsterdam segment rows (key-free; live 2026-08-10: ~119 `Euronext Amsterdam` + ~16 multi-venue rows mentioning Amsterdam, e.g. `Euronext Amsterdam, Brussels`; non-Amsterdam boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. |
+| nl_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Amsterdam segment rows (key-free; live 2026-08-10: ~119 `Euronext Amsterdam` + ~16 multi-venue rows mentioning Amsterdam, e.g. `Euronext Amsterdam, Brussels`; non-Amsterdam boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not a complete national universe; never enters the feed. |
 | yahoo_nl | news | none | Yahoo Finance NL public RSS (`region=NL`, `lang=nl-NL` + `en-US` merged); `.AS` at request time; may be loosely related and break without notice |
 | google_news_nl | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=nl&gl=NL&ceid=NL:nl`); may be loosely related and break without notice |
 
@@ -227,7 +242,7 @@ NL feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | eqs_it | filings | none | EQS News JSON by Italian ISIN (key-free, unofficial WP API — may change; partial Italian-issuer coverage; empty for issuers not on the platform; NOT a Consob official feed). Consob public registers and Borsa Italiana/Euronext Milan announcement pages are not wired (no stable key-free JSON). IT-4 re-verified (2026-08-10): Consob serves a Radware captcha wall, Borsa Italiana is HTML-only, Euronext Milan announcement pages use antibot HTML — no second free disclosure source. Needs ISIN from the IT universe cache or a typed Italian ISIN. |
-| it_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Milan segment rows (key-free; live 2026-08-10: ~204 `Euronext Milan` + ~243 `Euronext Growth Milan`; filter also accepts `Borsa Italiana`/`Milano` labels if they ever appear; non-Italian boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not an IBKR-complete universe; never enters the feed. |
+| it_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Milan segment rows (key-free; live 2026-08-10: ~204 `Euronext Milan` + ~243 `Euronext Growth Milan`; filter also accepts `Borsa Italiana`/`Milano` labels if they ever appear; non-Italian boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not a complete national universe; never enters the feed. |
 | yahoo_it | news | none | Yahoo Finance IT public RSS (`region=IT`, `lang=it-IT` + `en-US` merged; identical titles stay single-language); `.MI` at request time; may be loosely related and break without notice |
 | google_news_it | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=it&gl=IT&ceid=IT:it`); may be loosely related and break without notice |
 
@@ -241,7 +256,7 @@ IT feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 |---|---|---|---|
 | cnmv_hr | filings | none | CNMV official relevant-information RSS — inside information (IP) + other relevant information (OIR) feeds (key-free, official; live 2026-08-10). Records are keyed by issuer legal name (`Title`) with a stable `nreg` registration number; matched to requested tickers via the ES universe name/ISIN. The IP feed is sometimes empty for a day (honest `[]`). Not a paid MOPS-style push. |
 | bme_relevant_facts | filings | none | Official BME relevant-facts JSON API (key-free; live 2026-08-10; same API family as the ES universe). Matched per company via the universe `companyKey`; records carry the same stable CNMV registration numbers (`IP`/`OI` prefixes) and CNMV detail deep links; date-only records use the Europe/Madrid noon anchor. The API clamps the requested range to at most ~31 calendar days, so older history is not available. Paid BME real-time/historical data services are deliberately not wired (ES-4 re-verified 2026-08-10). |
-| es_universe | breadth cache | none | Official BME equity API (key-free; live 2026-08-10): `SIBE` (~123) + `Floor` (~5) + `Latibex` (~14) kept in full; `MTF` filtered to `BMEGrowth` (~111) + `BMEScaleUp` (~52); funds (SICAV/HedgeFunds/VCC) and other non-equity rows excluded. Tickers are enriched per ISIN from `ShareDetailsInfo` (rate-limited; reuses cached tickers; failed entries stay until next refresh). BME is a SIX company — the Euronext CSV family is NOT reused and no Madrid segment exists there. Not an IBKR-complete universe; never enters the feed. |
+| es_universe | breadth cache | none | Official BME equity API (key-free; live 2026-08-10): `SIBE` (~123) + `Floor` (~5) + `Latibex` (~14) kept in full; `MTF` filtered to `BMEGrowth` (~111) + `BMEScaleUp` (~52); funds (SICAV/HedgeFunds/VCC) and other non-equity rows excluded. Tickers are enriched per ISIN from `ShareDetailsInfo` (rate-limited; reuses cached tickers; failed entries stay until next refresh). BME is a SIX company — the Euronext CSV family is NOT reused and no Madrid segment exists there. Not a complete national universe; never enters the feed. |
 | yahoo_es | news | none | Yahoo Finance ES public RSS (`region=ES`, `lang=es-ES` + `en-US` merged; identical titles stay single-language); `.MC` at request time; may be loosely related and break without notice |
 | google_news_es | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=es&gl=ES&ceid=ES:es`); may be loosely related (the `.MC` suffix also matches unrelated "MC" text) and break without notice |
 
@@ -254,11 +269,11 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | sgx_announcements | filings | none | **Not wired (SG-1 spike A3; SG-4 re-verified 2026-08-10)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector or second disclosure source is registered; SGX DataLink / LSEG / paid market-data products are deliberately not used (locked by tests). |
-| sg_universe | breadth cache | none | **Boundary stub (SG-2 spike B2)**: no stable key-free SGX securities directory exists (`www.sgx.com/securities/*` is a JS SPA, the screener is Refinitiv/LSEG-powered; `api.sgx.com` 403; `data.gov.sg` has only aggregate SINGSTAT turnover; ACRA is the full company register without SGX codes). `load_sg_universe` / `sg_universe_name_map` / `search_sg_universe` read a local cache if one ever exists; `refresh_sg_universe` raises `SgUniverseError` instead of faking an STI-only universe. Never enters the feed. |
+| sg_universe | breadth cache | none | **partial**：从正规新加坡第三方 StocksSG 的公开 `/api/v1/companies` 目录读取 ticker、公司名、UEN、board、ISIN、LEI；校验响应总数、重复 ticker 和最小规模后原子写缓存。现场接口仅约 183 行，明显不能证明 SGX 全量，因此不标 official/live；缓存永不进入信息 feed。 |
 | yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
 | google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
 
-`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）并保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。SG feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_sg` / `google_news_sg` news 跨源按 ticker + Singapore day（`Asia/Singapore`）+ normalized title 配对。无 SG 披露连接器，监管 filings 永无去重键且永不标注。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）。目录缓存温热时可回填名称、board 与 ISIN；冷启动仍保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。官方 SGX 披露仍未接入，不能用 StocksSG 的有限 announcements 页面代替监管 filings。
 
 ### 瑞士数据源（CH）
 
@@ -303,7 +318,7 @@ SE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 |---|---|---|---|
 | `fsma_stori` | Filings | None (key-free) | Official FSMA STORI (Belgian central storage of regulated information, `webapi.fsma.be/api/v1/<lang>/stori/result`; powers the public `fsma.be/en/stori` portal). Matches by Belgian ISIN or company name — never by ticker mnemonic (`ABI` does not match `AB INBEV`). A BE ISIN typed as the ticker works now; mnemonic tickers get an ISIN/name from the BE universe cache (BE-2) once it is refreshed and are otherwise skipped honestly (`no_universe_identity`). Europe/Brussels day bounds, stable document ids (`requiredReportingTopicId`), dates constrained server- and client-side. Undocumented JSON surface; may change without notice. `market=be` companies use canonical root tickers (`ABI` / `ABI.BR` / `ABI-BRU` all store as `ABI`; exchange suffixes `.BR` / `.BRU` / `.EBR` are stripped at add time, Belgian ISINs are kept as-is) and remain unmapped. Finnhub is **US only** and never queried for BE. |
 | `be_second_disclosure` | Filings | None | **Not wired (BE-4 re-verified 2026-08-10)**: no stable key-free second Belgian disclosure source exists. Euronext Brussels announcements are Drupal HTML pages keyed by per-company node IDs - no RSS (public RSS paths 404) and no JSON export (`_format=json` returns 406); the key-free EQS News JSON API (same family as the NL/IT connectors) returns zero records for every sampled Belgian ISIN, including BEL 20 names (ABI/KBC/UCB/Solvay/Ageas/Argenx and others); FSMA STORI remains the only official machine-readable feed. Paid feeds (Euronext Web Services/Saturn real-time or historical data, FinancialReports.eu, LSEG) are deliberately not wired. |
-| `be_universe` | breadth cache | none | Euronext live all-stocks CSV filtered to Brussels segment rows (key-free; live 2026-08-10: ~95 `Euronext Brussels` + ~5 `Euronext Growth Brussels` + ~8 `Euronext Access Brussels` + ~25 multi-venue rows mentioning Brussels, e.g. `Euronext Paris, Brussels` / `Euronext Amsterdam, Brussels`; non-Brussels national boards, Global Equity Market, Trading After Hours, EuroTLX and Euronext Expert Market excluded); not an IBKR-complete universe; never enters the feed. |
+| `be_universe` | breadth cache | none | Euronext live all-stocks CSV filtered to Brussels segment rows (key-free; live 2026-08-10: ~95 `Euronext Brussels` + ~5 `Euronext Growth Brussels` + ~8 `Euronext Access Brussels` + ~25 multi-venue rows mentioning Brussels, e.g. `Euronext Paris, Brussels` / `Euronext Amsterdam, Brussels`; non-Brussels national boards, Global Equity Market, Trading After Hours, EuroTLX and Euronext Expert Market excluded); not a complete national universe; never enters the feed. |
 | yahoo_be | news | none | Yahoo Finance BE public RSS (`region=BE`, `lang=fr-BE` + `en-US` merged; identical titles stay single-language); `.BR` at request time; may be loosely related and break without notice |
 | google_news_be | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-BE&gl=BE&ceid=BE:en`); may be loosely related and break without notice |
 
@@ -325,7 +340,7 @@ AQ feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 
 ### Cboe Europe (CXE) — Alternative European Equities，首个场所
 
-IBKR "Alternative European Equities" 包为多场所 bundle。本轨道仅落地 **一个场所**：Cboe Europe 股票（CXE 与 BXE 订单簿，MIC `CXEM`/`CXET`/`BXEM`/`BXET`）。**无** 虚拟 `aee` / `eu` / `eu_alt` market 代码。延期场所（本轨道未接入）：Turquoise（LSEG MTF；旧 turquoise.com 域名已停放，LSEG 替代路径非稳定免密钥目录）及其他 alternative European 订单簿。`market=cxe` 公司使用规范大写 Cboe 符号（`AZNl` → `AZNL`；`.CXE`/`.BXE` 后缀在添加时剥离；泛欧 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 CXE 查询。
+Alternative European Equities 参考范围包含多个场所。本轨道仅落地 **一个场所**：Cboe Europe 股票（CXE 与 BXE 订单簿，MIC `CXEM`/`CXET`/`BXEM`/`BXET`）。**无** 虚拟 `aee` / `eu` / `eu_alt` market 代码。延期场所（本轨道未接入）：Turquoise（LSEG MTF；旧 turquoise.com 域名已停放，LSEG 替代路径非稳定免密钥目录）及其他 alternative European 订单簿。`market=cxe` 公司使用规范大写 Cboe 符号（`AZNl` → `AZNL`；`.CXE`/`.BXE` 后缀在添加时剥离；泛欧 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 CXE 查询。
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -376,6 +391,312 @@ TRQ feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/�
 EUX feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 EUX 披露连接器（EUX-1 A3 / EUX-4）。News：`google_news_eux` 按 product code + Berlin day（`Europe/Berlin`）+ normalized title 配对（仅一个 EUX news 源，配对为同源）。
 
 Web Settings 页面为每个已实现的数据源展示 Provider credentials（各连接器声明自有字段，当前为 `FINNHUB_API_KEY` 与 `SEC_USER_AGENT`）；未实现的源显示为 Not implemented 且不可配置。高级区域允许为显式读取它们的连接器设置额外环境变量。工作区数据库中保存的值优先于 `.env` 作用于运行进程，且任何 API 响应均不会完整返回这些值。
+
+### 波罗的海（EE/LV/LT）— Nasdaq Baltic 三国市场
+
+- 市场代码：`ee`（爱沙尼亚 / Tallinn）、`lv`（拉脱维亚 / Riga）、`lt`（立陶宛 / Vilnius），
+  2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；`TICKER@EE|LV|LT` 与 Yahoo 后缀
+  `.TL` / `.RG` / `.VL` 均可导入。
+- **披露/公告主链 `nasdaq_baltic_news`**（filings，免 key）：官方页面
+  https://nasdaqbaltic.com/statistics/en/news 背后的公开 JSON API
+  `https://api.news.eu.nasdaq.com/news/query.action`（live 验证 2026-08-15）。
+  按 `Europe/Tallinn` 时区逐日请求，仅收集发行人公告；交易所公告
+  （company 为 `Nasdaq Tallinn/Riga/Vilnius`）不属于单一 ticker，跳过。
+  官方 API 不返回 ISIN/代码，公告按**归一化公司名精确匹配** Baltic 宇宙缓存；
+  匹配不上就诚实跳过，不做短码猜名。稳定主键 = 官方 `disclosureId`
+  （external_id `baltic:<id>`），PDF 附件链接保留官方 URL。
+- **可交易宇宙**：官方 XLSX（`/statistics/en/shares?download=1`，20 列，含
+  Ticker/Name/ISIN/MarketPlace/List/segment），stdlib `zipfile` 解析，按
+  MarketPlace `TLN/RIG/VLN` 分桶。live 条数（2026-08-15）：ee 30、lv 13、
+  lt 25。缓存仅用于回填名称/板别/ISIN 与披露匹配，永不进入 feed；
+  无手写蓝筹种子。
+- **新闻**：`yahoo_ee` / `google_news_ee`、`yahoo_lv` / `google_news_lv`、
+  `yahoo_lt` / `google_news_lt`（免 key RSS）。Yahoo 请求后缀 `.TL`/`.RG`/`.VL`，
+  本地语言 `et-EE`/`lv-LV`/`lt-LT` 与 `en-US` 双查后合并；Google 参数
+  `hl=et&gl=EE&ceid=EE:et`、`hl=lv&gl=LV&ceid=LV:lv`、`hl=lt&gl=LT&ceid=LT:lt`。
+  可能松散相关，按已知 RSS 边界处理。**Finnhub 永不查 ee/lv/lt。**
+- **第二披露源（BALTIC-4 锁死）**：三国发行人公告的稳定免费第二源不存在——
+  Nasdaq Baltic 官方 API 已是唯一权威入口；中央证券存管与交易所无额外免 key
+  接口，付费 Nasdaq 数据产品不接。新闻侧 Yahoo/Google 互为第二通道，
+  披露侧保持单一官方源。
+- **软去重**：披露按稳定 `disclosureId` 配对（无 id 时 source-scoped +
+  Tallinn 日 + 标题）；三国新闻在 Yahoo↔Google 间按 ticker + Tallinn 日 +
+  归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
+
+### 挪威与葡萄牙（NO/PT）— Euronext 扩展轨
+
+- 市场代码：`no`（挪威 / Oslo Børs）、`pt`（葡萄牙 / Euronext Lisbon），
+  2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；`TICKER@NO|PT` 与
+  Yahoo 后缀 `.OL` / `.LS` 均可导入。
+- **披露主链（诚实 stub）**：`newsweb_no`（NewsWeb，挪威法定 OAM）与
+  `euronext_lisbon_news`（Euronext Lisbon 公司新闻）。ENP-1 live 侦察
+  （2026-08-15）：NewsWeb 消息列表为混淆 JS SPA，`/api/*` 全部返回 SPA
+  外壳，无稳定免 key 数据端点；Euronext Lisbon 公司页 200，但公告由前端
+  组件渲染，探测的 press-release ajax 端点 404。两个连接器 `collect()`
+  诚实返回空并标注 stub，不伪造数据。付费聚合商不接。
+- **可交易宇宙**：复用 Euronext live CSV
+  （`live.euronext.com/en/pd_es/data/stocks/download?mics=dm_all_stock`，
+  同 NL/FR 家族），按 `market` 列的 **live 锁定写法**过滤：
+  NO 保留含 `Oslo` 的行（`Oslo Børs` 198 + `Euronext Growth Oslo` 87 +
+  `Euronext Expand Oslo` 10 = **295**）；PT 保留含 `Lisbon` 的行
+  （`Euronext Lisbon` 33 + `Euronext Access Lisbon` 14 +
+  `Euronext Growth Lisbon` 1 = **48**）。Amsterdam/Paris/Brussels 行一律
+  丢弃；无 OBX/PSI20 手写种子；缓存不进 feed。
+- **新闻**：`yahoo_no`/`google_news_no`、`yahoo_pt`/`google_news_pt`
+  （免 key RSS）。Yahoo 请求后缀 `.OL`/`.LS`，本地语言 `nb-NO`/`pt-PT` 与
+  `en-US` 双查合并；Google 参数 `hl=no&gl=NO&ceid=NO:no` 与
+  `hl=pt&gl=PT&ceid=PT:pt`。可能松散相关。**Finnhub 永不查 no/pt。**
+- **第二源（ENP-4 锁死）**：NO 主源 NewsWeb 尚无可用实现，Euronext Oslo
+  公司新闻未找到稳定免 key 端点，第二源同样锁死；PT 的 CMVM 公开通道与
+  Euronext 公司新闻均未发现稳定免 key JSON（`cmvm.pt` 英文路径 404，
+  EQS News API 对 EQNR/EDP 返回空记录），披露侧保持 stub 诚实边界。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；NO/PT 新闻在
+  Yahoo↔Google 间按 ticker + Oslo/Lisbon 日 + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
+### 奥地利（AT）— Vienna Stock Exchange / Wiener Börse
+
+- 市场代码：`at`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@AT` 与 Yahoo 后缀 `.VI` 均可导入。
+- **披露主链（诚实 stub）**：`wiener_boerse_news`。AT-1 live 侦察
+  （2026-08-15）：wienerborse.at 为 TYPO3 站点，发行人公告目录由前端
+  渲染，`/en/listed-companies/`、`/en/market-data/*` 下未发现稳定免 key
+  的 CSV/XLSX/JSON 端点；EQS Austria 对抽样 AT ISIN（如 OMV
+  AT0000743059）返回空记录。连接器 `collect()` 诚实返回空并标注 stub。
+  若未来用 EQS Austria，必须标注「非 Wiener Börse 官方、覆盖可能部分」。
+- **可交易宇宙（边界 stub）**：官方无稳定免 key 目录端点，`refresh` 抛
+  `AtUniverseError`；只读取手工放置的
+  `.cache/investment_monitor/at_universe.json`（若存在）。**无 ATX 或任何
+  手写种子冒充全宇宙**；缓存永不进 feed。
+- **新闻**：`yahoo_at`（`.VI` 后缀，`de-AT` + `en-US` 双查）与
+  `google_news_at`（`hl=de&gl=AT&ceid=AT:de`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 at。**
+- **第二源（AT-4 锁死）**：官方主源尚未有可用实现，EQS Austria 样本
+  空记录，无第二官方源；不接付费终端/数据商。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；AT 新闻在
+  Yahoo↔Google 间按 ticker + Vienna 日 + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
+### 印度（IN）— NSE（主）/ BSE（第二源边界）
+
+- 市场代码：`in`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@IN` 与 Yahoo 后缀 `.NS`（BSE 报价 `.BO`）均可导入。
+- **披露主链 `nse_announcements`**（filings，免 key）：官方 JSON
+  `https://www.nseindia.com/api/corporate-announcements?index=equities&from_date=dd-MM-yyyy&to_date=dd-MM-yyyy`
+  （live 验证 2026-08-15，无 WAF/cookie）。字段含 `seq_id`（稳定主键，
+  external_id `nse:<seq_id>`）、`symbol`、`sm_name`、`sm_isin`、`desc`
+  类别、`an_dt`（IST）、`attchmntText` 摘要与官方 PDF 附件。单日约
+  1600 条，连接器按请求 symbols 过滤；日期窗真实约束；时区 Asia/Kolkata。
+- **可交易宇宙**：官方免 key CSV
+  `https://archives.nseindia.com/content/equities/EQUITY_L.csv`
+  （live 验证 2026-08-15），仅保留 `SERIES == EQ` 的股票行（条数见回执）；
+  **BSE 行不混入**；无 Nifty50 手写种子；缓存永不进 feed。
+- **新闻**：`yahoo_in`（`.NS` 后缀，`en-IN` + `en-US` 双查）与
+  `google_news_in`（`hl=en&gl=IN&ceid=IN:en`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 in。**
+- **第二披露源（IN-4 锁死）**：BSE 公告 API
+  （`api.bseindia.com/.../AnnSubCategoryGetData`）探测返回空 `{}`，
+  站点为 Angular SPA 且参数无公开文档；不接付费终端。NSE 官方 API 为
+  唯一披露源，BSE 边界写死。
+- **软去重**：NSE 披露按稳定 `seq_id` 配对（无 id → source-scoped +
+  Kolkata 日 + 标题）；IN 新闻 Yahoo↔Google 按 ticker + Kolkata 日 +
+  归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
+
+### 墨西哥（MX）— BMV（主）/ BIVA（第二源边界）
+
+- 市场代码：`mx`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@MX` 与 Yahoo 后缀 `.MX` 均可导入。
+- **披露主链（诚实 stub）**：`bmv_relevant_events`。MX-1 live 侦察
+  （2026-08-15）：bmv.com.mx 为旧式 Liferay 站点，eventos-relevantes 与
+  上市公司深层路径 404，未发现稳定免 key JSON；`collect()` 诚实空并标注
+  stub。
+- **可交易宇宙（边界 stub）**：BMV 无稳定免 key 目录端点，`refresh` 抛
+  `MxUniverseError`；只读手工放置的
+  `.cache/investment_monitor/mx_universe.json`。**无 IPC 手写种子**；缓存
+  不进 feed。
+- **新闻**：`yahoo_mx`（`.MX` 后缀、`es-MX` + `en-US` 双查）与
+  `google_news_mx`（`hl=es&gl=MX&ceid=MX:es`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 mx。**
+- **第二源（MX-4 锁死）**：BIVA 门户为 React SPA，事件页无服务端数据；
+  `rss.biva.com.mx` TLS 握手失败，无稳定 RSS。不接 EODHD/OpenFIGI 等
+  third_party 冒充官方；不接付费终端。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；MX 新闻
+  Yahoo↔Google 按 ticker + **Mexico City 日** + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
+### 以色列（IL）— TASE / MAYA
+
+- 市场代码：`il`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@IL` 与 Yahoo 后缀 `.TA` 均可导入。
+- **披露主链（诚实 stub）**：`maya_announcements`。live 侦察
+  （2026-08-15）：MAYA/TASE 公告通道未发现稳定免 key JSON/RSS 端点
+  （证据见回执），连接器 `collect()` 诚实空并标注 stub。
+- **可交易宇宙（边界 stub）**：TASE 无稳定免 key 目录端点，`refresh`
+  抛 `IlUniverseError`；只读手工缓存
+  `.cache/investment_monitor/il_universe.json`。**无 TA-35 手写种子**；
+  缓存不进 feed。TASE Data Hub 付费产品不接。
+- **新闻**：`yahoo_il`（`.TA` 后缀，`he-IL` + `en-US` 双查，live 均
+  200）与 `google_news_il`（`hl=en&gl=IL&ceid=IL:en`；`hl=he` 实测仅 1
+  条故采用 en），免 key RSS，可能松散相关。**Finnhub 永不查 il。**
+- **第二源（IL-4 锁死）**：ISA 公开披露无稳定免 key 通道；TASE Data
+  Hub 需注册/付费，不接。README 写死边界。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；IL 新闻
+  Yahoo↔Google 按 ticker + **Jerusalem 日** + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
+### 匈牙利（HU）— Budapest Stock Exchange（BSE/BET）
+
+> 注意：这里的 **BSE 是布达佩斯证券交易所（bse.hu / bet.hu）**，与本仓
+> 印度轨锁死的印度 BSE（bseindia.com）完全不同，两者不共享任何端点或逻辑。
+
+- 市场代码：`hu`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@HU` 与 Yahoo 后缀 `.BU` 均可导入。
+- **披露主链（诚实 stub）**：`bse_hu_announcements`。live 侦察
+  （2026-08-15）：bse.hu/bet.hu 公告通道未发现稳定免 key JSON/RSS 端点
+  （证据见回执），连接器 `collect()` 诚实空并标注 stub。
+- **可交易宇宙（边界 stub）**：无稳定免 key BSE/BET 目录端点，`refresh`
+  抛 `HuUniverseError`；只读手工缓存
+  `.cache/investment_monitor/hu_universe.json`。**无 BUX 手写种子**；缓存
+  不进 feed。
+- **新闻**：`yahoo_hu`（`.BU` 后缀、`hu-HU` + `en-US` 双查；live 实测 Yahoo
+  `.BU` RSS 返回 200 但 **0 items**，保留连接器并如实标注空 feed）与
+  `google_news_hu`（`hl=hu&gl=HU&ceid=HU:hu`；live 实测 69 条，`hl=en`
+  被重定向到 US 且 65 条，故采用 hu），免 key RSS，可能松散相关。
+  **Finnhub 永不查 hu。**
+- **第二源（HU-4 锁死）**：MNB 公开通道无稳定免 key 披露端点；不接
+  EODHD/OpenFIGI 等 third_party；不接付费终端。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；HU 新闻
+  Yahoo↔Google 按 ticker + **Budapest 日** + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
+## 1.4 全球市场参考目录 + 覆盖看板（Phase 0）
+
+`universe/exchange_catalog.py` 是 Phase 0 的静态参考目录。历史文件名
+`universe/ibkr_exchange_catalog.json` 记录它最初由公开经纪商市场清单整理而来，
+但它只是一次性的覆盖范围 benchmark：运行时不访问该经纪商、不登录账号、
+不调用 API，也不提供交易能力。产品数据来自交易所、监管机构和正规第三方。
+
+- **冻结基线**：28 国（美洲 3 / 欧洲 19 / 亚太 6）、87 条股票场所/路由记录
+  （31 / 44 / 12）；测试逐项断言。美国页面的 `Nasdaq/BX/PSX`、
+  `Direct Edge/EDGEA`、加拿大 `Aequitas NEO/NEO Lit` 等组合行按计划书计数
+  拆分，回执内说明映射。ETF 栏目 27 条与股票场所大体重复，Phase 0 保持
+  单一场所体系，只在 seed `normalization.etf_columns` 记录 11/15/1。
+- **覆盖状态**（`coverage_report.py`，自动推导）：
+  `live / partial / stub / unavailable`，另有
+  `etf_universe: live|partial|unavailable|unknown` 与
+  `source_tier_summary: official|mixed|third_party|none`。边界 stub 国
+  （AT/CH/HU/IL/MX/SE/SG 宇宙；AT/HU/IL/MX/NO/PT 披露）绝不标 live；
+  RU 只接 MOEX 研究目录。报告不进 feed，也不表达任何经纪商交易状态。
+- **API/UI**：`GET /api/coverage` 返回目录摘要 + 28 国信息源覆盖（沿用现有
+  `/api/*` 鉴权）；Manage 页显示「全球市场信息覆盖」。响应明确声明
+  `broker_runtime_dependency=false`、`broker_account_required=false`，且不包含
+  交易状态。
+- **产品边界**：不接 IBKR 或其他经纪商账号/API，不使用 Gateway、TWS、
+  Client Portal、`conid`，也不以账户权限验证信息覆盖。
+- **本轨不做**：不把 BATS/Chi-X/Cboe/Turquoise 路由场所注册成披露连接器；
+  不做 Phase 4（CA/SG/SE/CH 主链与各国 ETF 爬全）；不重做 Phase 1 的
+  `global_equity_reference`/EODHD 日预算；不动 eux/emf；不上云、不改生产。
+
+## 1.5 共享股票身份 + ETF 子类型基建（Phase 1）
+
+`universe/global_equity_reference.py` 是跨市场的第三方候选参考层
+（`source_tier="third_party"`），为 Euronext ETF 候选、ISIN/FIGI 富化与
+证券身份富化提供 ISIN/FIGI 等跨市场参考字段。缓存位于
+`.cache/investment_monitor/global_equity_reference.json`。
+
+- **官方宇宙永远赢**：`refresh_global_equity_reference()` 把 DE/BE/FR/NL/IT
+  官方 `name_map` 作为锚；同一 symbol 的官方 name/ISIN/board 覆盖第三方
+  候选，候选只保留 provenance。DE Xetra 官方目录（含 3000+ ETF）不受影响。
+- **EODHD（P1-2）**：`EODHD_API_KEY` 从 `.env`/环境注入（不写进仓库，
+  不进 Web Settings extra-env——密钥后缀被安全白名单拒绝）。
+  `exchange-symbol-list/{EXCHANGE}` 逐交易所收编权益行，默认每日预算
+  `EODHD_DAILY_BUDGET=20` 次调用，预算日期与已刷交易所都持久化在缓存里，
+  防止坏 token 空转。未配置 key 时管线如实记录 `skipped_eodhd_no_key`，
+  **不产生任何假候选**。
+- **OpenFIGI（P1-1）**：`POST https://api.openfigi.com/v3/mapping` 免 key
+  可用（2026-08-15 live 实测；GET 返回 405）。只对缺 ISIN/FIGI 的 ETF
+  候选批量富化（默认最多 100 条、每请求 10 个 job），尊重其 25 次/60 秒
+  限速窗口；可选 `OPENFIGI_API_KEY` 头。
+- **Twelve Data（P1-3，可选）**：无 `TWELVE_DATA_API_KEY` 时跳过并记录
+  `skipped_twelve_no_key`；显式 `allow_no_key=True` 才走免 key
+  `symbol_search`，只写 `twelve_*` provenance 字段。
+- **add-company 接线**：`/api/companies/batch` 在官方 `name_fallback`
+  之下合并参考层条目（官方命中保留，参考层只补官方没有的 ticker，如
+  Euronext ETF 候选），无需改前端。
+- **测试**：`test_global_equity_reference.py`、`test_phase1_equity_reference.py`
+  （DE 黄金样本 + Euronext ETF 候选）、`test_eodhd_client.py`、
+  `test_openfigi_client.py`、`test_twelve_data_client.py`，全部离线 fake
+  opener，不发真实网络请求。
+
+## 1.6 Phase 4 partial 边界与 ETF 完整性（2026-08-16）
+
+计划书 Phase 4 的四国主链在 2026-08-16 重新 live 侦察后按实际可达性锁边：
+
+- **CA**：universe 保持 `partial`（官方 TMX TSX/TSXV 目录 live；CSE
+  `api.thecse.com` TLS EOF、NEO/Cboe Canada 目录超时）。披露保持
+  `unavailable`（SEDAR+ 403 WAF，无稳定免 key API，README 锁死，不假 LIVE）。
+- **SG**：universe 保持 `stub`。`api.sgx.com/securities/v1.1` 200 JSON
+  但只返回 prices 结构、筛选参数未公开；announcements 403；SGX 网页 SPA。
+  filings 保持 unavailable；EODHD/OpenFIGI 候选行进入
+  `global_equity_reference` 后 coverage 才会转 partial。
+- **SE**：universe 保持 `stub`（Nasdaq screener 对 Stockholm/OMX 代码
+  totalrecords=0，官方目录 SPA）；披露 `nasdaq_se_filings` 保持 live。
+  候选目录同样只走 third_party 标注。
+- **CH**：universe 保持 `stub`（SIX 页面与 `api.six-group.com` 均 404）；
+  披露 `eqs_ch` 保持 partial。EODHD/OpenFIGI 候选可转 partial，但永远
+  `source_tier=third_party`，不得覆盖官方字段。
+- **ETF 七国**：UK 官方 FIRDS 已按 CFI 分类 ETF（`uk_universe_etf_count`），
+  缓存含 ETF 行时 coverage 显示 `partial`（FIRDS 只有 ISIN、无零售 ticker，
+  故不标 live）；HK/JP/TW/AU/PL/ES 本轮未发现可自动化的官方 ETF
+  CSV/XLSX/API（HKEX/LSE/ASX 为 SPA 或前端导出，JPX/BME 404，GPW 连接
+  不稳），coverage 诚实保持 `unknown`，一旦第三方候选层有行自动转
+  `partial`。DE 黄金样本（官方 Xetra 含 ETF/ETN/ETC）不回退，测试锁死。
+- **CXE/TRQ**：`docs/phase4-cxe-trq-venue.md` 收口——两市场只有
+  `google_news_*` 新闻源，无任何披露 connector；catalog `catalog_role`
+  为 `venue_only`，永不进 28 国分母。
+- `coverage_report.py` 新增 `MARKET_NOTES` 显式锁边文案；四个模块新增
+  `PHASE4_BOUNDARY` 常量，`tests/test_phase4_boundaries.py` 逐项断言
+  Manage 看板状态与边界一致。
+
+## 1.7 Phase 5 计划书边角收口（2026-08-16）
+
+- **俄罗斯只读宇宙**：`universe/ru_universe.py` 接官方 MOEX ISS
+  `…/engines/stock/markets/shares/boards/TQBR/securities.json`（免 key，
+  live 505 行 TQBR）。payload 固定 `readonly=true`，只做研究目录，绝不进
+  feed；coverage RU 显示 universe partial；产品不提供行情或交易状态。
+- **CN↔Stock Connect**：`universe/stock_connect.py` 静态记录
+  `SEHKSZSE`（Shanghai-HK Stock Connect）与 `SEHKSTAR`（STAR Connect）
+  northbound 映射；`cn` 保持 catalog extra，**不新开 CN 监管披露连接器**。
+- **ETF 发行人披露骨架**：coverage 新增 `etf_disclosure` 字段
+  （live|partial|stub|unavailable）。当前无免 key ETF 文件/公告源，28 国
+  全部 unavailable；股权 `eqs_*`/公司公告绝不冒充 ETF 基金文件。看板新增
+  一列。
+- **经纪商身份路径已移除**：添加公司只使用项目自身市场代码、官方目录及
+  ISIN/FIGI 参考信息，不查询或保存 `conid`。迁移不会删除历史数据库表或数据。
+- **季度覆盖对表工具**：`PYTHONPATH=src python -m investment_monitor.catalog_diff`
+  可把当前静态 benchmark 与 `docs/ibkr_catalog_snapshot.json` 比较；该工具仅供
+  离线发现范围变化，不是运行时依赖，也不调用账号/API。
+- **薄国结论（2026-08-16 live 复验）**：NO/PT 已有 Euronext Live CSV
+  官方宇宙（保持 live）；AT Wiener Börse 仅 HTML、MX 候选全 404、
+  IL TASE/MAYA 400/403 WAF、HU BSE 无结构化导出——均锁 stub，不假 LIVE。
+
+## 1.8 零注册免费扫尾（Z，2026-08-16）
+
+- **US**：新增 `us_universe.py`，官方 SEC
+  `company_tickers_exchange.json`（约 10k 行，必须带 User-Agent）；这是
+  SEC 注册边界内的 breadth-only 目录，coverage 标 `partial`，不冒充完整
+  交易所目录。
+- **JP**：JPX 上市公司页未暴露静态 xlsx/xls 直链（Z0 复验），无稳定免
+  key 官方目录 → universe 保持 `unavailable`；TDnet/EDINET 披露保持 live。
+- **公开 ETF 目录**：未发现新的免 key 官方静态文件（LSE/HKEX/ASX SPA、
+  JPX/BME 404、GPW 不稳）；七国 ETF 状态维持 unknown，第三方候选行出现
+  才转 partial。不申请 EODHD/新 key。
+- **薄国**：无新稳免 key 源，AT/MX/IL/HU 继续锁 stub；NO/PT 保持已有
+  Euronext live。
+- **文档**：`docs/MARKET_COVERAGE_OUT_OF_SCOPE_ZH.md`（范围外清单）与
+  `docs/MARKET_DATA_FREE_VS_PAID_ZH.md`（免费 vs 付费短表）入库。
+- **禁止项**：不注册账号、不申请 key、不用 Playwright、不把新闻标成
+  披露/ETF 文件。
 
 ## 2. 可选的手动 SEC 采集
 
@@ -554,7 +875,7 @@ OK (skipped=1)
 
 生产模式是在常开 Linux 服务器或带持久磁盘的容器托管平台上运行同一服务。随附的 `Dockerfile` 将 Web 服务与每日采集器打包在一起。
 
-本地容器快速验证：
+本地容器快速验证（仅本机访问）：
 
 ```bash
 docker build -t investment-monitor .
@@ -562,12 +883,20 @@ docker run -d \
   --name investment-monitor \
   --restart unless-stopped \
   --env-file .env \
-  -p 8765:8765 \
+  -p 127.0.0.1:8765:8765 \
   -v investment-monitor-data:/app/data \
   investment-monitor
 ```
 
-在本机运行该命令仍要求电脑保持开机。若要让他人持续访问，将镜像部署至 VPS 或容器主机，在 `/app/data` 挂载持久卷，设置 `SEC_USER_AGENT`，并在前方配置 HTTPS/访问控制。SQLite 适用于单个小应用实例；勿对同一 SQLite 文件运行多个副本。
+生产部署必须满足（详见 `docs/security/HARDENING_CHECKLIST.md`）：
+
+1. **端口隔离**：容器/进程只映射到 `127.0.0.1`，由 Nginx/Caddy 在前方终结 HTTPS 并反代；云安全组**禁止**对公网放行 `8765`。
+2. **访问鉴权**：设置强随机的 `WEB_AUTH_TOKEN`。设置后所有 `/api/*` 请求必须携带 `Authorization: Bearer <WEB_AUTH_TOKEN>`，否则返回 401。浏览器端在控制台执行
+   `localStorage.setItem("im_web_auth_token", "<token>")` 后页面请求会自动带上。
+3. **同源校验**：设置 `WEB_EXTERNAL_SCHEME=https`（CSRF 同源校验依赖外部协议）。
+4. **数据安全**：为 `/app/data` 挂持久卷并纳入备份；SQLite 适用于单个小应用实例，勿对同一 SQLite 文件运行多个副本。
+
+在服务器上运行该服务仍要求持续供电联网；若需他人访问，按上述清单配置即可。
 
 ## 建议的手动验收测试
 

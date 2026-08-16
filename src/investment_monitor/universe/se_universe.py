@@ -35,6 +35,18 @@ from typing import Any, List, Mapping, Optional
 
 DEFAULT_CACHE_PATH = ".cache/investment_monitor/se_universe.json"
 
+# Phase 4 锁边（2026-08-16 live 复验）：Nasdaq screener 对 Stockholm 相关
+# exchange code 返回空 rows；nasdaqomxnordic.com/screener 仍是 SPA shell。
+# 披露主链 nasdaq_se_filings 保持 live；universe 保持 stub。
+PHASE4_BOUNDARY = {
+    "universe": "stub",
+    "disclosure": "live",
+    "evidence": (
+        "api.nasdaq.com/api/screener/stocks?exchange=STO: zero rows; "
+        "nasdaqomxnordic.com/screener/shares: SPA shell"
+    ),
+}
+
 
 class SeUniverseError(RuntimeError):
     """Raised when the SE universe cannot be refreshed at all."""

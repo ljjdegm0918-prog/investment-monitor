@@ -37,6 +37,7 @@ const MESSAGES = {
     "common.workspace_failed": "Workspace request failed",
     "common.request_failed_status": "Request failed ({status})",
     "common.asia_shanghai": "Asia/Shanghai",
+    "common.none_recorded": "None recorded",
     "cat.filings": "Filings",
     "cat.news": "News",
     "cat.community": "Community",
@@ -53,6 +54,18 @@ const MESSAGES = {
     "manage.market": "Market",
     "manage.search": "Search",
     "manage.add_ticker": "Add ticker",
+    "manage.manual_add": "Ticker input",
+    "manage.csv_add": "CSV / table import",
+    "manage.csv_desc": "Paste spreadsheet rows or upload a CSV/TSV file. Each row can use a different market and list.",
+    "manage.csv_rows": "CSV or spreadsheet rows",
+    "manage.csv_file": "Or choose a CSV/TSV file",
+    "manage.csv_import": "Import rows",
+    "manage.csv_help": "Required columns: ticker, market, list. List accepts an existing list name or slug. Up to 500 rows.",
+    "manage.csv_done": "CSV import completed.",
+    "manage.csv_added": "Added",
+    "manage.csv_existing": "Already present",
+    "manage.csv_failed": "Failed",
+    "manage.csv_row": "Row {row}",
     "manage.add_placeholder": "e.g. AAPL@US, 0700@HK, RY@TO",
     "manage.add_help": "Add one or more symbols, separated by commas, spaces, semicolons, or new lines. A market suffix selects that market: use @ (AAPL@US, 0700@HK) or a dot (AAPL.US, 0700.HK). A recognized suffix (for example .US, .HK, .TO, .AX, or the same code after @) selects the market; symbols without one are treated as US. A dot inside a ticker (for example BRK.B) is never treated as a suffix.",
     "manage.added_multi": "Added: {items}",
@@ -71,6 +84,18 @@ const MESSAGES = {
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
+    "manage.ibkr_coverage": "Global market information coverage",
+    "manage.coverage_desc": "Independent exchange, regulator, and reputable third-party source status. Reference venues only reveal coverage gaps and are never runtime broker dependencies.",
+    "manage.coverage_loading": "Loading coverage…",
+    "manage.coverage_country": "Country",
+    "manage.coverage_market": "Market",
+    "manage.coverage_universe": "Stock universe",
+    "manage.coverage_etf": "ETF universe",
+    "manage.coverage_etf_disclosure": "ETF disclosure",
+    "manage.coverage_disclosure": "Disclosure",
+    "manage.coverage_news": "News",
+    "manage.coverage_tier": "Source tier",
+    "manage.coverage_venues": "Venues",
     "manage.companies_count": "{count} companies",
     "manage.rename": "Rename",
     "manage.delete": "Delete",
@@ -104,6 +129,11 @@ const MESSAGES = {
     "manage.latest_attempt": "Latest attempt",
     "manage.none_recorded": "None recorded",
     "manage.failure_details": "Failure details",
+    "manage.adding_company": "Adding…",
+    "manage.added_collecting_background": "{items} added. Collecting in background…",
+    "manage.collection_complete": "Collection complete.",
+    "manage.collection_partial": "Collection partial. {error}",
+    "manage.collection_failed": "Collection failed. {error}",
     "status.connected": "Connected",
     "status.data_stale": "Data stale",
     "status.not_connected": "Not connected",
@@ -128,6 +158,16 @@ const MESSAGES = {
     "region.ch": "Switzerland",
     "region.pl": "Poland",
     "region.se": "Sweden",
+    "region.ee": "Estonia",
+    "region.lv": "Latvia",
+    "region.lt": "Lithuania",
+    "region.no": "Norway",
+    "region.pt": "Portugal",
+    "region.at": "Austria",
+    "region.in": "India",
+    "region.mx": "Mexico",
+    "region.il": "Israel",
+    "region.hu": "Hungary",
     "region.aq": "Aquis (AQSE)",
     "region.cxe": "Cboe Europe (CXE)",
     "region.emf": "Europe (Funds)",
@@ -240,6 +280,7 @@ const MESSAGES = {
     "common.workspace_failed": "工作区请求失败",
     "common.request_failed_status": "请求失败（{status}）",
     "common.asia_shanghai": "上海时间",
+    "common.none_recorded": "无记录",
     "cat.filings": "申报",
     "cat.news": "新闻",
     "cat.community": "社区",
@@ -256,6 +297,18 @@ const MESSAGES = {
     "manage.market": "市场",
     "manage.search": "搜索",
     "manage.add_ticker": "添加代码",
+    "manage.manual_add": "代码输入",
+    "manage.csv_add": "CSV / 表格导入",
+    "manage.csv_desc": "可粘贴表格行或上传 CSV/TSV 文件；每一行可指定不同市场和列表。",
+    "manage.csv_rows": "CSV 或表格内容",
+    "manage.csv_file": "或者选择 CSV/TSV 文件",
+    "manage.csv_import": "导入表格",
+    "manage.csv_help": "必需列：ticker、market、list。list 可填写现有列表名称或 slug，最多 500 行。",
+    "manage.csv_done": "CSV 导入完成。",
+    "manage.csv_added": "已添加",
+    "manage.csv_existing": "已存在",
+    "manage.csv_failed": "失败",
+    "manage.csv_row": "第 {row} 行",
     "manage.add_placeholder": "例如：AAPL@US、0700@HK、RY@TO",
     "manage.add_help": "可一次输入多个“股票代码@市场/交易所”或“股票代码.市场/交易所”，用逗号、空格、分号或换行分隔。@ 格式（如 0700@HK）不会与代码本身冲突，更推荐；. 格式（如 0700.HK）也支持。可识别的后缀（如 .US、.HK、.TO、.AX，或 @ 后的相同代码）会指定对应市场；没有后缀的代码默认视为美股（US）。代码本身含点（如 BRK.B）不会被误判为后缀。",
     "manage.added_multi": "已添加：{items}",
@@ -274,6 +327,18 @@ const MESSAGES = {
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
+    "manage.ibkr_coverage": "全球市场信息覆盖",
+    "manage.coverage_desc": "交易所、监管机构与正规第三方来源状态；参考场所只用于发现覆盖缺口，不依赖任何经纪商。",
+    "manage.coverage_loading": "正在加载覆盖…",
+    "manage.coverage_country": "国家",
+    "manage.coverage_market": "市场",
+    "manage.coverage_universe": "股票宇宙",
+    "manage.coverage_etf": "ETF 宇宙",
+    "manage.coverage_etf_disclosure": "ETF 披露",
+    "manage.coverage_disclosure": "披露",
+    "manage.coverage_news": "新闻",
+    "manage.coverage_tier": "来源层级",
+    "manage.coverage_venues": "场所数",
     "manage.companies_count": "{count} 家公司",
     "manage.rename": "重命名",
     "manage.delete": "删除",
@@ -307,6 +372,11 @@ const MESSAGES = {
     "manage.latest_attempt": "最近尝试",
     "manage.none_recorded": "无记录",
     "manage.failure_details": "失败详情",
+    "manage.adding_company": "正在添加…",
+    "manage.added_collecting_background": "{items} 已添加，正在后台采集…",
+    "manage.collection_complete": "采集完成。",
+    "manage.collection_partial": "采集部分完成。{error}",
+    "manage.collection_failed": "采集失败。{error}",
     "status.connected": "已连接",
     "status.data_stale": "数据过期",
     "status.not_connected": "未连接",
@@ -331,6 +401,16 @@ const MESSAGES = {
     "region.ch": "瑞士",
     "region.pl": "波兰",
     "region.se": "瑞典",
+    "region.ee": "爱沙尼亚",
+    "region.lv": "拉脱维亚",
+    "region.lt": "立陶宛",
+    "region.no": "挪威",
+    "region.pt": "葡萄牙",
+    "region.at": "奥地利",
+    "region.in": "印度",
+    "region.mx": "墨西哥",
+    "region.il": "以色列",
+    "region.hu": "匈牙利",
     "region.aq": "Aquis (AQSE)",
     "region.cxe": "Cboe Europe (CXE)",
     "region.emf": "欧洲（基金）",
@@ -478,7 +558,6 @@ function applyStaticLabels() {
   }
 }
 
-const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","aq","cxe","emf","trq","eux","unknown"];
 const state = { bootstrap: null, selectedList: "" };
 document.addEventListener("DOMContentLoaded", init);
 
@@ -690,7 +769,7 @@ function researchCompanyRow(company) {
   const latest = company.latest_evidence_at ? formatDateTime(company.latest_evidence_at) : t("common.none_recorded");
   const generated = company.latest_generated_at ? formatDateTime(company.latest_generated_at) : t("research.no_card");
   return `<tr>
-    <td>${esc(company.name)}<br><small>${esc((company.lists || []).join(", "))}</small></td>
+    <td>${esc(company.name)}<br><small>${(company.lists || []).map(slug => esc(listDisplayName(slug))).join(", ")}</small></td>
     <td>${esc(company.ticker)}</td>
     <td>${esc(String(company.market).toUpperCase())}</td>
     <td>${coverage}</td>
@@ -847,7 +926,7 @@ function bindResearchPrint() {
 function listScopeLabel(slug) {
   if (!slug) return t("research.all_lists");
   const found = (state.bootstrap?.lists || []).find(l => l.slug === slug);
-  return found ? found.name : slug;
+  return found ? listDisplayName(found) : listDisplayName(slug);
 }
 
 function researchCardMeta(card) {
@@ -945,6 +1024,27 @@ function researchInfoTypeLabel(type) {
   return key ? t(key) : type;
 }
 
+const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","ee","lv","lt","no","pt","at","in","mx","il","hu","aq","cxe","emf","trq","eux","unknown"];
+
+// 固定列表名按当前语言显示；用户重命名的自定义列表始终显示用户的名字。
+const FIXED_LIST_LABELS = {
+  holdings: {en: "Holdings", "zh-CN": "持仓"},
+  planned: {en: "Planned Purchases", "zh-CN": "计划买入"},
+  watchlist: {en: "Watchlist", "zh-CN": "观察列表"},
+};
+function listDisplayName(list) {
+  if (typeof list === "string") {
+    const found = (state.bootstrap?.lists || []).find(item => item.slug === list);
+    if (found) return listDisplayName(found);
+    const label = FIXED_LIST_LABELS[list];
+    return label ? (label[lang] || label.en) : list;
+  }
+  if (list && list.is_fixed && FIXED_LIST_LABELS[list.slug]) {
+    return FIXED_LIST_LABELS[list.slug][lang] || FIXED_LIST_LABELS[list.slug].en;
+  }
+  return list ? list.name : "";
+}
+
 async function renderManage() {
   document.getElementById("page").innerHTML = `
     <section class="page-heading"><p class="eyebrow">${t("manage.eyebrow")}</p><h1>${t("manage.heading")}</h1><p>${t("manage.subtitle")}</p></section>
@@ -982,6 +1082,10 @@ async function renderManage() {
     <section class="management-section" aria-labelledby="sources-title">
       <div class="section-heading"><div><h2 id="sources-title">${t("manage.information_sources")}</h2><p>${t("manage.sources_desc")}</p></div></div>
       <div id="source-grid"><p class="loading">${t("manage.loading_sources")}</p></div>
+    </section>
+    <section class="management-section" aria-labelledby="coverage-title">
+      <div class="section-heading"><div><h2 id="coverage-title">${t("manage.ibkr_coverage")}</h2><p>${t("manage.coverage_desc")}</p></div></div>
+      <div id="coverage-board"><p class="loading">${t("manage.coverage_loading")}</p></div>
     </section>`;
   bindManagement();
   await refreshManagement();
@@ -1000,10 +1104,76 @@ function bindManagement() {
   document.getElementById("company-csv").addEventListener("submit", importCompanyCsv);
 }
 
+async function loadCsvFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try { document.getElementById("company-csv-input").value = await file.text(); }
+  catch (_) { toast(t("common.request_failed"), true); }
+}
+
+async function importCompanyCsv(event) {
+  event.preventDefault();
+  const button = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  const target = document.getElementById("csv-import-result");
+  button.disabled = true;
+  try {
+    const result = await api("/api/companies/csv", {
+      method:"POST",
+      body:JSON.stringify({csv:document.getElementById("company-csv-input").value}),
+    });
+    target.innerHTML = csvImportResult(result);
+    toast(t("manage.csv_done"));
+    await reloadBootstrap();
+    await refreshManagement();
+  } catch (error) {
+    target.innerHTML = `<div class="csv-result error">${esc(error.message)}</div>`;
+  } finally { button.disabled = false; }
+}
+
+function csvImportResult(result) {
+  const sections = [];
+  if (result.added?.length) sections.push(`<strong>${t("manage.csv_added")}:</strong> ${result.added.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.already_present?.length) sections.push(`<strong>${t("manage.csv_existing")}:</strong> ${result.already_present.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.failed?.length) sections.push(`<strong>${t("manage.csv_failed")}:</strong> ${result.failed.map(item => `${item.row ? `${t("manage.csv_row", {row:item.row})}: ` : ""}${esc(item.ticker)} — ${esc(item.error)}`).join("; ")}`);
+  return `<div class="csv-result">${sections.join("<br>") || t("manage.csv_done")}</div>`;
+}
+
 async function refreshManagement() {
   renderLists(); renderCompanies();
   try { renderSources((await api("/api/sources")).sources); }
   catch (error) { document.getElementById("source-grid").innerHTML = errorState(t("common.request_failed"), error.message); }
+  try { renderCoverage(await api("/api/coverage")); }
+  catch (error) { document.getElementById("coverage-board").innerHTML = errorState(t("common.request_failed"), error.message); }
+}
+
+function coverageBadge(status) {
+  const safe = String(status || "unavailable").toLowerCase();
+  return `<span class="coverage-badge coverage-${escAttr(safe)}">${esc(status || "unavailable")}</span>`;
+}
+
+function renderCoverage(payload) {
+  const rows = payload.report?.countries || [];
+  document.getElementById("coverage-board").innerHTML = `
+    <p class="coverage-summary">${t("manage.coverage_country")}: ${payload.catalog?.countries ?? rows.length} · ${t("manage.coverage_venues")}: ${payload.catalog?.venues ?? ""}</p>
+    <div class="coverage-table-wrap"><table class="coverage-table">
+      <thead><tr>
+        <th>${t("manage.coverage_country")}</th><th>${t("manage.coverage_market")}</th>
+        <th>${t("manage.coverage_universe")}</th><th>${t("manage.coverage_etf")}</th><th>${t("manage.coverage_etf_disclosure")}</th>
+        <th>${t("manage.coverage_disclosure")}</th><th>${t("manage.coverage_news")}</th>
+        <th>${t("manage.coverage_tier")}</th><th>${t("manage.coverage_venues")}</th>
+      </tr></thead>
+      <tbody>${rows.map(row => `<tr>
+        <td>${esc(row.country_name || row.country_code)}</td>
+        <td>${esc(row.market_code || "—")}</td>
+        <td>${coverageBadge(row.universe)}</td>
+        <td>${coverageBadge(row.etf_universe)}</td>
+        <td>${coverageBadge(row.etf_disclosure)}</td>
+        <td>${coverageBadge(row.disclosure)}</td>
+        <td>${coverageBadge(row.news)}</td>
+        <td>${esc(row.source_tier_summary || "—")}</td>
+        <td>${Number(row.venue_count || 0)}</td>
+      </tr>`).join("")}</tbody>
+    </table></div>`;
 }
 
 function renderLists() {
@@ -1012,7 +1182,7 @@ function renderLists() {
   if (state.selectedList && !lists.some(list => list.slug === state.selectedList)) state.selectedList = lists[0]?.slug || "";
   document.getElementById("list-strip").innerHTML = lists.length ? lists.map(list => `
     <article class="list-card ${list.slug === state.selectedList ? "selected" : ""}" data-slug="${escAttr(list.slug)}">
-      <button class="list-select" type="button"><strong>${esc(list.name)}</strong><span>${t("manage.companies_count", {count: list.company_count})}</span></button>
+      <button class="list-select" type="button"><strong>${esc(listDisplayName(list))}</strong><span>${t("manage.companies_count", {count: list.company_count})}</span></button>
       <div><button class="text-button rename-list" type="button">${t("manage.rename")}</button><button class="text-button danger delete-list" type="button">${t("manage.delete")}</button></div>
     </article>`).join("") : `<div class="empty compact"><p>${t("manage.create_list_first")}</p></div>`;
   document.querySelectorAll(".list-select").forEach(button => button.addEventListener("click", () => { state.selectedList = button.closest(".list-card").dataset.slug; renderLists(); renderCompanies(); }));
@@ -1038,7 +1208,7 @@ async function deleteList(slug) {
 function renderCompanies() {
   const list = state.bootstrap.lists.find(item => item.slug === state.selectedList);
   const companies = state.bootstrap.companies.filter(company => company.list_slugs.includes(state.selectedList));
-  document.getElementById("company-context").textContent = list ? `${list.name} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
+  document.getElementById("company-context").textContent = list ? `${listDisplayName(list)} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
   document.getElementById("company-table").innerHTML = companies.length ? `<div class="table-wrap"><table><thead><tr><th>${t("manage.company")}</th><th>${t("manage.ticker")}</th><th>${t("manage.exchange")}</th><th>${t("manage.region")}</th><th></th></tr></thead><tbody>${companies.map(company => `<tr><td>${esc(company.name)}</td><td>${esc(company.ticker)}</td><td>${esc(exchangeLabel(company.exchange))}</td><td>${regionForMarket(company.market)}</td><td><button class="text-button danger remove-company" data-ticker="${escAttr(company.ticker)}" data-market="${escAttr(company.market)}">${t("manage.remove")}</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty compact"><p>${t("manage.no_companies")}</p></div>`;
   document.querySelectorAll(".remove-company").forEach(button => button.addEventListener("click", () => removeCompany(button.dataset.ticker, button.dataset.market)));
 }
@@ -1079,19 +1249,42 @@ function csvImportResult(result) {
 
 async function addTickerDirect(event) {
   event.preventDefault();
+  const button = document.getElementById("add-ticker-direct");
+  if (button.disabled) return;
   if (!state.selectedList) { toast(t("manage.create_or_select_first"), true); return; }
   const tickers = document.getElementById("company-query").value.trim();
   if (!tickers) { toast(t("manage.enter_ticker_first"), true); return; }
+  button.disabled = true;
+  toast(t("manage.adding_company"));
   try {
     const result = await api("/api/companies/batch", {method:"POST", body:JSON.stringify({tickers, lists:[state.selectedList]})});
     const added = (result.added || []).map(row => `${esc(row.ticker)} (${esc(String(row.market).toUpperCase())})`);
-    if (added.length) toast(t("manage.added_multi", {items: added.join(", ")}));
+    if (added.length) toast(t("manage.added_collecting_background", {items: added.join(", ")}));
     for (const item of (result.failed || [])) {
       toast(`${esc(item.ticker)}: ${esc(item.error)}`, true);
     }
     await reloadBootstrap();
     await refreshManagement();
+    if (result.backfill_task_id) await pollBackfill(result.backfill_task_id);
   } catch (error) { toast(error.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function pollBackfill(taskId) {
+  let consecutiveFailures = 0;
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const task = await api(`/api/backfill-tasks/${encodeURIComponent(taskId)}`);
+      if (task.status === "success") { toast(t("manage.collection_complete")); return; }
+      if (task.status === "partial") { toast(t("manage.collection_partial", {error: task.error || ""}).trim(), true); return; }
+      if (task.status === "failure") { toast(t("manage.collection_failed", {error: task.error || ""}).trim(), true); return; }
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= 3) return;
+    }
+  }
 }
 
 async function removeCompany(ticker, market) {
@@ -1104,9 +1297,9 @@ function renderSources(sources) {
 }
 
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
-function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(list.name)}</option>`).join(""); }
+function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(listDisplayName(list))}</option>`).join(""); }
 function statusLabel(status) { const key = {connected:"status.connected", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
-function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
+function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", ee:"region.ee", lv:"region.lv", lt:"region.lt", no:"region.no", pt:"region.pt", at:"region.at", in:"region.in", mx:"region.mx", il:"region.il", hu:"region.hu", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
 function categoryLabel(type) { const key = {Filing:"cat.official_filings", News:"cat.news", Community:"cat.community"}[type]; return key ? t(key) : type; }
 function exchangeLabel(exchange) { return exchange && exchange !== "Unavailable" ? exchange : t("common.unavailable"); }
 function formatDay(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
@@ -1115,7 +1308,7 @@ function formatRange(start, end) { return start === end ? formatDay(start) : `${
 function formatTime(value) { return new Intl.DateTimeFormat(localeFor(), {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
-async function api(url, options={}) { const response = await fetch(url, {headers:{"Content-Type":"application/json"}, ...options}); const payload = await response.json(); if (!response.ok) throw new Error(payload.error || t("common.request_failed_status", {status: response.status})); return payload; }
+async function api(url, options={}) { const headers = {"Content-Type":"application/json", ...(options.headers||{})}; let token=""; try { token = localStorage.getItem("im_web_auth_token") || ""; } catch (_) { /* localStorage unavailable */ } if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(url, {...options, headers}); const payload = await response.json(); if (!response.ok) { const error = new Error(payload.error || t("common.request_failed_status", {status: response.status})); error.status = response.status; error.code = payload.code || ""; throw error; } return payload; }
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }

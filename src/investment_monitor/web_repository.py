@@ -63,6 +63,7 @@ SOURCE_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -129,6 +130,7 @@ PROVIDER_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -177,7 +179,29 @@ EXTRA_ENV_BLOCKED_EXACT = frozenset(
         "LOCALAPPDATA",
     }
 )
-EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "SSL", "PYTHON")
+# 白名单后缀：只允许无害的运行时调优项通过 Web Settings 写入。
+# 任何含密钥/上游地址/TLS 开关语义的名字都进不来。
+EXTRA_ENV_ALLOWED_SUFFIXES = (
+    "_TIMEOUT_SECONDS",
+    "_MAX_RETRIES",
+    "_REQUESTS_PER_SECOND",
+    "_LOOKBACK_DAYS",
+    "_BACKFILL_DAYS",
+)
+# 危险子串（大小写不敏感）：密钥、上游地址、TLS 校验、鉴权材料一律拒绝。
+EXTRA_ENV_BLOCKED_SUBSTRINGS = (
+    "KEY",
+    "TOKEN",
+    "COOKIE",
+    "SECRET",
+    "PASSWORD",
+    "URL",
+    "VERIFY",
+    "SSL",
+    "AUTH",
+    "BEARER",
+)
+EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
     ("dart", "OpenDART", "filings"),
@@ -282,9 +306,14 @@ class FeedFilters:
     page: int = 1
     page_size: int = 25
 
+    # Cap deep OFFSET pagination: beyond this the query degrades to O(n) scans.
+    MAX_PAGE = 1000
+
     def __post_init__(self) -> None:
         if self.page < 1:
             raise ValueError("page must be at least 1")
+        if self.page > self.MAX_PAGE:
+            raise ValueError(f"page must be at most {self.MAX_PAGE}")
         if not 1 <= self.page_size <= 100:
             raise ValueError("page_size must be between 1 and 100")
         if self.start_date and self.end_date and self.start_date > self.end_date:
@@ -1944,7 +1973,12 @@ class WebRepository:
             return False
         if name in EXTRA_ENV_BLOCKED_EXACT:
             return False
-        return not name.startswith(EXTRA_ENV_BLOCKED_PREFIXES)
+        if name.startswith(EXTRA_ENV_BLOCKED_PREFIXES):
+            return False
+        upper = name.upper()
+        if any(substring in upper for substring in EXTRA_ENV_BLOCKED_SUBSTRINGS):
+            return False
+        return name.endswith(EXTRA_ENV_ALLOWED_SUFFIXES)
 
     def _feed_where(self, filters: FeedFilters) -> Tuple[str, List[Any]]:
         conditions: List[str] = []
@@ -2430,6 +2464,16 @@ def _market_region(market: str) -> str:
         "ch": "Switzerland",
         "pl": "Poland",
         "se": "Sweden",
+        "ee": "Estonia",
+        "lv": "Latvia",
+        "lt": "Lithuania",
+        "no": "Norway",
+        "pt": "Portugal",
+        "at": "Austria",
+        "in": "India",
+        "mx": "Mexico",
+        "il": "Israel",
+        "hu": "Hungary",
     }.get(market, "Unavailable")
 
 
@@ -2975,6 +3019,269 @@ _TRQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 _EUX_TICKER_SUFFIXES = ("EUX",)
 _EUX_TICKER_SEPARATORS = (".", " ", "-")
 _EUX_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
+
+
+_BALTIC_TICKER_SUFFIXES = ("TL", "RG", "VL")
+_BALTIC_TICKER_SEPARATORS = (".", " ", "-")
+_BALTIC_ISIN_PATTERNS = {
+    "ee": re.compile(r"EE[0-9A-Z]{10}"),
+    "lv": re.compile(r"LV[0-9A-Z]{10}"),
+    "lt": re.compile(r"LT[0-9A-Z]{10}"),
+}
+
+
+def normalize_baltic_ticker(ticker: str, market: str) -> str:
+    """Normalize a Nasdaq Baltic (EE/LV/LT) symbol.
+
+    Accepts plain symbols (``TAL1T``) and the common data-provider suffixes
+    (``TAL1T.TL``, ``SAF1R.RG``, ``TEL1L.VL``; space or dash separators are
+    tolerated too, and stacked suffixes collapse to the root). Suffix words
+    without a separator are never erased. When the input contains a Baltic
+    ISIN (EE/LV/LT followed by 10 alphanumeric characters), the ISIN is
+    extracted and returned instead.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _BALTIC_ISIN_PATTERNS.get(market, re.compile(r"[A-Z]{2}[0-9A-Z]{10}")).search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _BALTIC_TICKER_SEPARATORS:
+            for suffix in _BALTIC_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_ee_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "ee")
+
+
+def normalize_lv_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "lv")
+
+
+def normalize_lt_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "lt")
+
+
+_NO_TICKER_SUFFIXES = ("OL",)
+_NO_TICKER_SEPARATORS = (".", " ", "-")
+_NO_ISIN_PATTERN = re.compile(r"NO[0-9A-Z]{10}")
+_PT_TICKER_SUFFIXES = ("LS",)
+_PT_TICKER_SEPARATORS = (".", " ", "-")
+_PT_ISIN_PATTERN = re.compile(r"PT[0-9A-Z]{10}")
+
+
+def _normalize_euronext_ticker(
+    ticker: str,
+    suffixes: tuple,
+    separators: tuple,
+    isin_pattern: re.Pattern,
+) -> str:
+    cleaned = str(ticker).strip().upper()
+    isin_match = isin_pattern.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in separators:
+            for suffix in suffixes:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_no_ticker(ticker: str) -> str:
+    """Normalize an Oslo Bors (Euronext Oslo) symbol.
+
+    Accepts plain symbols (``EQNR``) and the common ``.OL`` quote suffix;
+    a bare ``OL`` word is never erased, and a Norwegian ISIN (``NO`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    return _normalize_euronext_ticker(
+        ticker, _NO_TICKER_SUFFIXES, _NO_TICKER_SEPARATORS, _NO_ISIN_PATTERN
+    )
+
+
+def normalize_pt_ticker(ticker: str) -> str:
+    """Normalize a Euronext Lisbon symbol.
+
+    Accepts plain symbols (``EDP``) and the common ``.LS`` quote suffix;
+    a bare ``LS`` word is never erased, and a Portuguese ISIN (``PT`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    return _normalize_euronext_ticker(
+        ticker, _PT_TICKER_SUFFIXES, _PT_TICKER_SEPARATORS, _PT_ISIN_PATTERN
+    )
+
+
+_AT_TICKER_SUFFIXES = ("VI",)
+_AT_TICKER_SEPARATORS = (".", " ", "-")
+_AT_ISIN_PATTERN = re.compile(r"AT[0-9A-Z]{10}")
+
+
+def normalize_at_ticker(ticker: str) -> str:
+    """Normalize a Vienna Stock Exchange symbol.
+
+    Accepts plain symbols (``VOE``) and the common ``.VI`` quote suffix;
+    a bare ``VI`` word is never erased, and an Austrian ISIN (``AT`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _AT_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AT_TICKER_SEPARATORS:
+            for suffix in _AT_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_IN_TICKER_SUFFIXES = ("NS", "BO")
+_IN_TICKER_SEPARATORS = (".", " ", "-")
+_IN_ISIN_PATTERN = re.compile(r"IN[0-9A-Z]{10}")
+
+
+def normalize_in_ticker(ticker: str) -> str:
+    """Normalize an Indian (NSE/BSE) symbol.
+
+    Accepts plain NSE symbols (``RELIANCE``) and the common quote suffixes
+    ``.NS`` (NSE) and ``.BO`` (BSE); a bare ``NS``/``BO`` word is never
+    erased, and an Indian ISIN (``IN`` + 10 alphanumeric characters) is
+    kept as-is. The stored root stays the NSE-style symbol.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _IN_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _IN_TICKER_SEPARATORS:
+            for suffix in _IN_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_MX_TICKER_SUFFIXES = ("MX",)
+_MX_TICKER_SEPARATORS = (".", " ", "-")
+_MX_ISIN_PATTERN = re.compile(r"MX[0-9A-Z]{10}")
+
+
+def normalize_mx_ticker(ticker: str) -> str:
+    """Normalize a Mexican (BMV) symbol.
+
+    Accepts plain symbols (``WALMEX``) and the common ``.MX`` quote suffix;
+    a bare ``MX`` word is never erased, and a Mexican ISIN (``MX`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _MX_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _MX_TICKER_SEPARATORS:
+            for suffix in _MX_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_IL_TICKER_SUFFIXES = ("TA",)
+_IL_TICKER_SEPARATORS = (".", " ", "-")
+_IL_ISIN_PATTERN = re.compile(r"IL[0-9A-Z]{10}")
+
+
+def normalize_il_ticker(ticker: str) -> str:
+    """Normalize an Israeli (TASE) symbol.
+
+    Accepts plain symbols (``TEVA``) and the common ``.TA`` quote suffix;
+    a bare ``TA`` word is never erased, and an Israeli ISIN (``IL`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _IL_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _IL_TICKER_SEPARATORS:
+            for suffix in _IL_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_HU_TICKER_SUFFIXES = ("BU",)
+_HU_TICKER_SEPARATORS = (".", " ", "-")
+_HU_ISIN_PATTERN = re.compile(r"HU[0-9A-Z]{10}")
+
+
+def normalize_hu_ticker(ticker: str) -> str:
+    """Normalize a Hungarian (Budapest Stock Exchange) symbol.
+
+    Accepts plain symbols (``OTP``, ``MOL``, ``RICHTER``) and the common
+    ``.BU`` quote suffix; a bare ``BU`` word is never erased, and a
+    Hungarian ISIN (``HU`` + 10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _HU_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _HU_TICKER_SEPARATORS:
+            for suffix in _HU_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
 
 
 def normalize_se_ticker(ticker: str) -> str:

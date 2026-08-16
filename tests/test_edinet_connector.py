@@ -4,12 +4,17 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 import zipfile
 
 from investment_monitor.sources.edinet import (
     EDINETClient, EDINETCompanyInput, EDINETConnector, EDINETRequestError,
     EDINETStore,
+)
+from investment_monitor.sources.edinet.connector import (
+    EDINETDataError,
+    _read_limited_response,
 )
 from investment_monitor.models import CollectionRequest
 
@@ -203,9 +208,15 @@ class EDINETConnectorTests(unittest.TestCase):
     def test_client_retries_429_without_leaking_key(self):
         class Response:
             headers = {"Content-Type": "application/json"}
+            def __init__(self):
+                self.done = False
             def __enter__(self): return self
             def __exit__(self, *args): return None
-            def read(self): return json.dumps({"results": []}).encode()
+            def read(self, size=-1):
+                if self.done:
+                    return b""
+                self.done = True
+                return json.dumps({"results": []}).encode()
         calls = []
         def opener(request, timeout):
             calls.append(request)
@@ -221,6 +232,45 @@ class EDINETConnectorTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertNotIn("secret-key", calls[0].full_url)
         self.assertEqual(calls[0].headers["Ocp-apim-subscription-key"], "secret-key")
+
+    def test_read_limited_accepts_small_body_and_rejects_oversize(self):
+        class SmallResponse:
+            headers = {}
+            def __init__(self):
+                self.done = False
+            def read(self, size=-1):
+                if self.done:
+                    return b""
+                self.done = True
+                return b"small"
+
+        with patch(
+            "investment_monitor.sources.edinet.connector.EDINET_MAX_RESPONSE_BYTES",
+            16,
+        ):
+            self.assertEqual(_read_limited_response(SmallResponse()), b"small")
+
+            class OversizeResponse:
+                headers = {"Content-Length": "17"}
+                def read(self, size=-1):
+                    return b"x" * 17
+
+            with self.assertRaises(EDINETDataError):
+                _read_limited_response(OversizeResponse())
+
+            class StreamingResponse:
+                headers = {}
+                def __init__(self):
+                    self.remaining = 20
+                def read(self, size=-1):
+                    if self.remaining <= 0:
+                        return b""
+                    chunk = b"x" * min(size, self.remaining)
+                    self.remaining -= len(chunk)
+                    return chunk
+
+            with self.assertRaises(EDINETDataError):
+                _read_limited_response(StreamingResponse())
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from collections.abc import Iterable as IterableABC
 import json
 from pathlib import Path
 import sqlite3
+import time
 from tempfile import TemporaryDirectory
 from typing import get_args, get_origin, get_type_hints
 import unittest
@@ -154,6 +155,18 @@ class SourceBackfillStateTests(unittest.TestCase):
             "database_path: ../data/web.sqlite3\n",
             encoding="utf-8",
         )
+
+    def _wait_for_backfill(self, application, task_id, timeout=5.0):
+        """轮询后台回填任务直到终态，返回终态任务 payload。"""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            task = json.loads(application.handle(
+                "GET", f"/api/backfill-tasks/{task_id}"
+            ).body.decode("utf-8"))
+            if task["status"] in ("success", "partial", "failure"):
+                return task
+            time.sleep(0.02)
+        self.fail("backfill task did not reach a terminal state")
 
     def test_missing_selected_source_merges_with_normal_events_and_failures(self) -> None:
         self._write_settings(("healthy", "missing_fixture"))
@@ -1017,12 +1030,17 @@ class SourceBackfillStateTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status, 201)
+        payload = json.loads(response.body.decode("utf-8"))
+        self.assertIsNone(payload["collection"])
+        self.assertTrue(payload["backfill_task_id"].startswith("bf-"))
+        self._wait_for_backfill(application, payload["backfill_task_id"])
+
         self.assertEqual(len(calls), 1)
         self.assertEqual(tuple(calls[0]["sources"]), ("sec",))
         self.assertTrue(calls[0]["initial_backfill"])
         self.assertEqual(
             (calls[0]["end_date"] - calls[0]["start_date"]).days,
-            365,
+            30,
         )
 
     def test_es_add_runs_each_relevant_source_without_sec(self) -> None:
@@ -1052,6 +1070,9 @@ class SourceBackfillStateTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status, 201)
+        payload = json.loads(response.body.decode("utf-8"))
+        self._wait_for_backfill(application, payload["backfill_task_id"])
+
         self.assertEqual(
             [tuple(call["sources"]) for call in calls],
             [("cnmv_hr",), ("bme_relevant_facts",)],

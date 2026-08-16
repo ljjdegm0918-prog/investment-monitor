@@ -888,18 +888,18 @@ class WebRepositoryTests(unittest.TestCase):
             self.repository.set_setting("AWS_SECRET_ACCESS_KEY", "x")
 
     def test_extra_env_settings_are_validated_and_stored(self) -> None:
-        self.repository.set_setting("extra_env:CUSTOM_VAR", "value-1")
+        self.repository.set_setting("extra_env:CUSTOM_TIMEOUT_SECONDS", "value-1")
 
         stored = self.repository.load_extra_env()
-        status = self.repository.setting_status(("extra_env:CUSTOM_VAR",))[
-            "extra_env:CUSTOM_VAR"
+        status = self.repository.setting_status(("extra_env:CUSTOM_TIMEOUT_SECONDS",))[
+            "extra_env:CUSTOM_TIMEOUT_SECONDS"
         ]
 
-        self.assertEqual(stored, (("CUSTOM_VAR", "value-1"),))
+        self.assertEqual(stored, (("CUSTOM_TIMEOUT_SECONDS", "value-1"),))
         self.assertTrue(status["configured"])
         self.assertEqual(status["hint"], "••••ue-1")
 
-        self.repository.set_setting("extra_env:CUSTOM_VAR", "")
+        self.repository.set_setting("extra_env:CUSTOM_TIMEOUT_SECONDS", "")
         self.assertEqual(self.repository.load_extra_env(), ())
 
     def test_extra_env_rejects_invalid_and_dangerous_names(self) -> None:
@@ -914,9 +914,25 @@ class WebRepositoryTests(unittest.TestCase):
             "LD_LIBRARY_PATH",
             "SSL_CERT_FILE",
             "PYTHONHOME",
+            # Secret / URL / TLS override names must never be writable.
+            "RESEARCH_AI_BASE_URL",
+            "RESEARCH_AI_ALLOWED_HOSTS",
+            "RESEARCH_AI_API_KEY",
+            "FINNHUB_BASE_URL",
+            "AU_UNIVERSE_VERIFY_SSL",
+            "MY_APP_TOKEN",
+            "XUEQIU_COOKIE",
+            "SEC_USER_AGENT",
+            # Not on the tuning whitelist.
+            "CUSTOM_VAR",
         ):
             with self.assertRaises(ValueError, msg=bad_name):
                 self.repository.set_setting(f"extra_env:{bad_name}", "x")
+
+    def test_feed_page_is_capped_at_one_thousand(self) -> None:
+        with self.assertRaises(ValueError):
+            FeedFilters(page=1001)
+        self.assertEqual(FeedFilters(page=1000).page, 1000)
 
     def test_news_status_aggregates_multiple_news_sources(self) -> None:
         repository = WebRepository(

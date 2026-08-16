@@ -6,10 +6,17 @@ import re
 
 
 def normalize_jp_ticker(ticker: str) -> str:
-    """Normalize a JP ticker to a four-digit code without the .T suffix."""
+    """Normalize a JP ticker without the ``.T`` suffix.
+
+    TSE introduced alphanumeric security codes such as ``473A``; preserving
+    the trailing letter is required for ETF directory and news matching.
+    """
     code = str(ticker).strip().upper()
     if code.endswith(".T"):
         code = code[:-2]
+    compact = re.sub(r"[^0-9A-Z]", "", code)
+    if re.fullmatch(r"\d{3}[A-Z]", compact):
+        return compact
     digits = re.sub(r"[^0-9]", "", code)
     if digits:
         return digits.zfill(4)

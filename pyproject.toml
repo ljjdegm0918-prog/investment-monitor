@@ -19,7 +19,7 @@ edinet = "investment_monitor.sources.edinet.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-investment_monitor = ["migrations/*.sql", "web_static/*.html", "web_static/*.css", "web_static/*.js"]
+investment_monitor = ["migrations/*.sql", "web_static/*.html", "web_static/*.css", "web_static/*.js", "universe/*.json"]
 
 [tool.mypy]
 python_version = "3.9"

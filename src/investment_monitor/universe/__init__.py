@@ -7,6 +7,13 @@ from .de_universe import (
     refresh_de_universe,
     search_de_universe,
 )
+from .jp_etf_universe import (
+    JpEtfUniverseError,
+    jp_etf_universe_name_map,
+    load_jp_etf_universe,
+    refresh_jp_etf_universe,
+    search_jp_etf_universe,
+)
 from .be_universe import (
     BeUniverseError,
     be_universe_name_map,
@@ -70,10 +77,50 @@ from .se_universe import (
     search_se_universe,
     se_universe_name_map,
 )
+from .global_equity_reference import (
+    GlobalEquityReferenceError,
+    build_official_name_maps,
+    empty_payload,
+    etf_candidates_for,
+    euronext_etf_candidates,
+    load_global_equity_reference,
+    refresh_global_equity_reference,
+    save_global_equity_reference,
+    search_global_equity_reference,
+)
+from .eodhd_client import EodhdClientError, collect_eodhd_symbols
+from .openfigi_client import OpenFigiClientError, enrich_with_openfigi
+from .twelve_data_client import (
+    TwelveDataClientError,
+    enrich_with_twelve_quotes,
+)
+from .exchange_catalog import (
+    ExchangeCatalogError,
+    catalog_summary,
+    country_count,
+    list_countries,
+    list_venues,
+    load_exchange_catalog,
+    primary_exchanges_for,
+    venue_count,
+)
+from .coverage_report import coverage_report
+from .ru_universe import (
+    RuUniverseError,
+    load_ru_universe,
+    refresh_ru_universe,
+    ru_universe_name_map,
+    search_ru_universe,
+)
+from .stock_connect import (
+    stock_connect_summary,
+    stock_connect_venues_for,
+)
 
 __all__ = [
     "BeUniverseError",
     "DeUniverseError",
+    "JpEtfUniverseError",
     "FrUniverseError",
     "NlUniverseError",
     "ItUniverseError",
@@ -82,6 +129,37 @@ __all__ = [
     "ChUniverseError",
     "PlUniverseError",
     "SeUniverseError",
+    "GlobalEquityReferenceError",
+    "EodhdClientError",
+    "OpenFigiClientError",
+    "TwelveDataClientError",
+    "ExchangeCatalogError",
+    "RuUniverseError",
+    "catalog_summary",
+    "country_count",
+    "coverage_report",
+    "list_countries",
+    "list_venues",
+    "load_exchange_catalog",
+    "load_ru_universe",
+    "primary_exchanges_for",
+    "refresh_ru_universe",
+    "ru_universe_name_map",
+    "search_ru_universe",
+    "stock_connect_summary",
+    "stock_connect_venues_for",
+    "venue_count",
+    "build_official_name_maps",
+    "collect_eodhd_symbols",
+    "empty_payload",
+    "enrich_with_openfigi",
+    "enrich_with_twelve_quotes",
+    "etf_candidates_for",
+    "euronext_etf_candidates",
+    "load_global_equity_reference",
+    "refresh_global_equity_reference",
+    "save_global_equity_reference",
+    "search_global_equity_reference",
     "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",
@@ -94,16 +172,20 @@ __all__ = [
     "se_universe_name_map",
     "load_be_universe",
     "load_de_universe",
+    "load_jp_etf_universe",
     "load_fr_universe",
     "load_nl_universe",
     "load_it_universe",
     "refresh_be_universe",
     "refresh_de_universe",
+    "refresh_jp_etf_universe",
     "refresh_fr_universe",
     "refresh_nl_universe",
     "refresh_it_universe",
     "search_be_universe",
     "search_de_universe",
+    "search_jp_etf_universe",
+    "jp_etf_universe_name_map",
     "search_fr_universe",
     "search_nl_universe",
     "search_it_universe",

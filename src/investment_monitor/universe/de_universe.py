@@ -4,8 +4,8 @@ Source (live verified 2026-08-10): the key-free Deutsche Boerse Cash Market
 ``t7-xetr-allTradableInstruments.csv`` download (blob URL published on the
 Xetra / cash-market Downloads page). Semicolon-delimited; two metadata rows,
 then a header row, then Active/Active instrument rows. We keep Instrument
-Type ``CS`` (common shares), ``ETF``, ``ETN`` and ``ETC`` (the same
-exchange-traded family as the IBKR "German ETF's" package) with a
+Type ``CS`` (common shares), ``ETF``, ``ETN`` and ``ETC`` in the Xetra /
+Deutsche Börse Cash Market exchange-traded family, with a
 non-empty Mnemonic on MIC ``XETR``; each entry stores its
 ``instrument_type`` so ETF vs shares are distinguishable. The CSV is a
 Cash Market file: it contains no Eurex derivatives.

@@ -140,6 +140,10 @@ sources:
     label: CEO.ca (CA)
     source_type: community
     enabled: true          # key-free CEO.ca JSON API (new-api.ceo.ca); channel page URL only; may change without notice
+  - name: ceoca_sedar
+    label: CEO.ca SEDAR 文件镜像 (CA)
+    source_type: filings
+    enabled: true          # 第三方 SEDAR PDF 镜像；无 key；只标 partial，不能证明 SEDAR+ 全量完整
   - name: hotcopper_au
     label: HotCopper (AU)
     source_type: community
@@ -283,6 +287,106 @@ sources:
     label: Google News (CH)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=de, gl=CH); may be loosely related / break without notice
+  - name: yahoo_ee
+    label: Yahoo Finance EE
+    source_type: news
+    enabled: true                 # key-free RSS; .TL suffix at request time; may be loosely related
+  - name: google_news_ee
+    label: Google News (EE)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=et&gl=EE&ceid=EE:et
+  - name: yahoo_lv
+    label: Yahoo Finance LV
+    source_type: news
+    enabled: true                 # key-free RSS; .RG suffix at request time; may be loosely related
+  - name: google_news_lv
+    label: Google News (LV)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=lv&gl=LV&ceid=LV:lv
+  - name: yahoo_lt
+    label: Yahoo Finance LT
+    source_type: news
+    enabled: true                 # key-free RSS; .VL suffix at request time; may be loosely related
+  - name: google_news_lt
+    label: Google News (LT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: bse_hu_announcements
+    label: BSE (Budapest) announcements
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free endpoint (HU-1 2026-08-15)
+  - name: yahoo_hu
+    label: Yahoo Finance HU
+    source_type: news
+    enabled: true                 # key-free RSS; .BU suffix; hu-HU + en-US dual fetch
+  - name: google_news_hu
+    label: Google News (HU)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=hu&gl=HU&ceid=HU:hu (en 备选)
+  - name: maya_announcements
+    label: MAYA (TASE) announcements
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free endpoint (IL-1 2026-08-15)
+  - name: yahoo_il
+    label: Yahoo Finance IL
+    source_type: news
+    enabled: true                 # key-free RSS; .TA suffix; he-IL + en-US dual fetch
+  - name: google_news_il
+    label: Google News (IL)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=en&gl=IL&ceid=IL:en (he 仅 1 条, 2026-08-15)
+  - name: bmv_relevant_events
+    label: BMV relevant events
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free endpoint (MX-1 2026-08-15)
+  - name: yahoo_mx
+    label: Yahoo Finance MX
+    source_type: news
+    enabled: true                 # key-free RSS; .MX suffix at request time; may be loosely related
+  - name: google_news_mx
+    label: Google News (MX)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=es&gl=MX&ceid=MX:es
+  - name: nse_announcements
+    label: NSE announcements
+    source_type: filings
+    enabled: true                 # key-free official JSON (live 2026-08-15); symbol/ISIN matched
+  - name: yahoo_in
+    label: Yahoo Finance IN
+    source_type: news
+    enabled: true                 # key-free RSS; .NS suffix at request time; may be loosely related
+  - name: google_news_in
+    label: Google News (IN)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=en&gl=IN&ceid=IN:en
+  - name: wiener_boerse_news
+    label: Wiener Börse news
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free issuer-news endpoint (AT-1 2026-08-15)
+  - name: yahoo_at
+    label: Yahoo Finance AT
+    source_type: news
+    enabled: true                 # key-free RSS; .VI suffix at request time; may be loosely related
+  - name: google_news_at
+    label: Google News (AT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=de&gl=AT&ceid=AT:de
+  - name: yahoo_no
+    label: Yahoo Finance NO
+    source_type: news
+    enabled: true                 # key-free RSS; .OL suffix at request time; may be loosely related
+  - name: google_news_no
+    label: Google News (NO)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=no&gl=NO&ceid=NO:no
+  - name: yahoo_pt
+    label: Yahoo Finance PT
+    source_type: news
+    enabled: true                 # key-free RSS; .LS suffix at request time; may be loosely related
+  - name: google_news_pt
+    label: Google News (PT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=pt&gl=PT&ceid=PT:pt
   - name: yahoo_pl
     label: Yahoo Finance PL
     source_type: news
@@ -337,6 +441,18 @@ sources:
   # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
   # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
   # still unreachable from this network; GPW paid data products are unused.
+  - name: newsweb_no
+    label: NewsWeb (Oslo Bors)
+    source_type: filings
+    enabled: true                 # honest stub: SPA, no stable key-free API (ENP-1 2026-08-15)
+  - name: euronext_lisbon_news
+    label: Euronext Lisbon news
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free press-release API (ENP-1 2026-08-15)
+  - name: nasdaq_baltic_news
+    label: Nasdaq Baltic
+    source_type: filings          # official Nasdaq Baltic issuer announcements (ee/lv/lt)
+    enabled: true                 # key-free official JSON; matched by universe company name
   - name: gpw_espi
     label: GPW ESPI/EBI
     source_type: filings

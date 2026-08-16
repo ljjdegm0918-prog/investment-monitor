@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -70,12 +71,14 @@ class WebApplicationTests(unittest.TestCase):
 
     def noop_collection_runner(self, **kwargs):
         self.collection_calls.append(kwargs)
+        # stored_count=0 避免后台线程触碰 SQLite：异步回填的 daemon 线程可能在
+        # tearDown 删除临时目录时才跑，这里不做任何 DB IO 以免 Windows 文件锁。
         return ConfiguredCollectionResult(
             items=(),
             failures=(),
             save_result=SaveResult(),
             database_path=self.project_root / "data" / "web.sqlite3",
-            stored_count=self.items.count(),
+            stored_count=0,
         )
 
     def test_core_pages_and_static_assets_are_served(self) -> None:
@@ -430,34 +433,39 @@ class WebApplicationTests(unittest.TestCase):
         saved = self.payload(self.application.handle(
             "POST",
             "/api/settings",
-            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": "abc123"}).encode(),
+            json.dumps({"key": "extra_env:FOO_TIMEOUT_SECONDS", "value": "8"}).encode(),
         ))
         settings = self.payload(
             self.application.handle("GET", "/api/settings")
         )
 
         self.assertTrue(saved["configured"])
-        self.assertEqual(saved["hint"], "••••c123")
-        self.assertEqual(os.environ["MY_APP_TOKEN"], "abc123")
+        self.assertEqual(saved["hint"], "••••")
+        self.assertEqual(os.environ["FOO_TIMEOUT_SECONDS"], "8")
         self.assertEqual(
             settings["extra_env"],
-            [{"name": "MY_APP_TOKEN", "configured": True, "hint": "••••c123"}],
+            [{"name": "FOO_TIMEOUT_SECONDS", "configured": True, "hint": "••••"}],
         )
-        self.assertNotIn("abc123", json.dumps(settings))
+        self.assertNotIn("8", json.dumps(settings))
 
         cleared = self.payload(self.application.handle(
             "POST",
             "/api/settings",
-            json.dumps({"key": "extra_env:MY_APP_TOKEN", "value": ""}).encode(),
+            json.dumps({"key": "extra_env:FOO_TIMEOUT_SECONDS", "value": ""}).encode(),
         ))
         settings = self.payload(
             self.application.handle("GET", "/api/settings")
         )
         self.assertFalse(cleared["configured"])
-        self.assertNotIn("MY_APP_TOKEN", os.environ)
+        self.assertNotIn("FOO_TIMEOUT_SECONDS", os.environ)
         self.assertEqual(settings["extra_env"], [])
 
-        for bad_key in ("extra_env:PATH", "extra_env:LD_LIBRARY_PATH", "extra_env:1BAD"):
+        for bad_key in (
+            "extra_env:PATH",
+            "extra_env:LD_LIBRARY_PATH",
+            "extra_env:1BAD",
+            "extra_env:MY_APP_TOKEN",
+        ):
             response = self.application.handle(
                 "POST",
                 "/api/settings",
@@ -998,7 +1006,6 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(marked.status, 200)
         self.assertTrue(read_feed["items"][0]["is_read"])
         self.assertEqual(unmarked.status, 200)
-
     def test_batch_add_mixed_markets_single_request(self) -> None:
         with patch.object(self.application, "hkexnews_resolver", _NoneResolver()), \
              patch.object(self.application, "dart_resolver", _NoneResolver()):
@@ -1231,7 +1238,99 @@ class WebApplicationTests(unittest.TestCase):
         )
 
 
-    def test_adding_nvda_immediately_backfills_sec_items(self) -> None:
+    def test_csv_import_preserves_all_declared_markets_and_routes_sources(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n"
+            "  - yahoo_jp\n"
+            "  - yahoo_ca\n"
+            "  - asx_announcements\n"
+            "  - xueqiu\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        with patch(
+            "investment_monitor.web.ca_universe_name_map",
+            return_value={"RY": {"name": "Royal Bank", "exchange": "TSX"}},
+        ):
+            response = application.handle(
+                "POST",
+                "/api/companies/csv",
+                json.dumps({
+                    "csv": (
+                        "ticker,market,list\n"
+                        "7203,Japan,watchlist\n"
+                        "RY.TO,Canada,Planned Purchases\n"
+                        "BHP.AX,Australia,holdings\n"
+                        "600519,China,watchlist\n"
+                    )
+                }).encode(),
+            )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        # 新基底 CSV 导入复用秒回 batch：每个市场组一个后台回填任务。
+        # 轮询内存任务直到全部终态后再断言采集参数，避免 daemon 线程竞态。
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and application._backfill_tasks:
+            if all(
+                task["status"] in ("success", "partial", "failure")
+                for task in application._backfill_tasks.values()
+            ):
+                break
+            time.sleep(0.02)
+
+        self.assertEqual(
+            {(row["ticker"], row["market"]) for row in payload["added"]},
+            {("7203", "jp"), ("RY", "ca"), ("BHP", "au"), ("600519", "cn")},
+        )
+        self.assertNotIn("unknown", {row["market"] for row in payload["added"]})
+        self.assertEqual(
+            {call["sources"] for call in self.collection_calls},
+            {("yahoo_jp",), ("yahoo_ca",), ("asx_announcements",), ("xueqiu",)},
+        )
+        self.assertTrue(all(call["initial_backfill"] for call in self.collection_calls))
+
+    def test_csv_import_accepts_custom_list_name_and_reports_invalid_market(self) -> None:
+        custom = self.application.repository.create_list("High Conviction")
+        response = self.application.handle(
+            "POST",
+            "/api/companies/csv",
+            json.dumps({
+                "csv": (
+                    "ticker\tmarket\tlist\n"
+                    "7203\tJP\tHigh Conviction\n"
+                    "SAP\tZZ\tholdings\n"
+                )
+            }).encode(),
+        )
+        payload = self.payload(response)
+
+        self.assertEqual(response.status, 201)
+        self.assertEqual(payload["added"][0]["market"], "jp")
+        self.assertEqual(payload["failed"][0]["row"], 3)
+        self.assertIn("Market must be one of", payload["failed"][0]["error"])
+        company = next(
+            row
+            for row in self.application.repository.companies()
+            if row["ticker"] == "7203"
+        )
+        self.assertIn(custom["slug"], company["list_slugs"])
+
+    def test_non_us_markets_never_fall_through_to_sec_resolver(self) -> None:
+        for market in ("jp", "cn", "fr", "sg", "se"):
+            with self.subTest(market=market):
+                self.assertIsNone(self.application._resolver_for(market))
+        self.assertIs(self.application._resolver_for("us"), self.application.resolver)
+        self.assertIs(
+            self.application._resolver_for("unknown"),
+            self.application.resolver,
+        )
+
+    def test_adding_nvda_backfills_sec_items_in_background(self) -> None:
         def nvda_collection_runner(**kwargs):
             self.collection_calls.append(kwargs)
             item = InformationItem(
@@ -1266,18 +1365,36 @@ class WebApplicationTests(unittest.TestCase):
             json.dumps({"tickers": "NVDA", "lists": ["holdings"]}).encode(),
         )
         payload = self.payload(response)
-        feed = self.payload(application.handle("GET", "/api/feed?ticker=NVDA"))
 
         self.assertEqual(response.status, 201)
-        self.assertEqual(payload["collection"]["status"], "success")
-        self.assertEqual(payload["collection"]["inserted"], 1)
+        self.assertIsNone(payload["collection"])
+        self.assertTrue(payload["backfill_task_id"].startswith("bf-"))
+        self.assertEqual(payload["backfill_status"], "queued")
+
+        # 回填在后台线程执行；轮询任务直到终态后再断言落库与采集参数。
+        task_id = payload["backfill_task_id"]
+        deadline = time.monotonic() + 5.0
+        terminal = None
+        while time.monotonic() < deadline:
+            task = self.payload(application.handle(
+                "GET", f"/api/backfill-tasks/{task_id}"
+            ))
+            if task["status"] in ("success", "partial", "failure"):
+                terminal = task
+                break
+            time.sleep(0.02)
+        self.assertIsNotNone(terminal, "backfill task never reached a terminal state")
+        self.assertEqual(terminal["status"], "success")
+        self.assertIsNone(terminal["error"])
+
+        feed = self.payload(application.handle("GET", "/api/feed?ticker=NVDA"))
+        self.assertEqual(feed["pagination"]["total"], 1)
+        self.assertEqual(feed["items"][0]["external_id"], "0001045810-26-000060")
         self.assertEqual(self.collection_calls[-1]["tickers"], ("NVDA",))
         self.assertEqual(
             (self.collection_calls[-1]["end_date"] - self.collection_calls[-1]["start_date"]).days,
-            365,
+            30,
         )
-        self.assertEqual(feed["pagination"]["total"], 1)
-        self.assertEqual(feed["items"][0]["external_id"], "0001045810-26-000060")
 
     def test_collection_with_items_and_failures_is_partial_and_keeps_source(self) -> None:
         item = InformationItem(

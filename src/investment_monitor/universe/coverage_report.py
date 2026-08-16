@@ -1,0 +1,298 @@
+# -*- coding: utf-8 -*-
+"""Per-country coverage aggregator for the independent market monitor.
+
+The report is derived automatically from the repo's existing facts:
+
+* universe      — universe module presence + the explicit boundary-stub set;
+* disclosure    — SOURCE_MARKETS filing sources + the explicit honest-stub set;
+* news          — presence of yahoo_*/google_news_* sources for the market;
+* etf_universe  — DE official Xetra includes ETF/ETN/ETC (live); other
+                  official universes are stock-only (unknown); otherwise the
+                  Phase 1 third_party reference is consulted (partial when
+                  ETF candidate rows exist, else unavailable);
+* source_tier_summary — official > mixed > third_party > none.
+
+Statuses are honest: boundary stubs (AT/HU/IL/MX/NO/PT disclosures,
+AT/CH/HU/IL/MX/SE/SG universes) are never upgraded to live.
+The report never flows into information_items / the daily feed.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Mapping
+
+from .exchange_catalog import (
+    list_countries,
+    list_venues,
+    load_exchange_catalog,
+)
+from .global_equity_reference import etf_candidates_for
+
+# 显式边界 stub（对应各轨 spike 结论；禁止标 live）。
+UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se"})
+# 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
+UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg"})
+DISCLOSURE_BOUNDARY_STUBS = frozenset({"at", "hu", "il", "mx", "no", "pt"})
+DISCLOSURE_PARTIAL = frozenset({"ca", "ch", "de", "it", "nl"})
+DISCLOSURE_UNAVAILABLE = frozenset({"ru", "sg"})
+
+# Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
+MARKET_NOTES = {
+    "US": "Nasdaq Trader official nasdaqlisted/otherlisted directories provide exchange-listed stock and ETF breadth; SEC company_tickers_exchange adds CIKs only; OTC/Pink completeness remains unproven, so the country universe stays partial",
+    "JP": "JPX official Listed Issues page provides the TSE ETF directory; the broader JP stock universe still has no stable key-free directory, while TDnet/EDINET disclosure stays live",
+    "CA": "Official-source boundary: TSX/TSXV universe plus partial CEO.ca SEDAR PDF mirror; CSE/NEO breadth and official SEDAR+ completeness remain unavailable",
+    "SG": "Official-source boundary: StocksSG provides a partial third-party universe; official SGX directory/announcements remain SPA/403",
+    "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
+    "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
+    "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
+    "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
+    "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
+    "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
+    "HU": "BSE pages HTML only, no structured export (2026-08-16 probe); universe/disclosure stay stub",
+    "NO": "Euronext Oslo live CSV universe; NewsWeb disclosure stub (SPA, no stable key-free API)",
+    "PT": "Euronext Lisbon live CSV universe; Lisbon/CMVM disclosure stub (no stable key-free API)",
+}
+
+_NEWS_PREFIXES = ("yahoo_", "google_news_")
+
+# market -> ETF 发行人披露源（基金文件/份额变更/指数/分红公告）。
+# Phase 5 现状：尚无免 key ETF 公告/文件源接入；绝不能把股权 eqs_*/公司
+# 公告标成 ETF 披露 LIVE。未来接源后往这里登记。
+ETF_DISCLOSURE_SOURCES: Dict[str, tuple] = {}
+
+# market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
+_DISCLOSURE_SOURCES: Dict[str, tuple] = {
+    "us": ("sec",),
+    "ca": ("ceoca_sedar",),
+    "au": ("asx_announcements",),
+    "hk": ("hkexnews", "hkex_di"),
+    "tw": ("twse_material", "tpex_material"),
+    "jp": ("tdnet_public_web", "edinet"),
+    "in": ("nse_announcements",),
+    "at": ("wiener_boerse_news",),
+    "be": ("fsma_stori", "be_second_disclosure"),
+    "ch": ("eqs_ch", "six_official_notices"),
+    "de": ("eqs_dgap",),
+    "ee": ("nasdaq_baltic_news",),
+    "lv": ("nasdaq_baltic_news",),
+    "lt": ("nasdaq_baltic_news",),
+    "es": ("cnmv_hr", "bme_relevant_facts"),
+    "fr": ("amf_oam",),
+    "hu": ("bse_hu_announcements",),
+    "il": ("maya_announcements",),
+    "it": ("eqs_it",),
+    "nl": ("eqs_nl",),
+    "no": ("newsweb_no",),
+    "pl": ("gpw_espi",),
+    "pt": ("euronext_lisbon_news",),
+    "se": ("fi_oam", "nasdaq_se_filings"),
+    "sg": ("sgx_announcements",),
+    "uk": ("companies_house", "investegate"),
+    "mx": ("bmv_relevant_events",),
+    "ru": (),
+}
+
+
+def _universe_status(market_code: str | None, market: str) -> str:
+    if market == "ru":
+        # 官方 MOEX ISS 只读目录已接；本产品不表达经纪商交易状态。
+        try:
+            __import__(
+                "investment_monitor.universe.ru_universe", fromlist=["*"]
+            )
+        except ImportError:
+            return "unavailable"
+        return "partial"
+    if market_code is None:
+        return "unavailable"
+    if market_code in UNIVERSE_BOUNDARY_STUBS:
+        return "stub"
+    if market_code in UNIVERSE_PARTIAL:
+        return "partial"
+    module = _universe_module_name(market_code)
+    try:
+        __import__(module, fromlist=["*"])
+    except ImportError:
+        if not module.startswith("investment_monitor.universe."):
+            return "unavailable"
+        try:
+            __import__(
+                module.replace("investment_monitor.universe", "investment_monitor", 1),
+                fromlist=["*"],
+            )
+        except ImportError:
+            return "unavailable"
+    return "live"
+
+
+def _universe_module_name(market_code: str) -> str:
+    if market_code in ("ee", "lv", "lt"):
+        return "investment_monitor.universe.nasdaq_baltic_universe"
+    return f"investment_monitor.universe.{market_code}_universe"
+
+
+def _disclosure_status(market_code: str | None, market: str) -> str:
+    # ``country_code`` is only a fallback.  GB's canonical source-registry key
+    # is ``uk`` and must not be overwritten by its ISO country code.
+    market = str(market_code or market or "").lower()
+    if market in DISCLOSURE_UNAVAILABLE:
+        return "unavailable"
+    if market in DISCLOSURE_BOUNDARY_STUBS:
+        return "stub"
+    if market in DISCLOSURE_PARTIAL:
+        return "partial"
+    if _DISCLOSURE_SOURCES.get(market):
+        return "live"
+    return "unavailable"
+
+
+def _news_status(market_code: str | None) -> str:
+    if market_code is None:
+        return "unavailable"
+    return "live"
+
+
+def _etf_disclosure_status(market: str) -> str:
+    """ETF issuer-disclosure status; separate from equity disclosures.
+
+    Equity eqs_*/company announcements are never reused as ETF fund files.
+    """
+    market = str(market or "").lower()
+    if ETF_DISCLOSURE_SOURCES.get(market):
+        return "live"
+    return "unavailable"
+
+
+def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
+    if market in ("de", "jp", "us"):
+        return "live"
+    if market in ("uk", "gb"):
+        try:
+            from ..uk_universe import uk_universe_etf_count
+
+            if uk_universe_etf_count() > 0:
+                # FIRDS 是官方但只有 ISIN、无零售 ticker，因此至多 partial。
+                return "partial"
+        except Exception:  # noqa: BLE001 - 缓存冷不阻断报告
+            pass
+    candidates = 0
+    try:
+        candidates = len(etf_candidates_for(market, cache_path))
+    except Exception:  # noqa: BLE001 - 参考层损坏不阻断报告
+        candidates = 0
+    if candidates:
+        return "partial"
+    if market_code is not None and _universe_status(market_code, market) == "live":
+        return "unknown"
+    return "unavailable"
+
+
+def _source_tier_summary(universe: str, disclosure: str, news: str) -> str:
+    if universe == "live" and disclosure == "live":
+        return "official"
+    if universe == "live":
+        return "mixed"
+    if universe == "partial":
+        return "mixed"
+    if disclosure in ("live", "partial"):
+        return "mixed"
+    if news == "live":
+        return "third_party"
+    return "none"
+
+
+def coverage_report(
+    cache_path: Any = None,
+) -> Mapping[str, Any]:
+    """Return coverage rows for the 28-country comparison benchmark."""
+    countries = list_countries()
+    venues_by_country: Dict[str, int] = {}
+    for row in list_venues():
+        country = str(row.get("country_code") or "")
+        venues_by_country[country] = venues_by_country.get(country, 0) + 1
+
+    rows: List[Dict[str, Any]] = []
+    for country in countries:
+        market = str(country.get("market_code") or "").lower()
+        country_code = str(country.get("country_code") or "")
+        universe = _universe_status(country.get("market_code"), market or country_code.lower())
+        disclosure = _disclosure_status(country.get("market_code"), country_code)
+        news = _news_status(country.get("market_code"))
+        etf_universe = _etf_status(
+            country.get("market_code"), market or country_code.lower(), cache_path
+        )
+        etf_disclosure = _etf_disclosure_status(
+            market or country_code.lower()
+        )
+        rows.append({
+            "country_code": country_code,
+            "country_name": str(country.get("country_name") or country_code),
+            "region": str(country.get("region") or ""),
+            "market_code": country.get("market_code"),
+            "universe": universe,
+            "disclosure": disclosure,
+            "news": news,
+            "etf_universe": etf_universe,
+            "etf_disclosure": etf_disclosure,
+            "source_tier_summary": _source_tier_summary(
+                universe, disclosure, news
+            ),
+            "venue_count": venues_by_country.get(country_code, 0),
+            "notes": _notes_for(country_code, universe, disclosure, etf_universe, etf_disclosure),
+        })
+
+    status_counts: Dict[str, int] = {}
+    for key in ("universe", "disclosure", "news", "etf_universe", "etf_disclosure"):
+        counts: Dict[str, int] = {}
+        for row in rows:
+            value = str(row[key])
+            counts[value] = counts.get(value, 0) + 1
+        status_counts[key] = counts
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "schema": "coverage_report/v2",
+        "scope": {
+            "kind": "independent_market_information_coverage",
+            "broker_runtime_dependency": False,
+            "broker_account_required": False,
+            "trading_capability_assessed": False,
+        },
+        "summary": {
+            "countries": len(rows),
+            "venues": sum(row["venue_count"] for row in rows),
+            "status_counts": status_counts,
+        },
+        "countries": rows,
+    }
+
+
+def _notes_for(
+    country_code: str,
+    universe: str,
+    disclosure: str,
+    etf_universe: str,
+    etf_disclosure: str,
+) -> str:
+    if country_code in MARKET_NOTES:
+        return str(MARKET_NOTES[country_code])
+    notes = []
+    if universe == "stub":
+        notes.append("official universe is a boundary stub")
+    if disclosure == "stub":
+        notes.append("disclosure connector is an honest stub")
+    if etf_universe == "live":
+        notes.append("official exchange directory carries ETF instruments")
+    if etf_universe == "partial":
+        notes.append("third_party ETF candidates present")
+    if etf_disclosure == "unavailable" and etf_universe in ("live", "partial"):
+        notes.append(
+            "ETF issuer disclosure unavailable; equity filings are not reused"
+        )
+    return "; ".join(notes) or (
+        f"universe={universe}; disclosure={disclosure}"
+    )
+
+
+__all__ = ["coverage_report"]
