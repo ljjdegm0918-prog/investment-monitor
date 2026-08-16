@@ -2465,6 +2465,8 @@ def _market_region(market: str) -> str:
         "ee": "Estonia",
         "lv": "Latvia",
         "lt": "Lithuania",
+        "no": "Norway",
+        "pt": "Portugal",
     }.get(market, "Unavailable")
 
 
@@ -3060,6 +3062,63 @@ def normalize_lv_ticker(ticker: str) -> str:
 
 def normalize_lt_ticker(ticker: str) -> str:
     return normalize_baltic_ticker(ticker, "lt")
+
+
+_NO_TICKER_SUFFIXES = ("OL",)
+_NO_TICKER_SEPARATORS = (".", " ", "-")
+_NO_ISIN_PATTERN = re.compile(r"NO[0-9A-Z]{10}")
+_PT_TICKER_SUFFIXES = ("LS",)
+_PT_TICKER_SEPARATORS = (".", " ", "-")
+_PT_ISIN_PATTERN = re.compile(r"PT[0-9A-Z]{10}")
+
+
+def _normalize_euronext_ticker(
+    ticker: str,
+    suffixes: tuple,
+    separators: tuple,
+    isin_pattern: re.Pattern,
+) -> str:
+    cleaned = str(ticker).strip().upper()
+    isin_match = isin_pattern.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in separators:
+            for suffix in suffixes:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_no_ticker(ticker: str) -> str:
+    """Normalize an Oslo Bors (Euronext Oslo) symbol.
+
+    Accepts plain symbols (``EQNR``) and the common ``.OL`` quote suffix;
+    a bare ``OL`` word is never erased, and a Norwegian ISIN (``NO`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    return _normalize_euronext_ticker(
+        ticker, _NO_TICKER_SUFFIXES, _NO_TICKER_SEPARATORS, _NO_ISIN_PATTERN
+    )
+
+
+def normalize_pt_ticker(ticker: str) -> str:
+    """Normalize a Euronext Lisbon symbol.
+
+    Accepts plain symbols (``EDP``) and the common ``.LS`` quote suffix;
+    a bare ``LS`` word is never erased, and a Portuguese ISIN (``PT`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    return _normalize_euronext_ticker(
+        ticker, _PT_TICKER_SUFFIXES, _PT_TICKER_SEPARATORS, _PT_ISIN_PATTERN
+    )
 
 
 def normalize_se_ticker(ticker: str) -> str:

@@ -54,6 +54,8 @@ from .models import (
     MARKET_EE,
     MARKET_LV,
     MARKET_LT,
+    MARKET_NO,
+    MARKET_PT,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -1129,6 +1131,10 @@ class WebApplication:
             # Baltic companies stay unmapped; Nasdaq Baltic disclosures are
             # matched by ISIN/name from the Baltic universe, never SEC CIKs.
             return None
+        if market in (MARKET_NO, MARKET_PT):
+            # Oslo/Lisbon companies stay unmapped; disclosure matching is
+            # by ISIN/name from the local Euronext universe, never SEC CIKs.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1220,6 +1226,12 @@ class WebApplication:
         if market in (MARKET_EE, MARKET_LV, MARKET_LT):
             from .universe.nasdaq_baltic_universe import baltic_universe_name_map
             return baltic_universe_name_map(market)
+        if market == MARKET_NO:
+            from .universe.no_universe import no_universe_name_map
+            return no_universe_name_map()
+        if market == MARKET_PT:
+            from .universe.pt_universe import pt_universe_name_map
+            return pt_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:
