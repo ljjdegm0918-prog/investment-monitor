@@ -554,6 +554,35 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Yahoo↔Google 按 ticker + **Budapest 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
+## 1.4 IBKR 交易所目录 + 覆盖看板（Phase 0）
+
+`universe/exchange_catalog.py` 是 Phase 0 的交易所目录，种子
+`universe/ibkr_exchange_catalog.json` 以《IBKR_EXCHANGE_COVERAGE_PLAN_ZH》
+§3.1–3.3 为权威基线，IBKR venue id 与官网
+`/webrest/exchanges/` 快照（2026-08-16）对齐。
+
+- **冻结基线**：28 国（美洲 3 / 欧洲 19 / 亚太 6）、87 条股票场所/路由记录
+  （31 / 44 / 12）；测试逐项断言。美国页面的 `Nasdaq/BX/PSX`、
+  `Direct Edge/EDGEA`、加拿大 `Aequitas NEO/NEO Lit` 等组合行按计划书计数
+  拆分，回执内说明映射。ETF 栏目 27 条与股票场所大体重复，Phase 0 保持
+  单一场所体系，只在 seed `normalization.etf_columns` 记录 11/15/1。
+- **覆盖状态**（`coverage_report.py`，自动推导）：
+  `live / partial / stub / unavailable`，另有
+  `etf_universe: live|partial|unavailable|unknown` 与
+  `source_tier_summary: official|mixed|third_party|none`。边界 stub 国
+  （AT/CH/HU/IL/MX/SE/SG 宇宙；AT/HU/IL/MX/NO/PT 披露）绝不标 live；
+  RU 固定 `suspended` 只读。报告不进 feed。
+- **API/UI**：`GET /api/coverage` 返回目录摘要 + 28 国覆盖（沿用现有
+  `/api/*` 鉴权）；Manage 页「IBKR country coverage」可读表格。
+- **IBKR 身份（可选真连）**：`ibkr_secdef.search_contracts()` 按计划书
+  `GET /iserver/secdef/search` 与 `/iserver/secdef/info` 形状实现。只有
+  session 或同时配置 `IBKR_SECDEF_BASE_URL` + `IBKR_WEB_API_TOKEN` 环境
+  变量才发 HTTP；未配置返回 `[]`，绝不编造 conid。TWS
+  `reqContractDetails` 仅保留 Protocol，不强制实现。凭证只走环境变量。
+- **本轨不做**：不把 BATS/Chi-X/Cboe/Turquoise 路由场所注册成披露连接器；
+  不做 Phase 4（CA/SG/SE/CH 主链与各国 ETF 爬全）；不重做 Phase 1 的
+  `global_equity_reference`/EODHD 日预算；不动 eux/emf；不上云、不改生产。
+
 ## 1.5 共享股票身份 + ETF 子类型基建（Phase 1）
 
 `universe/global_equity_reference.py` 是跨市场的第三方候选参考层
