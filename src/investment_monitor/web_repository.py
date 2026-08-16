@@ -2462,6 +2462,9 @@ def _market_region(market: str) -> str:
         "ch": "Switzerland",
         "pl": "Poland",
         "se": "Sweden",
+        "ee": "Estonia",
+        "lv": "Latvia",
+        "lt": "Lithuania",
     }.get(market, "Unavailable")
 
 
@@ -3007,6 +3010,56 @@ _TRQ_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
 _EUX_TICKER_SUFFIXES = ("EUX",)
 _EUX_TICKER_SEPARATORS = (".", " ", "-")
 _EUX_ISIN_PATTERN = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9A-Z]{10}(?![A-Z0-9])")
+
+
+_BALTIC_TICKER_SUFFIXES = ("TL", "RG", "VL")
+_BALTIC_TICKER_SEPARATORS = (".", " ", "-")
+_BALTIC_ISIN_PATTERNS = {
+    "ee": re.compile(r"EE[0-9A-Z]{10}"),
+    "lv": re.compile(r"LV[0-9A-Z]{10}"),
+    "lt": re.compile(r"LT[0-9A-Z]{10}"),
+}
+
+
+def normalize_baltic_ticker(ticker: str, market: str) -> str:
+    """Normalize a Nasdaq Baltic (EE/LV/LT) symbol.
+
+    Accepts plain symbols (``TAL1T``) and the common data-provider suffixes
+    (``TAL1T.TL``, ``SAF1R.RG``, ``TEL1L.VL``; space or dash separators are
+    tolerated too, and stacked suffixes collapse to the root). Suffix words
+    without a separator are never erased. When the input contains a Baltic
+    ISIN (EE/LV/LT followed by 10 alphanumeric characters), the ISIN is
+    extracted and returned instead.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _BALTIC_ISIN_PATTERNS.get(market, re.compile(r"[A-Z]{2}[0-9A-Z]{10}")).search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _BALTIC_TICKER_SEPARATORS:
+            for suffix in _BALTIC_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+def normalize_ee_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "ee")
+
+
+def normalize_lv_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "lv")
+
+
+def normalize_lt_ticker(ticker: str) -> str:
+    return normalize_baltic_ticker(ticker, "lt")
 
 
 def normalize_se_ticker(ticker: str) -> str:
