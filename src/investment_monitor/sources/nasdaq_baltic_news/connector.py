@@ -129,7 +129,7 @@ class NasdaqBalticNewsConnector:
         disclosure_id = record.get("disclosureId")
         return InformationItem(
             source=self.name,
-            source_type="filings",
+            source_type="regulatory_filing",
             external_id=f"baltic:{disclosure_id}",
             tickers=(ticker,),
             issuer=company,

@@ -64,6 +64,12 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For Baltic (ee/lv/lt), the only wired disclosure source is
+nasdaq_baltic_news, which pairs on its stable disclosure id with a
+source-scoped Tallinn-day title fallback; Baltic news (yahoo_ee /
+google_news_ee, yahoo_lv / google_news_lv, yahoo_lt / google_news_lt)
+pairs across sources on ticker + Tallinn day + normalized title.
+
 For PL, the only wired disclosure source is gpw_espi, which pairs on its
 stable GPW report id (``geru_id``), or on a source-scoped title fallback
 (ticker + Warsaw day + normalized title); PL news (yahoo_pl /
@@ -131,6 +137,7 @@ MADRID = ZoneInfo("Europe/Madrid")
 SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
 WARSAW = ZoneInfo("Europe/Warsaw")
+TALLINN = ZoneInfo("Europe/Tallinn")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
 LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
@@ -190,6 +197,13 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_pl": 29,
     "yahoo_se": 30,
     "google_news_se": 31,
+    "nasdaq_baltic_news": 32,
+    "yahoo_ee": 33,
+    "google_news_ee": 34,
+    "yahoo_lv": 35,
+    "google_news_lv": 36,
+    "yahoo_lt": 37,
+    "google_news_lt": 38,
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
@@ -269,6 +283,13 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_pl": "Google News (PL)",
     "yahoo_se": "Yahoo Finance SE",
     "google_news_se": "Google News (SE)",
+    "nasdaq_baltic_news": "Nasdaq Baltic",
+    "yahoo_ee": "Yahoo Finance EE",
+    "google_news_ee": "Google News (EE)",
+    "yahoo_lv": "Yahoo Finance LV",
+    "google_news_lv": "Google News (LV)",
+    "yahoo_lt": "Yahoo Finance LT",
+    "google_news_lt": "Google News (LT)",
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
@@ -317,7 +338,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "aq", "cxe", "emf", "trq", "eux",
+        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "aq", "cxe", "emf", "trq", "eux",
         "cn", "us", "jp",
     }:
         return None
@@ -450,6 +471,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "ch":
         return _ch_filing_key(item)
+    if market in ("ee", "lv", "lt"):
+        return _baltic_filing_key(item)
     if market == "pl":
         return _pl_filing_key(item)
     if market == "au":
@@ -544,6 +567,29 @@ def _be_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"be:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _baltic_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """Baltic filings pair on the stable Nasdaq Baltic disclosure id.
+
+    ``nasdaq_baltic_news`` is the only wired Baltic disclosure source; its
+    ``external_id`` (``baltic:<disclosureId>``) is the primary identity.
+    Without one, the fallback is source-scoped (source + ticker + Tallinn
+    day + normalized title), so a hypothetical second Baltic disclosure
+    source is never cross-annotated by title.
+    """
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"{item.get('market')}:filing:baltic:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, TALLINN)
+    if title and day:
+        return (
+            f"{item.get('market')}:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -803,6 +849,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "ch"
         else WARSAW
         if market == "pl"
+        else TALLINN
+        if market in ("ee", "lv", "lt")
         else STOCKHOLM
         if market == "se"
         else BRUSSELS

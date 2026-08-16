@@ -377,6 +377,37 @@ EUX feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/�
 
 Web Settings 页面为每个已实现的数据源展示 Provider credentials（各连接器声明自有字段，当前为 `FINNHUB_API_KEY` 与 `SEC_USER_AGENT`）；未实现的源显示为 Not implemented 且不可配置。高级区域允许为显式读取它们的连接器设置额外环境变量。工作区数据库中保存的值优先于 `.env` 作用于运行进程，且任何 API 响应均不会完整返回这些值。
 
+### 波罗的海（EE/LV/LT）— Nasdaq Baltic 三国市场
+
+- 市场代码：`ee`（爱沙尼亚 / Tallinn）、`lv`（拉脱维亚 / Riga）、`lt`（立陶宛 / Vilnius），
+  2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；`TICKER@EE|LV|LT` 与 Yahoo 后缀
+  `.TL` / `.RG` / `.VL` 均可导入。
+- **披露/公告主链 `nasdaq_baltic_news`**（filings，免 key）：官方页面
+  https://nasdaqbaltic.com/statistics/en/news 背后的公开 JSON API
+  `https://api.news.eu.nasdaq.com/news/query.action`（live 验证 2026-08-15）。
+  按 `Europe/Tallinn` 时区逐日请求，仅收集发行人公告；交易所公告
+  （company 为 `Nasdaq Tallinn/Riga/Vilnius`）不属于单一 ticker，跳过。
+  官方 API 不返回 ISIN/代码，公告按**归一化公司名精确匹配** Baltic 宇宙缓存；
+  匹配不上就诚实跳过，不做短码猜名。稳定主键 = 官方 `disclosureId`
+  （external_id `baltic:<id>`），PDF 附件链接保留官方 URL。
+- **可交易宇宙**：官方 XLSX（`/statistics/en/shares?download=1`，20 列，含
+  Ticker/Name/ISIN/MarketPlace/List/segment），stdlib `zipfile` 解析，按
+  MarketPlace `TLN/RIG/VLN` 分桶。live 条数（2026-08-15）：ee 30、lv 13、
+  lt 25。缓存仅用于回填名称/板别/ISIN 与披露匹配，永不进入 feed；
+  无手写蓝筹种子。
+- **新闻**：`yahoo_ee` / `google_news_ee`、`yahoo_lv` / `google_news_lv`、
+  `yahoo_lt` / `google_news_lt`（免 key RSS）。Yahoo 请求后缀 `.TL`/`.RG`/`.VL`，
+  本地语言 `et-EE`/`lv-LV`/`lt-LT` 与 `en-US` 双查后合并；Google 参数
+  `hl=et&gl=EE&ceid=EE:et`、`hl=lv&gl=LV&ceid=LV:lv`、`hl=lt&gl=LT&ceid=LT:lt`。
+  可能松散相关，按已知 RSS 边界处理。**Finnhub 永不查 ee/lv/lt。**
+- **第二披露源（BALTIC-4 锁死）**：三国发行人公告的稳定免费第二源不存在——
+  Nasdaq Baltic 官方 API 已是唯一权威入口；中央证券存管与交易所无额外免 key
+  接口，付费 Nasdaq 数据产品不接。新闻侧 Yahoo/Google 互为第二通道，
+  披露侧保持单一官方源。
+- **软去重**：披露按稳定 `disclosureId` 配对（无 id 时 source-scoped +
+  Tallinn 日 + 标题）；三国新闻在 Yahoo↔Google 间按 ticker + Tallinn 日 +
+  归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：
