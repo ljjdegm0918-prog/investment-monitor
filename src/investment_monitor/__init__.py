@@ -521,6 +521,13 @@ from .universe.trq_universe import (
     search_trq_universe,
     trq_universe_name_map,
 )
+from .universe.mx_universe import (
+    MxUniverseError,
+    load_mx_universe,
+    mx_universe_name_map,
+    refresh_mx_universe,
+    search_mx_universe,
+)
 from .universe.in_universe import (
     InUniverseError,
     in_universe_name_map,
@@ -668,6 +675,7 @@ from .models import (
     MARKET_EMF,
     MARKET_TRQ,
     MARKET_EUX,
+    MARKET_MX,
     MARKET_IN,
     MARKET_AT,
     MARKET_NO,
@@ -773,6 +781,11 @@ __all__ = [
     "NoUniverseError",
     "AtUniverseError",
     "InUniverseError",
+    "MxUniverseError",
+    "load_mx_universe",
+    "mx_universe_name_map",
+    "refresh_mx_universe",
+    "search_mx_universe",
     "in_universe_name_map",
     "load_in_universe",
     "refresh_in_universe",
@@ -888,6 +901,7 @@ __all__ = [
     "MARKET_EMF",
     "MARKET_TRQ",
     "MARKET_EUX",
+    "MARKET_MX",
     "MARKET_IN",
     "MARKET_AT",
     "MARKET_NO",

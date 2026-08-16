@@ -487,6 +487,28 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Kolkata 日 + 标题）；IN 新闻 Yahoo↔Google 按 ticker + Kolkata 日 +
   归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
 
+### 墨西哥（MX）— BMV（主）/ BIVA（第二源边界）
+
+- 市场代码：`mx`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@MX` 与 Yahoo 后缀 `.MX` 均可导入。
+- **披露主链（诚实 stub）**：`bmv_relevant_events`。MX-1 live 侦察
+  （2026-08-15）：bmv.com.mx 为旧式 Liferay 站点，eventos-relevantes 与
+  上市公司深层路径 404，未发现稳定免 key JSON；`collect()` 诚实空并标注
+  stub。
+- **可交易宇宙（边界 stub）**：BMV 无稳定免 key 目录端点，`refresh` 抛
+  `MxUniverseError`；只读手工放置的
+  `.cache/investment_monitor/mx_universe.json`。**无 IPC 手写种子**；缓存
+  不进 feed。
+- **新闻**：`yahoo_mx`（`.MX` 后缀、`es-MX` + `en-US` 双查）与
+  `google_news_mx`（`hl=es&gl=MX&ceid=MX:es`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 mx。**
+- **第二源（MX-4 锁死）**：BIVA 门户为 React SPA，事件页无服务端数据；
+  `rss.biva.com.mx` TLS 握手失败，无稳定 RSS。不接 EODHD/OpenFIGI 等
+  third_party 冒充官方；不接付费终端。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；MX 新闻
+  Yahoo↔Google 按 ticker + **Mexico City 日** + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：
