@@ -152,6 +152,7 @@ const MESSAGES = {
     "region.no": "Norway",
     "region.pt": "Portugal",
     "region.at": "Austria",
+    "region.in": "India",
     "region.aq": "Aquis (AQSE)",
     "region.cxe": "Cboe Europe (CXE)",
     "region.emf": "Europe (Funds)",
@@ -379,6 +380,7 @@ const MESSAGES = {
     "region.no": "挪威",
     "region.pt": "葡萄牙",
     "region.at": "奥地利",
+    "region.in": "印度",
     "region.aq": "Aquis (AQSE)",
     "region.cxe": "Cboe Europe (CXE)",
     "region.emf": "欧洲（基金）",
@@ -992,7 +994,7 @@ function researchInfoTypeLabel(type) {
   return key ? t(key) : type;
 }
 
-const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","ee","lv","lt","no","pt","at","aq","cxe","emf","trq","eux","unknown"];
+const MARKET_CODES = ["us","jp","hk","cn","kr","uk","tw","ca","au","be","fr","de","nl","it","es","sg","ch","pl","se","ee","lv","lt","no","pt","at","in","aq","cxe","emf","trq","eux","unknown"];
 
 // 固定列表名按当前语言显示；用户重命名的自定义列表始终显示用户的名字。
 const FIXED_LIST_LABELS = {
@@ -1231,7 +1233,7 @@ function renderSources(sources) {
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(listDisplayName(list))}</option>`).join(""); }
 function statusLabel(status) { const key = {connected:"status.connected", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
-function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", ee:"region.ee", lv:"region.lv", lt:"region.lt", no:"region.no", pt:"region.pt", at:"region.at", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
+function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", ee:"region.ee", lv:"region.lv", lt:"region.lt", no:"region.no", pt:"region.pt", at:"region.at", in:"region.in", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
 function categoryLabel(type) { const key = {Filing:"cat.official_filings", News:"cat.news", Community:"cat.community"}[type]; return key ? t(key) : type; }
 function exchangeLabel(exchange) { return exchange && exchange !== "Unavailable" ? exchange : t("common.unavailable"); }
 function formatDay(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"full", timeZone:"UTC"}).format(new Date(`${value}T12:00:00Z`)); }
