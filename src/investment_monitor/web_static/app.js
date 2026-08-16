@@ -69,6 +69,18 @@ const MESSAGES = {
     "manage.add_placeholder": "e.g. AAPL@US, 0700@HK, RY@TO",
     "manage.add_help": "Add one or more symbols, separated by commas, spaces, semicolons, or new lines. A market suffix selects that market: use @ (AAPL@US, 0700@HK) or a dot (AAPL.US, 0700.HK). A recognized suffix (for example .US, .HK, .TO, .AX, or the same code after @) selects the market; symbols without one are treated as US. A dot inside a ticker (for example BRK.B) is never treated as a suffix.",
     "manage.added_multi": "Added: {items}",
+    "manage.manual_add": "Ticker input",
+    "manage.csv_add": "CSV / table import",
+    "manage.csv_desc": "Paste spreadsheet rows or upload a CSV/TSV file. Each row can use a different market and list.",
+    "manage.csv_rows": "CSV or spreadsheet rows",
+    "manage.csv_file": "Or choose a CSV/TSV file",
+    "manage.csv_import": "Import rows",
+    "manage.csv_help": "Required columns: ticker, market, list. List accepts an existing list name or slug. Up to 500 rows.",
+    "manage.csv_done": "CSV import completed.",
+    "manage.csv_added": "Added",
+    "manage.csv_existing": "Already present",
+    "manage.csv_failed": "Failed",
+    "manage.csv_row": "Row {row}",
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
@@ -284,6 +296,18 @@ const MESSAGES = {
     "manage.add_placeholder": "例如：AAPL@US、0700@HK、RY@TO",
     "manage.add_help": "可一次输入多个“股票代码@市场/交易所”或“股票代码.市场/交易所”，用逗号、空格、分号或换行分隔。@ 格式（如 0700@HK）不会与代码本身冲突，更推荐；. 格式（如 0700.HK）也支持。可识别的后缀（如 .US、.HK、.TO、.AX，或 @ 后的相同代码）会指定对应市场；没有后缀的代码默认视为美股（US）。代码本身含点（如 BRK.B）不会被误判为后缀。",
     "manage.added_multi": "已添加：{items}",
+    "manage.manual_add": "代码输入",
+    "manage.csv_add": "CSV / 表格导入",
+    "manage.csv_desc": "可粘贴表格行或上传 CSV/TSV 文件；每一行可指定不同市场和列表。",
+    "manage.csv_rows": "CSV 或表格内容",
+    "manage.csv_file": "或者选择 CSV/TSV 文件",
+    "manage.csv_import": "导入表格",
+    "manage.csv_help": "必需列：ticker、market、list。list 可填写现有列表名称或 slug，最多 500 行。",
+    "manage.csv_done": "CSV 导入完成。",
+    "manage.csv_added": "已添加",
+    "manage.csv_existing": "已存在",
+    "manage.csv_failed": "失败",
+    "manage.csv_row": "第 {row} 行",
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
@@ -1119,6 +1143,40 @@ function renderCompanies() {
   document.getElementById("company-context").textContent = list ? `${listDisplayName(list)} · ${t("manage.companies_count", {count: companies.length})}` : t("manage.create_or_select_first");
   document.getElementById("company-table").innerHTML = companies.length ? `<div class="table-wrap"><table><thead><tr><th>${t("manage.company")}</th><th>${t("manage.ticker")}</th><th>${t("manage.exchange")}</th><th>${t("manage.region")}</th><th></th></tr></thead><tbody>${companies.map(company => `<tr><td>${esc(company.name)}</td><td>${esc(company.ticker)}</td><td>${esc(exchangeLabel(company.exchange))}</td><td>${regionForMarket(company.market)}</td><td><button class="text-button danger remove-company" data-ticker="${escAttr(company.ticker)}" data-market="${escAttr(company.market)}">${t("manage.remove")}</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty compact"><p>${t("manage.no_companies")}</p></div>`;
   document.querySelectorAll(".remove-company").forEach(button => button.addEventListener("click", () => removeCompany(button.dataset.ticker, button.dataset.market)));
+}
+
+async function loadCsvFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try { document.getElementById("company-csv-input").value = await file.text(); }
+  catch (_) { toast(t("common.request_failed"), true); }
+}
+
+async function importCompanyCsv(event) {
+  event.preventDefault();
+  const button = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  const target = document.getElementById("csv-import-result");
+  button.disabled = true;
+  try {
+    const result = await api("/api/companies/csv", {
+      method:"POST",
+      body:JSON.stringify({csv:document.getElementById("company-csv-input").value}),
+    });
+    target.innerHTML = csvImportResult(result);
+    toast(t("manage.csv_done"));
+    await reloadBootstrap();
+    await refreshManagement();
+  } catch (error) {
+    target.innerHTML = `<div class="csv-result error">${esc(error.message)}</div>`;
+  } finally { button.disabled = false; }
+}
+
+function csvImportResult(result) {
+  const sections = [];
+  if (result.added?.length) sections.push(`<strong>${t("manage.csv_added")}:</strong> ${result.added.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.already_present?.length) sections.push(`<strong>${t("manage.csv_existing")}:</strong> ${result.already_present.map(item => `${esc(item.ticker)} (${esc(String(item.market).toUpperCase())})`).join(", ")}`);
+  if (result.failed?.length) sections.push(`<strong>${t("manage.csv_failed")}:</strong> ${result.failed.map(item => `${item.row ? `${t("manage.csv_row", {row:item.row})}: ` : ""}${esc(item.ticker)} — ${esc(item.error)}`).join("; ")}`);
+  return `<div class="csv-result">${sections.join("<br>") || t("manage.csv_done")}</div>`;
 }
 
 async function addTickerDirect(event) {
