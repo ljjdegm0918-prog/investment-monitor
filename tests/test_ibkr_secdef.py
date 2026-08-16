@@ -29,9 +29,11 @@ class _FakeOpener:
     def __init__(self, payload):
         self.payload = payload
         self.calls = 0
+        self.headers = None
 
     def __call__(self, request, timeout=None):
         self.calls += 1
+        self.headers = dict(request.headers)
         return _FakeResponse(self.payload)
 
 
@@ -71,11 +73,13 @@ class IbkrSecdefTests(unittest.TestCase):
             "listingExchange": "IBIS", "currency": "EUR",
             "validExchanges": ["IBIS", "FWB"],
         }]
+        opener = _FakeOpener(payload)
         rows = search_contracts(
             "SAP", exchange="IBIS", market="de",
-            opener=_FakeOpener(payload),
+            opener=opener,
         )
         self.assertEqual(len(rows), 1)
+        self.assertEqual(opener.headers.get("Authorization"), "Bearer test-token")
         row = rows[0]
         self.assertEqual(row["conid"], "123456")
         self.assertEqual(row["symbol"], "SAP")

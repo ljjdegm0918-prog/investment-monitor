@@ -80,14 +80,15 @@ def _fetch_json(
     url: str,
     opener: Callable[..., Any],
     timeout: float,
+    api_token: str = "",
 ) -> Any:
-    request = Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_USER_AGENT,
-            "Accept": "application/json",
-        },
-    )
+    headers = {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Accept": "application/json",
+    }
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
+    request = Request(url, headers=headers)
     with opener(request, timeout=timeout) as response:
         raw = response.read()
     return json.loads(raw.decode("utf-8"))
@@ -149,7 +150,9 @@ def search_contracts(
         query += f"&name={exchange}"  # secdef search alias
     url = f"{resolved_base}/iserver/secdef/search?{query}"
     try:
-        payload = _fetch_json(url, opener or urlopen, timeout)
+        payload = _fetch_json(
+            url, opener or urlopen, timeout, api_token=resolved_token
+        )
     except Exception as error:  # noqa: BLE001 - 调用方决定降级
         raise IbkrSecdefError(
             f"IBKR secdef search failed for {symbol}: {error}"
@@ -179,14 +182,16 @@ def contract_details(
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Dict[str, Any]:
     """Fetch full contract fields for one conid (secdef/info shape)."""
-    configured, resolved_base, _resolved_token = _configured(
+    configured, resolved_base, resolved_token = _configured(
         session, base_url, api_token
     )
     if not configured:
         return {}
     url = f"{resolved_base}/iserver/secdef/info?conid={conid}"
     try:
-        payload = _fetch_json(url, opener or urlopen, timeout)
+        payload = _fetch_json(
+            url, opener or urlopen, timeout, api_token=resolved_token
+        )
     except Exception as error:  # noqa: BLE001
         raise IbkrSecdefError(
             f"IBKR secdef info failed for conid={conid}: {error}"
