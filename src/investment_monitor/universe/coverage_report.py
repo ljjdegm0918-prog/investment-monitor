@@ -44,6 +44,12 @@ MARKET_NOTES = {
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
     "RU": "MOEX ISS read-only official directory (TQBR); IBKR trading suspended, no pricing, research-only",
+    "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
+    "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
+    "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
+    "HU": "BSE pages HTML only, no structured export (2026-08-16 probe); universe/disclosure stay stub",
+    "NO": "Euronext Oslo live CSV universe; NewsWeb disclosure stub (SPA, no stable key-free API)",
+    "PT": "Euronext Lisbon live CSV universe; Lisbon/CMVM disclosure stub (no stable key-free API)",
 }
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")

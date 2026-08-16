@@ -69,6 +69,12 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(live_news, 27)
         self.assertEqual(self.rows["RU"]["news"], "unavailable")
 
+    def test_phase5_thin_country_notes_are_locked(self):
+        for code in ("AT", "MX", "IL", "HU"):
+            self.assertIn("stub", self.rows[code]["notes"], code)
+        self.assertIn("NewsWeb", self.rows["NO"]["notes"])
+        self.assertIn("CMVM", self.rows["PT"]["notes"])
+
 
 if __name__ == "__main__":
     unittest.main()
