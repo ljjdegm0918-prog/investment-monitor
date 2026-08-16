@@ -337,6 +337,10 @@ sources:
   # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
   # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
   # still unreachable from this network; GPW paid data products are unused.
+  - name: nasdaq_baltic_news
+    label: Nasdaq Baltic
+    source_type: filings          # official Nasdaq Baltic issuer announcements (ee/lv/lt)
+    enabled: true                 # key-free official JSON; matched by universe company name
   - name: gpw_espi
     label: GPW ESPI/EBI
     source_type: filings
