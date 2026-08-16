@@ -33,6 +33,17 @@ TSX_URL_ENV = "CA_TSX_UNIVERSE_URL"
 TSXV_URL_ENV = "CA_TSXV_UNIVERSE_URL"
 DEFAULT_USER_AGENT = "InvestmentMonitor/0.1 (internal workspace)"
 
+# Phase 4 锁边（2026-08-16 live 复验）：CSE api.thecse.com TLS EOF；
+# NEO neo.inc 超时；SEDAR+ 为 WAF 页。TSX/TSXV 官方目录保持 partial。
+PHASE4_BOUNDARY = {
+    "universe": "partial",
+    "disclosure": "unavailable",
+    "evidence": (
+        "CSE api.thecse.com: TLS UNEXPECTED_EOF; NEO neo.inc: timeout; "
+        "SEDAR+ sedarplus.ca: WAF, no stable key-free API"
+    ),
+}
+
 
 class CaUniverseError(RuntimeError):
     """Raised when the CA universe cannot be refreshed at all."""
