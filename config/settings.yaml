@@ -307,6 +307,22 @@ sources:
     label: Google News (LT)
     source_type: news
     enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: yahoo_no
+    label: Yahoo Finance NO
+    source_type: news
+    enabled: true                 # key-free RSS; .OL suffix at request time; may be loosely related
+  - name: google_news_no
+    label: Google News (NO)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=no&gl=NO&ceid=NO:no
+  - name: yahoo_pt
+    label: Yahoo Finance PT
+    source_type: news
+    enabled: true                 # key-free RSS; .LS suffix at request time; may be loosely related
+  - name: google_news_pt
+    label: Google News (PT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=pt&gl=PT&ceid=PT:pt
   - name: yahoo_pl
     label: Yahoo Finance PL
     source_type: news

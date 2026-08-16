@@ -117,6 +117,14 @@ from .sources.lt_news import (
     GoogleLtNewsConnector,
     YahooLtNewsConnector,
 )
+from .sources.no_news import (
+    GoogleNoNewsConnector,
+    YahooNoNewsConnector,
+)
+from .sources.pt_news import (
+    GooglePtNewsConnector,
+    YahooPtNewsConnector,
+)
 from .sources.pl_news import (
     GooglePlNewsConnector,
     YahooPlNewsConnector,
@@ -181,6 +189,8 @@ SOURCE_MARKETS = {
     "yahoo_ee": "ee", "google_news_ee": "ee",
     "yahoo_lv": "lv", "google_news_lv": "lv",
     "yahoo_lt": "lt", "google_news_lt": "lt",
+    "yahoo_no": "no", "google_news_no": "no",
+    "yahoo_pt": "pt", "google_news_pt": "pt",
     "fi_oam": "se", "nasdaq_se_filings": "se",
     "yahoo_se": "se", "google_news_se": "se",
     "eurex_circulars": "eux", "google_news_eux": "eux",
@@ -389,6 +399,10 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleLvNewsConnector.name, GoogleLvNewsConnector)
     registry.register(YahooLtNewsConnector.name, YahooLtNewsConnector)
     registry.register(GoogleLtNewsConnector.name, GoogleLtNewsConnector)
+    registry.register(YahooNoNewsConnector.name, YahooNoNewsConnector)
+    registry.register(GoogleNoNewsConnector.name, GoogleNoNewsConnector)
+    registry.register(YahooPtNewsConnector.name, YahooPtNewsConnector)
+    registry.register(GooglePtNewsConnector.name, GooglePtNewsConnector)
     registry.register(GooglePlNewsConnector.name, GooglePlNewsConnector)
     registry.register(YahooSeNewsConnector.name, YahooSeNewsConnector)
     registry.register(GoogleSeNewsConnector.name, GoogleSeNewsConnector)
