@@ -48,6 +48,11 @@ MARKET_NOTES = {
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
 
+# market -> ETF 发行人披露源（基金文件/份额变更/指数/分红公告）。
+# Phase 5 现状：尚无免 key ETF 公告/文件源接入；绝不能把股权 eqs_*/公司
+# 公告标成 ETF 披露 LIVE。未来接源后往这里登记。
+ETF_DISCLOSURE_SOURCES: Dict[str, tuple] = {}
+
 # market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
 _DISCLOSURE_SOURCES: Dict[str, tuple] = {
     "us": ("sec",),
@@ -138,6 +143,17 @@ def _news_status(market_code: str | None) -> str:
     return "live"
 
 
+def _etf_disclosure_status(market: str) -> str:
+    """ETF issuer-disclosure status; separate from equity disclosures.
+
+    Equity eqs_*/company announcements are never reused as ETF fund files.
+    """
+    market = str(market or "").lower()
+    if ETF_DISCLOSURE_SOURCES.get(market):
+        return "live"
+    return "unavailable"
+
+
 def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
     if market == "de":
         return "live"
@@ -196,6 +212,9 @@ def coverage_report(
         etf_universe = _etf_status(
             country.get("market_code"), market or country_code.lower(), cache_path
         )
+        etf_disclosure = _etf_disclosure_status(
+            market or country_code.lower()
+        )
         rows.append({
             "country_code": country_code,
             "country_name": str(country.get("country_name") or country_code),
@@ -206,15 +225,16 @@ def coverage_report(
             "disclosure": disclosure,
             "news": news,
             "etf_universe": etf_universe,
+            "etf_disclosure": etf_disclosure,
             "source_tier_summary": _source_tier_summary(
                 universe, disclosure, news
             ),
             "venue_count": venues_by_country.get(country_code, 0),
-            "notes": _notes_for(country_code, universe, disclosure, etf_universe),
+            "notes": _notes_for(country_code, universe, disclosure, etf_universe, etf_disclosure),
         })
 
     status_counts: Dict[str, int] = {}
-    for key in ("universe", "disclosure", "news", "etf_universe"):
+    for key in ("universe", "disclosure", "news", "etf_universe", "etf_disclosure"):
         counts: Dict[str, int] = {}
         for row in rows:
             value = str(row[key])
@@ -238,6 +258,7 @@ def _notes_for(
     universe: str,
     disclosure: str,
     etf_universe: str,
+    etf_disclosure: str,
 ) -> str:
     if country_code == "RU":
         return "IBKR MOEX positions are suspended; read-only catalog entry."
@@ -252,6 +273,10 @@ def _notes_for(
         notes.append("official Xetra universe carries ETF/ETN/ETC")
     if etf_universe == "partial":
         notes.append("third_party ETF candidates present")
+    if etf_disclosure == "unavailable" and etf_universe in ("live", "partial"):
+        notes.append(
+            "ETF issuer disclosure unavailable; equity filings are not reused"
+        )
     return "; ".join(notes) or (
         f"universe={universe}; disclosure={disclosure}"
     )
