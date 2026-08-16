@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Mapping
 
-# cn_exchange 是计划书口径的中国挂牌场所；connect venue 是 IBKR catalog 里
-# HK 的通道 venue id。两条都是 northbound（香港投资者北上买 A 股）。
+# cn_exchange 是中国挂牌场所；connect venue 是静态参考目录里的香港通道
+# venue id。两条都是 northbound（香港投资者北上买 A 股）。
 STOCK_CONNECT_MAP: Mapping[str, Any] = {
     "cn": {
         "venues": [

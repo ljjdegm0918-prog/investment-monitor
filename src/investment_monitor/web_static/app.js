@@ -84,8 +84,8 @@ const MESSAGES = {
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
-    "manage.ibkr_coverage": "IBKR country coverage",
-    "manage.coverage_desc": "Global Access stock venues and per-country source status. Routing venues are venues only, never disclosure connectors.",
+    "manage.ibkr_coverage": "Global market information coverage",
+    "manage.coverage_desc": "Independent exchange, regulator, and reputable third-party source status. Reference venues only reveal coverage gaps and are never runtime broker dependencies.",
     "manage.coverage_loading": "Loading coverage…",
     "manage.coverage_country": "Country",
     "manage.coverage_market": "Market",
@@ -327,8 +327,8 @@ const MESSAGES = {
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
-    "manage.ibkr_coverage": "IBKR 国家覆盖",
-    "manage.coverage_desc": "Global Access 股票场所与各国来源状态；路由场所仅作场所记录，不是披露连接器。",
+    "manage.ibkr_coverage": "全球市场信息覆盖",
+    "manage.coverage_desc": "交易所、监管机构与正规第三方来源状态；参考场所只用于发现覆盖缺口，不依赖任何经纪商。",
     "manage.coverage_loading": "正在加载覆盖…",
     "manage.coverage_country": "国家",
     "manage.coverage_market": "市场",
@@ -1163,7 +1163,7 @@ function renderCoverage(payload) {
         <th>${t("manage.coverage_tier")}</th><th>${t("manage.coverage_venues")}</th>
       </tr></thead>
       <tbody>${rows.map(row => `<tr>
-        <td>${esc(row.country_name || row.country_code)}${row.trading_status === "suspended" ? ` <span class="coverage-badge coverage-suspended">${esc(row.trading_status)}</span>` : ""}</td>
+        <td>${esc(row.country_name || row.country_code)}</td>
         <td>${esc(row.market_code || "—")}</td>
         <td>${coverageBadge(row.universe)}</td>
         <td>${coverageBadge(row.etf_universe)}</td>

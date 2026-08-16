@@ -63,7 +63,8 @@ class RuUniverseTests(unittest.TestCase):
                 refreshed_at="2026-08-16T00:00:00+00:00",
             )
         self.assertEqual(payload["source_tier"], "official")
-        self.assertEqual(payload["trading_status"], "unavailable")
+        self.assertNotIn("trading_status", payload)
+        self.assertTrue(payload["readonly"])
         self.assertTrue(payload["readonly"])
         self.assertEqual(payload["counts"]["tqbr"], 2)
         self.assertEqual(

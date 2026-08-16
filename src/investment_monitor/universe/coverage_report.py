@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Per-country coverage aggregator for the IBKR exchange catalog (P0-1).
+"""Per-country coverage aggregator for the independent market monitor.
 
 The report is derived automatically from the repo's existing facts:
 
@@ -45,7 +45,7 @@ MARKET_NOTES = {
     "SG": "Official-source boundary: StocksSG provides a partial third-party universe; official SGX directory/announcements remain SPA/403",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
-    "RU": "MOEX ISS read-only official directory (TQBR); IBKR trading suspended, no pricing, research-only",
+    "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
     "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
     "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
     "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
@@ -96,7 +96,7 @@ _DISCLOSURE_SOURCES: Dict[str, tuple] = {
 
 def _universe_status(market_code: str | None, market: str) -> str:
     if market == "ru":
-        # P5-0：官方 MOEX ISS 只读目录已接；交易状态仍由 catalog 标 suspended。
+        # 官方 MOEX ISS 只读目录已接；本产品不表达经纪商交易状态。
         try:
             __import__(
                 "investment_monitor.universe.ru_universe", fromlist=["*"]
@@ -205,7 +205,7 @@ def _source_tier_summary(universe: str, disclosure: str, news: str) -> str:
 def coverage_report(
     cache_path: Any = None,
 ) -> Mapping[str, Any]:
-    """Return per-country coverage rows for the 28 core IBKR countries."""
+    """Return coverage rows for the 28-country comparison benchmark."""
     countries = list_countries()
     venues_by_country: Dict[str, int] = {}
     for row in list_venues():
@@ -230,7 +230,6 @@ def coverage_report(
             "country_name": str(country.get("country_name") or country_code),
             "region": str(country.get("region") or ""),
             "market_code": country.get("market_code"),
-            "trading_status": str(country.get("trading_status") or "active"),
             "universe": universe,
             "disclosure": disclosure,
             "news": news,
@@ -253,7 +252,13 @@ def coverage_report(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "schema": "coverage_report/v1",
+        "schema": "coverage_report/v2",
+        "scope": {
+            "kind": "independent_market_information_coverage",
+            "broker_runtime_dependency": False,
+            "broker_account_required": False,
+            "trading_capability_assessed": False,
+        },
         "summary": {
             "countries": len(rows),
             "venues": sum(row["venue_count"] for row in rows),
@@ -270,8 +275,6 @@ def _notes_for(
     etf_universe: str,
     etf_disclosure: str,
 ) -> str:
-    if country_code == "RU":
-        return "IBKR MOEX positions are suspended; read-only catalog entry."
     if country_code in MARKET_NOTES:
         return str(MARKET_NOTES[country_code])
     notes = []

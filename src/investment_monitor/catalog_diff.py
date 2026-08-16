@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Quarterly IBKR catalog diff helper (P5-4).
+"""Quarterly static coverage-benchmark diff helper.
 
 Usage (from the repo root):
 
@@ -10,8 +10,8 @@ Usage (from the repo root):
 Reads the current seed ``universe/ibkr_exchange_catalog.json`` and a
 previous snapshot (default ``docs/ibkr_catalog_snapshot.json``), then
 prints the frozen 28/87 summary plus added/removed/changed country and
-venue rows. Run it once per quarter (plan §8.8) after manually updating
-the snapshot from the IBKR Global Access page.
+venue rows. Updating the snapshot is a manual, offline benchmark task;
+the helper never logs in to or calls a broker service.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ def run(
     argv: Optional[Sequence[str]] = None,
 ) -> Tuple[Dict[str, Any], int]:
     parser = argparse.ArgumentParser(
-        description="Quarterly IBKR catalog diff helper (28 countries / 87 venues)."
+        description="Quarterly coverage benchmark diff (28 countries / 87 venues)."
     )
     parser.add_argument(
         "--snapshot",

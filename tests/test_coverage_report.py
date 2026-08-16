@@ -14,6 +14,16 @@ class CoverageReportTests(unittest.TestCase):
         self.rows = {row["country_code"]: row for row in self.report["countries"]}
 
     def test_report_covers_28_countries_and_87_venues(self):
+        self.assertEqual(self.report["schema"], "coverage_report/v2")
+        self.assertEqual(
+            self.report["scope"],
+            {
+                "kind": "independent_market_information_coverage",
+                "broker_runtime_dependency": False,
+                "broker_account_required": False,
+                "trading_capability_assessed": False,
+            },
+        )
         self.assertEqual(self.report["summary"]["countries"], 28)
         self.assertEqual(self.report["summary"]["venues"], 87)
         self.assertEqual(len(self.rows), 28)
@@ -38,11 +48,12 @@ class CoverageReportTests(unittest.TestCase):
             self.assertEqual(row["disclosure"], "stub")
 
         ru = self.rows["RU"]
-        self.assertEqual(ru["trading_status"], "suspended")
+        self.assertNotIn("trading_status", ru)
         self.assertEqual(ru["universe"], "partial")
         self.assertEqual(ru["disclosure"], "unavailable")
         self.assertEqual(ru["news"], "unavailable")
         self.assertEqual(ru["source_tier_summary"], "mixed")
+        self.assertIn("research-only", ru["notes"])
 
     def test_boundary_stubs_are_never_live(self):
         for code in ("AT", "HU", "IL", "MX", "NO", "PT"):
