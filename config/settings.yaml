@@ -307,6 +307,18 @@ sources:
     label: Google News (LT)
     source_type: news
     enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: bse_hu_announcements
+    label: BSE (Budapest) announcements
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free endpoint (HU-1 2026-08-15)
+  - name: yahoo_hu
+    label: Yahoo Finance HU
+    source_type: news
+    enabled: true                 # key-free RSS; .BU suffix; hu-HU + en-US dual fetch
+  - name: google_news_hu
+    label: Google News (HU)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=hu&gl=HU&ceid=HU:hu (en 备选)
   - name: maya_announcements
     label: MAYA (TASE) announcements
     source_type: filings

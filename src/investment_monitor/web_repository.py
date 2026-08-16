@@ -2471,6 +2471,7 @@ def _market_region(market: str) -> str:
         "in": "India",
         "mx": "Mexico",
         "il": "Israel",
+        "hu": "Hungary",
     }.get(market, "Unavailable")
 
 
@@ -3240,6 +3241,37 @@ def normalize_il_ticker(ticker: str) -> str:
         changed = False
         for separator in _IL_TICKER_SEPARATORS:
             for suffix in _IL_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_HU_TICKER_SUFFIXES = ("BU",)
+_HU_TICKER_SEPARATORS = (".", " ", "-")
+_HU_ISIN_PATTERN = re.compile(r"HU[0-9A-Z]{10}")
+
+
+def normalize_hu_ticker(ticker: str) -> str:
+    """Normalize a Hungarian (Budapest Stock Exchange) symbol.
+
+    Accepts plain symbols (``OTP``, ``MOL``, ``RICHTER``) and the common
+    ``.BU`` quote suffix; a bare ``BU`` word is never erased, and a
+    Hungarian ISIN (``HU`` + 10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _HU_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _HU_TICKER_SEPARATORS:
+            for suffix in _HU_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

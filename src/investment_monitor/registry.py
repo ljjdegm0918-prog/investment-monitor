@@ -124,6 +124,11 @@ from .sources.no_news import (
 from .sources.nse_announcements import NseAnnouncementsConnector
 from .sources.bmv_relevant_events import BmvRelevantEventsConnector
 from .sources.maya_announcements import MayaAnnouncementsConnector
+from .sources.bse_hu_announcements import BseHuAnnouncementsConnector
+from .sources.hu_news import (
+    GoogleHuNewsConnector,
+    YahooHuNewsConnector,
+)
 from .sources.il_news import (
     GoogleIlNewsConnector,
     YahooIlNewsConnector,
@@ -215,6 +220,7 @@ SOURCE_MARKETS = {
     "nse_announcements": "in", "yahoo_in": "in", "google_news_in": "in",
     "bmv_relevant_events": "mx", "yahoo_mx": "mx", "google_news_mx": "mx",
     "maya_announcements": "il", "yahoo_il": "il", "google_news_il": "il",
+    "bse_hu_announcements": "hu", "yahoo_hu": "hu", "google_news_hu": "hu",
     "fi_oam": "se", "nasdaq_se_filings": "se",
     "yahoo_se": "se", "google_news_se": "se",
     "eurex_circulars": "eux", "google_news_eux": "eux",
@@ -439,6 +445,9 @@ def create_default_registry() -> SourceRegistry:
     registry.register(MayaAnnouncementsConnector.name, MayaAnnouncementsConnector)
     registry.register(YahooIlNewsConnector.name, YahooIlNewsConnector)
     registry.register(GoogleIlNewsConnector.name, GoogleIlNewsConnector)
+    registry.register(BseHuAnnouncementsConnector.name, BseHuAnnouncementsConnector)
+    registry.register(YahooHuNewsConnector.name, YahooHuNewsConnector)
+    registry.register(GoogleHuNewsConnector.name, GoogleHuNewsConnector)
     registry.register(GooglePlNewsConnector.name, GooglePlNewsConnector)
     registry.register(YahooSeNewsConnector.name, YahooSeNewsConnector)
     registry.register(GoogleSeNewsConnector.name, GoogleSeNewsConnector)
