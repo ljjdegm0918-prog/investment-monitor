@@ -51,6 +51,9 @@ from .models import (
     MARKET_EMF,
     MARKET_TRQ,
     MARKET_EUX,
+    MARKET_EE,
+    MARKET_LV,
+    MARKET_LT,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -1122,6 +1125,10 @@ class WebApplication:
             # EUX stays unmapped via SEC; Eurex derivatives are product
             # codes, never SEC CIKs.
             return None
+        if market in (MARKET_EE, MARKET_LV, MARKET_LT):
+            # Baltic companies stay unmapped; Nasdaq Baltic disclosures are
+            # matched by ISIN/name from the Baltic universe, never SEC CIKs.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1210,6 +1217,9 @@ class WebApplication:
             return trq_universe_name_map()
         if market == MARKET_EUX:
             return eux_universe_name_map()
+        if market in (MARKET_EE, MARKET_LV, MARKET_LT):
+            from .universe.nasdaq_baltic_universe import baltic_universe_name_map
+            return baltic_universe_name_map(market)
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:
