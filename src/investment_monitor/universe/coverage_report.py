@@ -43,6 +43,7 @@ MARKET_NOTES = {
     "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
+    "RU": "MOEX ISS read-only official directory (TQBR); IBKR trading suspended, no pricing, research-only",
 }
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
@@ -81,7 +82,16 @@ _DISCLOSURE_SOURCES: Dict[str, tuple] = {
 
 
 def _universe_status(market_code: str | None, market: str) -> str:
-    if market == "ru" or market_code is None:
+    if market == "ru":
+        # P5-0：官方 MOEX ISS 只读目录已接；交易状态仍由 catalog 标 suspended。
+        try:
+            __import__(
+                "investment_monitor.universe.ru_universe", fromlist=["*"]
+            )
+        except ImportError:
+            return "unavailable"
+        return "partial"
+    if market_code is None:
         return "unavailable"
     if market_code in UNIVERSE_BOUNDARY_STUBS:
         return "stub"

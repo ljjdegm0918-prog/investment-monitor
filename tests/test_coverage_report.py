@@ -36,10 +36,10 @@ class CoverageReportTests(unittest.TestCase):
 
         ru = self.rows["RU"]
         self.assertEqual(ru["trading_status"], "suspended")
-        self.assertEqual(ru["universe"], "unavailable")
+        self.assertEqual(ru["universe"], "partial")
         self.assertEqual(ru["disclosure"], "unavailable")
         self.assertEqual(ru["news"], "unavailable")
-        self.assertEqual(ru["source_tier_summary"], "none")
+        self.assertEqual(ru["source_tier_summary"], "mixed")
 
     def test_boundary_stubs_are_never_live(self):
         for code in ("AT", "HU", "IL", "MX", "NO", "PT"):
