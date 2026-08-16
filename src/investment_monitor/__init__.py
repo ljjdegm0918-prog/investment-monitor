@@ -544,6 +544,13 @@ from .universe.stock_connect import (
     stock_connect_summary,
     stock_connect_venues_for,
 )
+from .us_universe import (
+    UsUniverseError,
+    load_us_universe,
+    refresh_us_universe,
+    search_us_universe,
+    us_universe_name_map,
+)
 from .universe.aq_universe import (
     AqUniverseError,
     load_aq_universe,
@@ -865,6 +872,11 @@ __all__ = [
     "stock_connect_summary",
     "stock_connect_venues_for",
     "venue_count",
+    "UsUniverseError",
+    "load_us_universe",
+    "refresh_us_universe",
+    "search_us_universe",
+    "us_universe_name_map",
     "build_official_name_maps",
     "collect_eodhd_symbols",
     "empty_payload",
