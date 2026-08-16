@@ -56,6 +56,7 @@ from .models import (
     MARKET_LT,
     MARKET_NO,
     MARKET_PT,
+    MARKET_AT,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -107,7 +108,7 @@ CollectionRunner = Callable[..., ConfiguredCollectionResult]
 # - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
 # - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
 ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
-    "newsweb_no", "euronext_lisbon_news",
+    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news",
     "hotcopper_au",
     "lse_share_chat",
     "yellowbrick",
@@ -1136,6 +1137,10 @@ class WebApplication:
             # Oslo/Lisbon companies stay unmapped; disclosure matching is
             # by ISIN/name from the local Euronext universe, never SEC CIKs.
             return None
+        if market == MARKET_AT:
+            # Vienna companies stay unmapped; never let SEC map an Austrian
+            # symbol to a same-named US company.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1233,6 +1238,9 @@ class WebApplication:
         if market == MARKET_PT:
             from .universe.pt_universe import pt_universe_name_map
             return pt_universe_name_map()
+        if market == MARKET_AT:
+            from .universe.at_universe import at_universe_name_map
+            return at_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:

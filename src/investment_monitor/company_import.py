@@ -60,6 +60,7 @@ _CANONICAL_SUFFIXES: Dict[str, str] = {
     "lt": "lt",
     "no": "no",
     "pt": "pt",
+    "at": "at",
 }
 
 # Common exchange / quote suffix aliases, mapped to a canonical market. This is
@@ -104,6 +105,8 @@ _EXCHANGE_ALIASES: Dict[str, str] = {
     # Norway / Portugal (Oslo Bors / Euronext Lisbon quote suffixes)
     "ol": "no",
     "ls": "pt",
+    # Austria (Vienna Stock Exchange quote suffix)
+    "vi": "at",
     "wse": "pl",
     "gpw": "pl",
     # Sweden
