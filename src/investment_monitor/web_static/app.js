@@ -84,6 +84,17 @@ const MESSAGES = {
     "manage.information_sources": "Information sources",
     "manage.sources_desc": "Configured connectors, coverage, latest run, and failure summary.",
     "manage.loading_sources": "Loading sources…",
+    "manage.ibkr_coverage": "IBKR country coverage",
+    "manage.coverage_desc": "Global Access stock venues and per-country source status. Routing venues are venues only, never disclosure connectors.",
+    "manage.coverage_loading": "Loading coverage…",
+    "manage.coverage_country": "Country",
+    "manage.coverage_market": "Market",
+    "manage.coverage_universe": "Stock universe",
+    "manage.coverage_etf": "ETF universe",
+    "manage.coverage_disclosure": "Disclosure",
+    "manage.coverage_news": "News",
+    "manage.coverage_tier": "Source tier",
+    "manage.coverage_venues": "Venues",
     "manage.companies_count": "{count} companies",
     "manage.rename": "Rename",
     "manage.delete": "Delete",
@@ -315,6 +326,17 @@ const MESSAGES = {
     "manage.information_sources": "信息来源",
     "manage.sources_desc": "已配置连接器、覆盖范围、最近运行和失败摘要。",
     "manage.loading_sources": "正在加载来源…",
+    "manage.ibkr_coverage": "IBKR 国家覆盖",
+    "manage.coverage_desc": "Global Access 股票场所与各国来源状态；路由场所仅作场所记录，不是披露连接器。",
+    "manage.coverage_loading": "正在加载覆盖…",
+    "manage.coverage_country": "国家",
+    "manage.coverage_market": "市场",
+    "manage.coverage_universe": "股票宇宙",
+    "manage.coverage_etf": "ETF 宇宙",
+    "manage.coverage_disclosure": "披露",
+    "manage.coverage_news": "新闻",
+    "manage.coverage_tier": "来源层级",
+    "manage.coverage_venues": "场所数",
     "manage.companies_count": "{count} 家公司",
     "manage.rename": "重命名",
     "manage.delete": "删除",
@@ -1058,6 +1080,10 @@ async function renderManage() {
     <section class="management-section" aria-labelledby="sources-title">
       <div class="section-heading"><div><h2 id="sources-title">${t("manage.information_sources")}</h2><p>${t("manage.sources_desc")}</p></div></div>
       <div id="source-grid"><p class="loading">${t("manage.loading_sources")}</p></div>
+    </section>
+    <section class="management-section" aria-labelledby="coverage-title">
+      <div class="section-heading"><div><h2 id="coverage-title">${t("manage.ibkr_coverage")}</h2><p>${t("manage.coverage_desc")}</p></div></div>
+      <div id="coverage-board"><p class="loading">${t("manage.coverage_loading")}</p></div>
     </section>`;
   bindManagement();
   await refreshManagement();
@@ -1114,6 +1140,37 @@ async function refreshManagement() {
   renderLists(); renderCompanies();
   try { renderSources((await api("/api/sources")).sources); }
   catch (error) { document.getElementById("source-grid").innerHTML = errorState(t("common.request_failed"), error.message); }
+  try { renderCoverage(await api("/api/coverage")); }
+  catch (error) { document.getElementById("coverage-board").innerHTML = errorState(t("common.request_failed"), error.message); }
+}
+
+function coverageBadge(status) {
+  const safe = String(status || "unavailable").toLowerCase();
+  return `<span class="coverage-badge coverage-${escAttr(safe)}">${esc(status || "unavailable")}</span>`;
+}
+
+function renderCoverage(payload) {
+  const rows = payload.report?.countries || [];
+  document.getElementById("coverage-board").innerHTML = `
+    <p class="coverage-summary">${t("manage.coverage_country")}: ${payload.catalog?.countries ?? rows.length} · ${t("manage.coverage_venues")}: ${payload.catalog?.venues ?? ""}</p>
+    <div class="coverage-table-wrap"><table class="coverage-table">
+      <thead><tr>
+        <th>${t("manage.coverage_country")}</th><th>${t("manage.coverage_market")}</th>
+        <th>${t("manage.coverage_universe")}</th><th>${t("manage.coverage_etf")}</th>
+        <th>${t("manage.coverage_disclosure")}</th><th>${t("manage.coverage_news")}</th>
+        <th>${t("manage.coverage_tier")}</th><th>${t("manage.coverage_venues")}</th>
+      </tr></thead>
+      <tbody>${rows.map(row => `<tr>
+        <td>${esc(row.country_name || row.country_code)}${row.trading_status === "suspended" ? ` <span class="coverage-badge coverage-suspended">${esc(row.trading_status)}</span>` : ""}</td>
+        <td>${esc(row.market_code || "—")}</td>
+        <td>${coverageBadge(row.universe)}</td>
+        <td>${coverageBadge(row.etf_universe)}</td>
+        <td>${coverageBadge(row.disclosure)}</td>
+        <td>${coverageBadge(row.news)}</td>
+        <td>${esc(row.source_tier_summary || "—")}</td>
+        <td>${Number(row.venue_count || 0)}</td>
+      </tr>`).join("")}</tbody>
+    </table></div>`;
 }
 
 function renderLists() {
