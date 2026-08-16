@@ -64,6 +64,11 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For Hungary (hu) the disclosure primary chain is an honest stub (no
+rows are produced), so no filing pairing exists yet; HU news
+(yahoo_hu / google_news_hu) pairs across sources on ticker +
+Budapest day + normalized title.
+
 For Israel (il) the disclosure primary chain is an honest stub (no
 rows are produced), so no filing pairing exists yet; IL news
 (yahoo_il / google_news_il) pairs across sources on ticker +
@@ -168,6 +173,7 @@ VIENNA = ZoneInfo("Europe/Vienna")
 KOLKATA = ZoneInfo("Asia/Kolkata")
 MEXICO_CITY = ZoneInfo("America/Mexico_City")
 JERUSALEM = ZoneInfo("Asia/Jerusalem")
+BUDAPEST = ZoneInfo("Europe/Budapest")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
 LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
@@ -249,6 +255,9 @@ NEWS_SOURCE_PRIORITY = {
     "maya_announcements": 51,
     "yahoo_il": 52,
     "google_news_il": 53,
+    "bse_hu_announcements": 54,
+    "yahoo_hu": 55,
+    "google_news_hu": 56,
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
@@ -353,6 +362,9 @@ SOURCE_DISPLAY_LABELS = {
     "maya_announcements": "MAYA (TASE)",
     "yahoo_il": "Yahoo Finance IL",
     "google_news_il": "Google News (IL)",
+    "bse_hu_announcements": "BSE (Budapest)",
+    "yahoo_hu": "Yahoo Finance HU",
+    "google_news_hu": "Google News (HU)",
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
@@ -401,7 +413,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "at", "in", "mx", "il", "aq", "cxe", "emf", "trq", "eux",
+        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "at", "in", "mx", "il", "hu", "aq", "cxe", "emf", "trq", "eux",
         "cn", "us", "jp",
     }:
         return None
@@ -541,6 +553,10 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         # a stray filing row must never be cross-annotated.
         return None
     if market == "il":
+        # Disclosure primary chain is an honest stub (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
+    if market == "hu":
         # Disclosure primary chain is an honest stub (no rows produced);
         # a stray filing row must never be cross-annotated.
         return None
@@ -961,6 +977,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "mx"
         else JERUSALEM
         if market == "il"
+        else BUDAPEST
+        if market == "hu"
         else STOCKHOLM
         if market == "se"
         else BRUSSELS

@@ -529,6 +529,31 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Yahoo↔Google 按 ticker + **Jerusalem 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
+### 匈牙利（HU）— Budapest Stock Exchange（BSE/BET）
+
+> 注意：这里的 **BSE 是布达佩斯证券交易所（bse.hu / bet.hu）**，与本仓
+> 印度轨锁死的印度 BSE（bseindia.com）完全不同，两者不共享任何端点或逻辑。
+
+- 市场代码：`hu`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@HU` 与 Yahoo 后缀 `.BU` 均可导入。
+- **披露主链（诚实 stub）**：`bse_hu_announcements`。live 侦察
+  （2026-08-15）：bse.hu/bet.hu 公告通道未发现稳定免 key JSON/RSS 端点
+  （证据见回执），连接器 `collect()` 诚实空并标注 stub。
+- **可交易宇宙（边界 stub）**：无稳定免 key BSE/BET 目录端点，`refresh`
+  抛 `HuUniverseError`；只读手工缓存
+  `.cache/investment_monitor/hu_universe.json`。**无 BUX 手写种子**；缓存
+  不进 feed。
+- **新闻**：`yahoo_hu`（`.BU` 后缀、`hu-HU` + `en-US` 双查；live 实测 Yahoo
+  `.BU` RSS 返回 200 但 **0 items**，保留连接器并如实标注空 feed）与
+  `google_news_hu`（`hl=hu&gl=HU&ceid=HU:hu`；live 实测 69 条，`hl=en`
+  被重定向到 US 且 65 条，故采用 hu），免 key RSS，可能松散相关。
+  **Finnhub 永不查 hu。**
+- **第二源（HU-4 锁死）**：MNB 公开通道无稳定免 key 披露端点；不接
+  EODHD/OpenFIGI 等 third_party；不接付费终端。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；HU 新闻
+  Yahoo↔Google 按 ticker + **Budapest 日** + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：
