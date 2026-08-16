@@ -31,14 +31,15 @@ from .global_equity_reference import etf_candidates_for
 
 # 显式边界 stub（对应各轨 spike 结论；禁止标 live）。
 UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se", "sg"})
-# 官方目录存在但覆盖不完整（缺次要板块/无 ticker 等）。
-UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk"})
+# 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
+UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us"})
 DISCLOSURE_BOUNDARY_STUBS = frozenset({"at", "hu", "il", "mx", "no", "pt"})
 DISCLOSURE_PARTIAL = frozenset({"ch", "de", "it", "nl"})
 DISCLOSURE_UNAVAILABLE = frozenset({"ca", "ru", "sg"})
 
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
+    "US": "SEC company_tickers_exchange official JSON (~10k rows); breadth-only SEC-registration boundary, not a full exchange directory",
     "CA": "TSX/TSXV official universe only; CSE/NEO directory and SEDAR+ stay unavailable (WAF/TLS boundary locked)",
     "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
