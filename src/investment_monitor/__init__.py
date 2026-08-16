@@ -515,6 +515,23 @@ from .universe.ibkr_reference import (
     enrich_with_ibkr_conids,
     ibkr_conid_for,
 )
+from .universe.exchange_catalog import (
+    ExchangeCatalogError,
+    catalog_summary,
+    country_count,
+    list_countries,
+    list_venues,
+    load_exchange_catalog,
+    primary_exchanges_for,
+    venue_count,
+)
+from .universe.coverage_report import coverage_report
+from .universe.ibkr_secdef import (
+    IbkrSecdefError,
+    TwSContractDetailsSession,
+    contract_details,
+    search_contracts,
+)
 from .universe.aq_universe import (
     AqUniverseError,
     load_aq_universe,
@@ -815,6 +832,19 @@ __all__ = [
     "OpenFigiClientError",
     "TwelveDataClientError",
     "IbkrReferenceError",
+    "ExchangeCatalogError",
+    "IbkrSecdefError",
+    "TwSContractDetailsSession",
+    "catalog_summary",
+    "contract_details",
+    "country_count",
+    "coverage_report",
+    "list_countries",
+    "list_venues",
+    "load_exchange_catalog",
+    "primary_exchanges_for",
+    "search_contracts",
+    "venue_count",
     "build_official_name_maps",
     "collect_eodhd_symbols",
     "empty_payload",
