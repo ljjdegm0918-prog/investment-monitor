@@ -64,6 +64,7 @@ _CANONICAL_SUFFIXES: Dict[str, str] = {
     "in": "in",
     "mx": "mx",
     "il": "il",
+    "hu": "hu",
 }
 
 # Common exchange / quote suffix aliases, mapped to a canonical market. This is
@@ -117,6 +118,8 @@ _EXCHANGE_ALIASES: Dict[str, str] = {
     "mx": "mx",
     # Israel (TASE quote suffix)
     "ta": "il",
+    # Hungary (Budapest Stock Exchange quote suffix)
+    "bu": "hu",
     "wse": "pl",
     "gpw": "pl",
     # Sweden

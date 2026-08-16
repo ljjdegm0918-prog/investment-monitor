@@ -60,6 +60,7 @@ from .models import (
     MARKET_IN,
     MARKET_MX,
     MARKET_IL,
+    MARKET_HU,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -111,7 +112,7 @@ CollectionRunner = Callable[..., ConfiguredCollectionResult]
 # - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
 # - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
 ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
-    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news", "bmv_relevant_events", "maya_announcements",
+    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news", "bmv_relevant_events", "maya_announcements", "bse_hu_announcements",
     "hotcopper_au",
     "lse_share_chat",
     "yellowbrick",
@@ -1157,6 +1158,10 @@ class WebApplication:
             # Israeli companies stay unmapped; TASE/MAYA announcements carry
             # their own symbol/ISIN and never need an SEC CIK.
             return None
+        if market == MARKET_HU:
+            # Hungarian companies stay unmapped; BSE/BET announcements carry
+            # their own symbol/ISIN and never need an SEC CIK.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1266,6 +1271,9 @@ class WebApplication:
         if market == MARKET_IL:
             from .universe.il_universe import il_universe_name_map
             return il_universe_name_map()
+        if market == MARKET_HU:
+            from .universe.hu_universe import hu_universe_name_map
+            return hu_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:
