@@ -521,6 +521,16 @@ from .universe.trq_universe import (
     search_trq_universe,
     trq_universe_name_map,
 )
+from .universe.nasdaq_baltic_universe import (
+    BalticUniverseError,
+    baltic_universe_name_map,
+    ee_universe_name_map,
+    load_baltic_universe,
+    lt_universe_name_map,
+    lv_universe_name_map,
+    refresh_baltic_universe,
+    search_baltic_universe,
+)
 from .universe.eux_universe import (
     EuxUniverseError,
     load_eux_universe,
@@ -727,6 +737,14 @@ __all__ = [
     "EmfUniverseError",
     "TrqUniverseError",
     "EuxUniverseError",
+    "BalticUniverseError",
+    "baltic_universe_name_map",
+    "ee_universe_name_map",
+    "load_baltic_universe",
+    "lt_universe_name_map",
+    "lv_universe_name_map",
+    "refresh_baltic_universe",
+    "search_baltic_universe",
     "HKEXNewsCompanyResolver",
     "HkUniverseError",
     "HkexDiClient",
