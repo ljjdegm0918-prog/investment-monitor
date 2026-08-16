@@ -307,6 +307,18 @@ sources:
     label: Google News (LT)
     source_type: news
     enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: wiener_boerse_news
+    label: Wiener Börse news
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free issuer-news endpoint (AT-1 2026-08-15)
+  - name: yahoo_at
+    label: Yahoo Finance AT
+    source_type: news
+    enabled: true                 # key-free RSS; .VI suffix at request time; may be loosely related
+  - name: google_news_at
+    label: Google News (AT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=de&gl=AT&ceid=AT:de
   - name: yahoo_no
     label: Yahoo Finance NO
     source_type: news
