@@ -617,6 +617,36 @@ IBKR `conid`（可选）提供统一契约。缓存位于
   `test_openfigi_client.py`、`test_twelve_data_client.py`、
   `test_ibkr_reference.py`，全部离线 fake opener，不发真实网络请求。
 
+## 1.6 Phase 4 partial 边界与 ETF 完整性（2026-08-16）
+
+计划书 Phase 4 的四国主链在 2026-08-16 重新 live 侦察后按实际可达性锁边：
+
+- **CA**：universe 保持 `partial`（官方 TMX TSX/TSXV 目录 live；CSE
+  `api.thecse.com` TLS EOF、NEO/Cboe Canada 目录超时）。披露保持
+  `unavailable`（SEDAR+ 403 WAF，无稳定免 key API，README 锁死，不假 LIVE）。
+- **SG**：universe 保持 `stub`。`api.sgx.com/securities/v1.1` 200 JSON
+  但只返回 prices 结构、筛选参数未公开；announcements 403；SGX 网页 SPA。
+  filings 保持 unavailable；EODHD/OpenFIGI 候选行进入
+  `global_equity_reference` 后 coverage 才会转 partial。
+- **SE**：universe 保持 `stub`（Nasdaq screener 对 Stockholm/OMX 代码
+  totalrecords=0，官方目录 SPA）；披露 `nasdaq_se_filings` 保持 live。
+  候选目录同样只走 third_party 标注。
+- **CH**：universe 保持 `stub`（SIX 页面与 `api.six-group.com` 均 404）；
+  披露 `eqs_ch` 保持 partial。EODHD/OpenFIGI 候选可转 partial，但永远
+  `source_tier=third_party`，不得覆盖官方字段。
+- **ETF 七国**：UK 官方 FIRDS 已按 CFI 分类 ETF（`uk_universe_etf_count`），
+  缓存含 ETF 行时 coverage 显示 `partial`（FIRDS 只有 ISIN、无零售 ticker，
+  故不标 live）；HK/JP/TW/AU/PL/ES 本轮未发现可自动化的官方 ETF
+  CSV/XLSX/API（HKEX/LSE/ASX 为 SPA 或前端导出，JPX/BME 404，GPW 连接
+  不稳），coverage 诚实保持 `unknown`，一旦第三方候选层有行自动转
+  `partial`。DE 黄金样本（官方 Xetra 含 ETF/ETN/ETC）不回退，测试锁死。
+- **CXE/TRQ**：`docs/phase4-cxe-trq-venue.md` 收口——两市场只有
+  `google_news_*` 新闻源，无任何披露 connector；catalog `catalog_role`
+  为 `venue_only`，永不进 28 国分母。
+- `coverage_report.py` 新增 `MARKET_NOTES` 显式锁边文案；四个模块新增
+  `PHASE4_BOUNDARY` 常量，`tests/test_phase4_boundaries.py` 逐项断言
+  Manage 看板状态与边界一致。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：

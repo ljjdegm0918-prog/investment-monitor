@@ -37,6 +37,14 @@ DISCLOSURE_BOUNDARY_STUBS = frozenset({"at", "hu", "il", "mx", "no", "pt"})
 DISCLOSURE_PARTIAL = frozenset({"ch", "de", "it", "nl"})
 DISCLOSURE_UNAVAILABLE = frozenset({"ca", "ru", "sg"})
 
+# Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
+MARKET_NOTES = {
+    "CA": "TSX/TSXV official universe only; CSE/NEO directory and SEDAR+ stay unavailable (WAF/TLS boundary locked)",
+    "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
+    "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
+    "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
+}
+
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
 
 # market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
@@ -123,6 +131,15 @@ def _news_status(market_code: str | None) -> str:
 def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
     if market == "de":
         return "live"
+    if market in ("uk", "gb"):
+        try:
+            from ..uk_universe import uk_universe_etf_count
+
+            if uk_universe_etf_count() > 0:
+                # FIRDS 是官方但只有 ISIN、无零售 ticker，因此至多 partial。
+                return "partial"
+        except Exception:  # noqa: BLE001 - 缓存冷不阻断报告
+            pass
     candidates = 0
     try:
         candidates = len(etf_candidates_for(market, cache_path))
@@ -214,6 +231,8 @@ def _notes_for(
 ) -> str:
     if country_code == "RU":
         return "IBKR MOEX positions are suspended; read-only catalog entry."
+    if country_code in MARKET_NOTES:
+        return str(MARKET_NOTES[country_code])
     notes = []
     if universe == "stub":
         notes.append("official universe is a boundary stub")

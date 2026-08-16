@@ -142,6 +142,23 @@ def uk_universe_name_map(
     return result
 
 
+def uk_universe_etf_count(path: Optional[Path] = None) -> int:
+    """Count ETF-classified FIRDS rows in the cached UK universe.
+
+    FIRDS is official but ISIN-keyed and lacks retail tickers, so a
+    positive count supports ``etf_universe=partial`` (never ``live``).
+    Returns 0 when the cache is cold or unreadable.
+    """
+    payload = load_uk_universe(path)
+    if not payload:
+        return 0
+    return sum(
+        1
+        for item in payload.get("items") or []
+        if str(item.get("instrument_kind") or "").lower() == "etf"
+    )
+
+
 def _latest_fulins_files() -> List[Mapping[str, Any]]:
     query = urlencode(
         {
