@@ -2468,6 +2468,7 @@ def _market_region(market: str) -> str:
         "no": "Norway",
         "pt": "Portugal",
         "at": "Austria",
+        "in": "India",
     }.get(market, "Unavailable")
 
 
@@ -3143,6 +3144,38 @@ def normalize_at_ticker(ticker: str) -> str:
         changed = False
         for separator in _AT_TICKER_SEPARATORS:
             for suffix in _AT_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_IN_TICKER_SUFFIXES = ("NS", "BO")
+_IN_TICKER_SEPARATORS = (".", " ", "-")
+_IN_ISIN_PATTERN = re.compile(r"IN[0-9A-Z]{10}")
+
+
+def normalize_in_ticker(ticker: str) -> str:
+    """Normalize an Indian (NSE/BSE) symbol.
+
+    Accepts plain NSE symbols (``RELIANCE``) and the common quote suffixes
+    ``.NS`` (NSE) and ``.BO`` (BSE); a bare ``NS``/``BO`` word is never
+    erased, and an Indian ISIN (``IN`` + 10 alphanumeric characters) is
+    kept as-is. The stored root stays the NSE-style symbol.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _IN_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _IN_TICKER_SEPARATORS:
+            for suffix in _IN_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()

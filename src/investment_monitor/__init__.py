@@ -521,6 +521,13 @@ from .universe.trq_universe import (
     search_trq_universe,
     trq_universe_name_map,
 )
+from .universe.in_universe import (
+    InUniverseError,
+    in_universe_name_map,
+    load_in_universe,
+    refresh_in_universe,
+    search_in_universe,
+)
 from .universe.at_universe import (
     AtUniverseError,
     at_universe_name_map,
@@ -661,6 +668,7 @@ from .models import (
     MARKET_EMF,
     MARKET_TRQ,
     MARKET_EUX,
+    MARKET_IN,
     MARKET_AT,
     MARKET_NO,
     MARKET_PT,
@@ -764,6 +772,11 @@ __all__ = [
     "BalticUniverseError",
     "NoUniverseError",
     "AtUniverseError",
+    "InUniverseError",
+    "in_universe_name_map",
+    "load_in_universe",
+    "refresh_in_universe",
+    "search_in_universe",
     "at_universe_name_map",
     "load_at_universe",
     "refresh_at_universe",
@@ -875,6 +888,7 @@ __all__ = [
     "MARKET_EMF",
     "MARKET_TRQ",
     "MARKET_EUX",
+    "MARKET_IN",
     "MARKET_AT",
     "MARKET_NO",
     "MARKET_PT",

@@ -462,6 +462,31 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Yahoo↔Google 间按 ticker + Vienna 日 + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
+### 印度（IN）— NSE（主）/ BSE（第二源边界）
+
+- 市场代码：`in`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@IN` 与 Yahoo 后缀 `.NS`（BSE 报价 `.BO`）均可导入。
+- **披露主链 `nse_announcements`**（filings，免 key）：官方 JSON
+  `https://www.nseindia.com/api/corporate-announcements?index=equities&from_date=dd-MM-yyyy&to_date=dd-MM-yyyy`
+  （live 验证 2026-08-15，无 WAF/cookie）。字段含 `seq_id`（稳定主键，
+  external_id `nse:<seq_id>`）、`symbol`、`sm_name`、`sm_isin`、`desc`
+  类别、`an_dt`（IST）、`attchmntText` 摘要与官方 PDF 附件。单日约
+  1600 条，连接器按请求 symbols 过滤；日期窗真实约束；时区 Asia/Kolkata。
+- **可交易宇宙**：官方免 key CSV
+  `https://archives.nseindia.com/content/equities/EQUITY_L.csv`
+  （live 验证 2026-08-15），仅保留 `SERIES == EQ` 的股票行（条数见回执）；
+  **BSE 行不混入**；无 Nifty50 手写种子；缓存永不进 feed。
+- **新闻**：`yahoo_in`（`.NS` 后缀，`en-IN` + `en-US` 双查）与
+  `google_news_in`（`hl=en&gl=IN&ceid=IN:en`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 in。**
+- **第二披露源（IN-4 锁死）**：BSE 公告 API
+  （`api.bseindia.com/.../AnnSubCategoryGetData`）探测返回空 `{}`，
+  站点为 Angular SPA 且参数无公开文档；不接付费终端。NSE 官方 API 为
+  唯一披露源，BSE 边界写死。
+- **软去重**：NSE 披露按稳定 `seq_id` 配对（无 id → source-scoped +
+  Kolkata 日 + 标题）；IN 新闻 Yahoo↔Google 按 ticker + Kolkata 日 +
+  归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：

@@ -57,6 +57,7 @@ from .models import (
     MARKET_NO,
     MARKET_PT,
     MARKET_AT,
+    MARKET_IN,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -1142,6 +1143,10 @@ class WebApplication:
             # Vienna companies stay unmapped; never let SEC map an Austrian
             # symbol to a same-named US company.
             return None
+        if market == MARKET_IN:
+            # Indian companies stay unmapped; NSE announcements carry their
+            # own symbol/ISIN and never need an SEC CIK.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1242,6 +1247,9 @@ class WebApplication:
         if market == MARKET_AT:
             from .universe.at_universe import at_universe_name_map
             return at_universe_name_map()
+        if market == MARKET_IN:
+            from .universe.in_universe import in_universe_name_map
+            return in_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:

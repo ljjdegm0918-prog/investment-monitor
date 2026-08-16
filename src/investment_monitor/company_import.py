@@ -61,6 +61,7 @@ _CANONICAL_SUFFIXES: Dict[str, str] = {
     "no": "no",
     "pt": "pt",
     "at": "at",
+    "in": "in",
 }
 
 # Common exchange / quote suffix aliases, mapped to a canonical market. This is
@@ -107,6 +108,9 @@ _EXCHANGE_ALIASES: Dict[str, str] = {
     "ls": "pt",
     # Austria (Vienna Stock Exchange quote suffix)
     "vi": "at",
+    # India (NSE / BSE quote suffixes)
+    "ns": "in",
+    "bo": "in",
     "wse": "pl",
     "gpw": "pl",
     # Sweden
