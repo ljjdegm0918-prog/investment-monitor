@@ -59,6 +59,7 @@ from .models import (
     MARKET_AT,
     MARKET_IN,
     MARKET_MX,
+    MARKET_IL,
     MARKET_IT,
     MARKET_NL,
     MARKET_TW,
@@ -1152,6 +1153,10 @@ class WebApplication:
             # Mexican companies stay unmapped; never let SEC map a BMV
             # symbol to a same-named US company.
             return None
+        if market == MARKET_IL:
+            # Israeli companies stay unmapped; TASE/MAYA announcements carry
+            # their own symbol/ISIN and never need an SEC CIK.
+            return None
         if market == MARKET_CA:
             # CA disclosure mapping is not connected yet; never let SEC map
             # a Canadian symbol to a same-named US company.
@@ -1258,6 +1263,9 @@ class WebApplication:
         if market == MARKET_MX:
             from .universe.mx_universe import mx_universe_name_map
             return mx_universe_name_map()
+        if market == MARKET_IL:
+            from .universe.il_universe import il_universe_name_map
+            return il_universe_name_map()
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:

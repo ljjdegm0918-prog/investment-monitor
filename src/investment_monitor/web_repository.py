@@ -2470,6 +2470,7 @@ def _market_region(market: str) -> str:
         "at": "Austria",
         "in": "India",
         "mx": "Mexico",
+        "il": "Israel",
     }.get(market, "Unavailable")
 
 
@@ -3208,6 +3209,37 @@ def normalize_mx_ticker(ticker: str) -> str:
         changed = False
         for separator in _MX_TICKER_SEPARATORS:
             for suffix in _MX_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_IL_TICKER_SUFFIXES = ("TA",)
+_IL_TICKER_SEPARATORS = (".", " ", "-")
+_IL_ISIN_PATTERN = re.compile(r"IL[0-9A-Z]{10}")
+
+
+def normalize_il_ticker(ticker: str) -> str:
+    """Normalize an Israeli (TASE) symbol.
+
+    Accepts plain symbols (``TEVA``) and the common ``.TA`` quote suffix;
+    a bare ``TA`` word is never erased, and an Israeli ISIN (``IL`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _IL_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _IL_TICKER_SEPARATORS:
+            for suffix in _IL_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
