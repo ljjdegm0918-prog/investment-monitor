@@ -107,7 +107,19 @@ from .ibkr_secdef import (
     IbkrSecdefError,
     TwSContractDetailsSession,
     contract_details,
+    ibkr_secdef_configured,
     search_contracts,
+)
+from .ru_universe import (
+    RuUniverseError,
+    load_ru_universe,
+    refresh_ru_universe,
+    ru_universe_name_map,
+    search_ru_universe,
+)
+from .stock_connect import (
+    stock_connect_summary,
+    stock_connect_venues_for,
 )
 
 __all__ = [
@@ -128,16 +140,24 @@ __all__ = [
     "IbkrReferenceError",
     "ExchangeCatalogError",
     "IbkrSecdefError",
+    "RuUniverseError",
     "TwSContractDetailsSession",
     "catalog_summary",
     "contract_details",
     "country_count",
     "coverage_report",
+    "ibkr_secdef_configured",
     "list_countries",
     "list_venues",
     "load_exchange_catalog",
+    "load_ru_universe",
     "primary_exchanges_for",
+    "refresh_ru_universe",
+    "ru_universe_name_map",
     "search_contracts",
+    "search_ru_universe",
+    "stock_connect_summary",
+    "stock_connect_venues_for",
     "venue_count",
     "build_official_name_maps",
     "collect_eodhd_symbols",

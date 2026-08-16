@@ -120,6 +120,16 @@ def _normalize_record(record: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def ibkr_secdef_configured() -> bool:
+    """True only when a session or both env values are present.
+
+    Callers use this gate before touching the network; when False the
+    add-company path performs zero HTTP and writes no fabricated conid.
+    """
+    configured, _base, _token = _configured(None, "", "")
+    return configured
+
+
 def search_contracts(
     symbol: str,
     *,
@@ -207,5 +217,6 @@ __all__ = [
     "IbkrSecdefError",
     "TwSContractDetailsSession",
     "contract_details",
+    "ibkr_secdef_configured",
     "search_contracts",
 ]

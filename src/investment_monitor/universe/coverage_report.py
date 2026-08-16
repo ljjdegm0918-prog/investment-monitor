@@ -43,9 +43,21 @@ MARKET_NOTES = {
     "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
+    "RU": "MOEX ISS read-only official directory (TQBR); IBKR trading suspended, no pricing, research-only",
+    "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
+    "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
+    "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
+    "HU": "BSE pages HTML only, no structured export (2026-08-16 probe); universe/disclosure stay stub",
+    "NO": "Euronext Oslo live CSV universe; NewsWeb disclosure stub (SPA, no stable key-free API)",
+    "PT": "Euronext Lisbon live CSV universe; Lisbon/CMVM disclosure stub (no stable key-free API)",
 }
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
+
+# market -> ETF 发行人披露源（基金文件/份额变更/指数/分红公告）。
+# Phase 5 现状：尚无免 key ETF 公告/文件源接入；绝不能把股权 eqs_*/公司
+# 公告标成 ETF 披露 LIVE。未来接源后往这里登记。
+ETF_DISCLOSURE_SOURCES: Dict[str, tuple] = {}
 
 # market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
 _DISCLOSURE_SOURCES: Dict[str, tuple] = {
@@ -81,7 +93,16 @@ _DISCLOSURE_SOURCES: Dict[str, tuple] = {
 
 
 def _universe_status(market_code: str | None, market: str) -> str:
-    if market == "ru" or market_code is None:
+    if market == "ru":
+        # P5-0：官方 MOEX ISS 只读目录已接；交易状态仍由 catalog 标 suspended。
+        try:
+            __import__(
+                "investment_monitor.universe.ru_universe", fromlist=["*"]
+            )
+        except ImportError:
+            return "unavailable"
+        return "partial"
+    if market_code is None:
         return "unavailable"
     if market_code in UNIVERSE_BOUNDARY_STUBS:
         return "stub"
@@ -126,6 +147,17 @@ def _news_status(market_code: str | None) -> str:
     if market_code is None:
         return "unavailable"
     return "live"
+
+
+def _etf_disclosure_status(market: str) -> str:
+    """ETF issuer-disclosure status; separate from equity disclosures.
+
+    Equity eqs_*/company announcements are never reused as ETF fund files.
+    """
+    market = str(market or "").lower()
+    if ETF_DISCLOSURE_SOURCES.get(market):
+        return "live"
+    return "unavailable"
 
 
 def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
@@ -186,6 +218,9 @@ def coverage_report(
         etf_universe = _etf_status(
             country.get("market_code"), market or country_code.lower(), cache_path
         )
+        etf_disclosure = _etf_disclosure_status(
+            market or country_code.lower()
+        )
         rows.append({
             "country_code": country_code,
             "country_name": str(country.get("country_name") or country_code),
@@ -196,15 +231,16 @@ def coverage_report(
             "disclosure": disclosure,
             "news": news,
             "etf_universe": etf_universe,
+            "etf_disclosure": etf_disclosure,
             "source_tier_summary": _source_tier_summary(
                 universe, disclosure, news
             ),
             "venue_count": venues_by_country.get(country_code, 0),
-            "notes": _notes_for(country_code, universe, disclosure, etf_universe),
+            "notes": _notes_for(country_code, universe, disclosure, etf_universe, etf_disclosure),
         })
 
     status_counts: Dict[str, int] = {}
-    for key in ("universe", "disclosure", "news", "etf_universe"):
+    for key in ("universe", "disclosure", "news", "etf_universe", "etf_disclosure"):
         counts: Dict[str, int] = {}
         for row in rows:
             value = str(row[key])
@@ -228,6 +264,7 @@ def _notes_for(
     universe: str,
     disclosure: str,
     etf_universe: str,
+    etf_disclosure: str,
 ) -> str:
     if country_code == "RU":
         return "IBKR MOEX positions are suspended; read-only catalog entry."
@@ -242,6 +279,10 @@ def _notes_for(
         notes.append("official Xetra universe carries ETF/ETN/ETC")
     if etf_universe == "partial":
         notes.append("third_party ETF candidates present")
+    if etf_disclosure == "unavailable" and etf_universe in ("live", "partial"):
+        notes.append(
+            "ETF issuer disclosure unavailable; equity filings are not reused"
+        )
     return "; ".join(notes) or (
         f"universe={universe}; disclosure={disclosure}"
     )

@@ -647,6 +647,32 @@ IBKR `conid`（可选）提供统一契约。缓存位于
   `PHASE4_BOUNDARY` 常量，`tests/test_phase4_boundaries.py` 逐项断言
   Manage 看板状态与边界一致。
 
+## 1.7 Phase 5 计划书边角收口（2026-08-16）
+
+- **俄罗斯只读宇宙**：`universe/ru_universe.py` 接官方 MOEX ISS
+  `…/engines/stock/markets/shares/boards/TQBR/securities.json`（免 key，
+  live 505 行 TQBR）。payload 固定 `trading_status=unavailable`、
+  `readonly=true`，只做研究目录，绝不进 feed；coverage RU 显示
+  universe partial + trading suspended。
+- **CN↔Stock Connect**：`universe/stock_connect.py` 静态记录
+  `SEHKSZSE`（Shanghai-HK Stock Connect）与 `SEHKSTAR`（STAR Connect）
+  northbound 映射；`cn` 保持 catalog extra，**不新开 CN 监管披露连接器**。
+- **ETF 发行人披露骨架**：coverage 新增 `etf_disclosure` 字段
+  （live|partial|stub|unavailable）。当前无免 key ETF 文件/公告源，28 国
+  全部 unavailable；股权 `eqs_*`/公司公告绝不冒充 ETF 基金文件。看板新增
+  一列。
+- **IBKR conid 真写**：`/api/companies/batch` 在
+  `IBKR_SECDEF_BASE_URL`+`IBKR_WEB_API_TOKEN`（或等价 session）齐备时才
+  调 `ibkr_secdef.search_contracts` 并把真实 conid 写入
+  `company_ibkr_contracts` 表；未配置 0 HTTP、不写假 conid。
+- **季度对表工具**：`PYTHONPATH=src python -m investment_monitor.catalog_diff`
+  输出当前 28/87 摘要并与 `docs/ibkr_catalog_snapshot.json` 做
+  added/removed/changed diff；`--write-snapshot` 更新基线；按计划书 §8.8
+  每季度跑一次。
+- **薄国结论（2026-08-16 live 复验）**：NO/PT 已有 Euronext Live CSV
+  官方宇宙（保持 live）；AT Wiener Börse 仅 HTML、MX 候选全 404、
+  IL TASE/MAYA 400/403 WAF、HU BSE 无结构化导出——均锁 stub，不假 LIVE。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：

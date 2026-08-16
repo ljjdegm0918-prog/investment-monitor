@@ -91,6 +91,7 @@ const MESSAGES = {
     "manage.coverage_market": "Market",
     "manage.coverage_universe": "Stock universe",
     "manage.coverage_etf": "ETF universe",
+    "manage.coverage_etf_disclosure": "ETF disclosure",
     "manage.coverage_disclosure": "Disclosure",
     "manage.coverage_news": "News",
     "manage.coverage_tier": "Source tier",
@@ -333,6 +334,7 @@ const MESSAGES = {
     "manage.coverage_market": "市场",
     "manage.coverage_universe": "股票宇宙",
     "manage.coverage_etf": "ETF 宇宙",
+    "manage.coverage_etf_disclosure": "ETF 披露",
     "manage.coverage_disclosure": "披露",
     "manage.coverage_news": "新闻",
     "manage.coverage_tier": "来源层级",
@@ -1156,7 +1158,7 @@ function renderCoverage(payload) {
     <div class="coverage-table-wrap"><table class="coverage-table">
       <thead><tr>
         <th>${t("manage.coverage_country")}</th><th>${t("manage.coverage_market")}</th>
-        <th>${t("manage.coverage_universe")}</th><th>${t("manage.coverage_etf")}</th>
+        <th>${t("manage.coverage_universe")}</th><th>${t("manage.coverage_etf")}</th><th>${t("manage.coverage_etf_disclosure")}</th>
         <th>${t("manage.coverage_disclosure")}</th><th>${t("manage.coverage_news")}</th>
         <th>${t("manage.coverage_tier")}</th><th>${t("manage.coverage_venues")}</th>
       </tr></thead>
@@ -1165,6 +1167,7 @@ function renderCoverage(payload) {
         <td>${esc(row.market_code || "—")}</td>
         <td>${coverageBadge(row.universe)}</td>
         <td>${coverageBadge(row.etf_universe)}</td>
+        <td>${coverageBadge(row.etf_disclosure)}</td>
         <td>${coverageBadge(row.disclosure)}</td>
         <td>${coverageBadge(row.news)}</td>
         <td>${esc(row.source_tier_summary || "—")}</td>
