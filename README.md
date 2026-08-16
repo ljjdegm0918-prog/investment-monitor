@@ -6,6 +6,20 @@
 
 Investment Monitor 是一个以列表为中心的本地金融信息监控工作区。首个 Web MVP 使用本项目已有的 SEC EDGAR 连接器，并为 News 与 Community 连接器预留清晰的数据源边界。
 
+## IBKR 覆盖总览（Draft PR #35）
+
+IBKR 基线目录分为 **美洲、欧洲、亚洲 3 个地区**，共 **28 个国家、87 个交易场所 ID**。这里的接口按“国家证券目录、法定/交易所披露、新闻、ETF 目录、ETF 专属披露”计数，不把同一主上市证券经过的每个 MTF/ATS 路由伪装成独立发行人接口。代码当前注册 110 个连接器工厂（包括新闻、社区、mock 与边界 stub）；与 28 国公司披露覆盖表直接关联的是 33 个 source ID，其中有些仍是明确的 stub，不能把“已登记名称”当成“已连通官方 API”。
+
+| 地区 | 国家 / IBKR 场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
+|---|---:|---|---|---|
+| 美洲 | 3 / 31 | 0 live、2 partial、1 stub | 1 live、1 partial、1 stub | 加拿大 CSE/NEO 与官方 SEDAR+ 完整性；墨西哥 BMV 稳定接口；美国 OTC/Pink |
+| 欧洲 | 19 / 44 | 12 live、2 partial、5 stub | 9 live、4 partial、5 stub、1 unavailable | AT/CH/HU/IL/MX 的证券主数据；NO/PT 等法定披露；RU 仅只读 |
+| 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 unavailable | 日本股票全目录/PTS；新加坡官方公告；香港/TW 完整 IBKR 合约映射 |
+
+全局自动报告当前为：证券目录 **14 live、7 partial、6 stub、1 unavailable**；公司披露 **15 live、5 partial、6 stub、2 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、13 unknown、12 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和 venue 的表见 [IBKR 覆盖报告](docs/IBKR_COVERAGE_STATUS_ZH.md)。
+
+本 PR 已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
+
 Web 界面为英文，包含三个固定列表：
 
 - Holdings（持仓）
@@ -145,7 +159,7 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 
 ### 加拿大数据源（CA）
 
-**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存 + Yahoo/Google CA news + 软去重。**未接入：** SEDAR+ 披露、CSE universe/filings、NEO universe/filings（见下方边界说明）。
+**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存、CEO.ca SEDAR PDF 镜像、Yahoo/Google CA news 与软去重。**未接入：** SEDAR+ 官方全量、CSE universe/filings、NEO universe/filings（见下方边界说明）。
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
@@ -153,11 +167,12 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 | yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); may be loosely related and break without notice |
 | google_news_ca | news | none | Key-free Google News RSS search (`hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
 | ceoca_ca | community | none | CEO.ca channel spiels via key-free JSON API (`new-api.ceo.ca`; spike 2026-08-11). API returns ~50 spiels/page (`limit` ignored); paginate with `until`. Toronto calendar-day filter; channel page URL only — no per-spiel deep link. Undocumented API may change without notice. |
-| sedar_plus / cse_filings / neo_filings | filings | — | Listed in Settings as **Not implemented**. Regulatory disclosure is **deliberately not wired** (CA-1 spike, re-verified CA-4): SEDAR+ has no stable free public API (Radware 403); CSE/NEO filings share the same network blockers as their directories |
+| ceoca_sedar | filings | none | **partial**：按请求 ticker 读取 CEO.ca 公司频道中的 `#sedar` bot 消息并保留实际 PDF 深链接，不扫描全局 SEDAR 历史；只接受精确 bot 身份、消息格式和 `ceo.ca/content/sedar/*.pdf`，日期最多 31 天且分页上限会失败关闭。这是 SEDAR+ 的第三方镜像，端点未文档化且无法证明无漏页，所以绝不标 official/live。 |
+| sedar_plus / cse_filings / neo_filings | filings | — | 官方 SEDAR+ 仍受 Radware 403；CSE/NEO 目录和 filings 仍缺稳定入口。它们保留为未实现边界，不会被 CEO.ca 镜像冒充。 |
 
 `market=ca` 公司使用规范根 ticker（`RY` / `RY.TO` / `RY-TO` 均存为 `RY`）。Board 在 universe 温热时由 `ca_universe_name_map()` 写入 `exchange`，冷启动时从输入后缀推断。公司保持 unmapped。Finnhub **仅 US**，不对 CA 查询。
 
-CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。监管 filings 无 CA 披露连接器，永不标注。Community 软去重使用 CEO.ca spiel id（或同源 scoped 标题回退）；仅接入 `ceoca_ca` 时无跨源 community 配对 — 同源重复仍可显示 "Also seen on"。
+CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。`ceoca_sedar` 以 spiel id 生成稳定 external id；Community 软去重继续使用 `ceoca_ca` spiel id（或同源 scoped 标题回退）。
 
 ### 台湾数据源（TW）
 
@@ -254,11 +269,11 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | sgx_announcements | filings | none | **Not wired (SG-1 spike A3; SG-4 re-verified 2026-08-10)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector or second disclosure source is registered; SGX DataLink / LSEG / paid market-data products are deliberately not used (locked by tests). |
-| sg_universe | breadth cache | none | **Boundary stub (SG-2 spike B2)**: no stable key-free SGX securities directory exists (`www.sgx.com/securities/*` is a JS SPA, the screener is Refinitiv/LSEG-powered; `api.sgx.com` 403; `data.gov.sg` has only aggregate SINGSTAT turnover; ACRA is the full company register without SGX codes). `load_sg_universe` / `sg_universe_name_map` / `search_sg_universe` read a local cache if one ever exists; `refresh_sg_universe` raises `SgUniverseError` instead of faking an STI-only universe. Never enters the feed. |
+| sg_universe | breadth cache | none | **partial**：从正规新加坡第三方 StocksSG 的公开 `/api/v1/companies` 目录读取 ticker、公司名、UEN、board、ISIN、LEI；校验响应总数、重复 ticker 和最小规模后原子写缓存。现场接口仅约 183 行，明显不能证明 SGX 全量，因此不标 official/live；缓存永不进入信息 feed。 |
 | yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
 | google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
 
-`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）并保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。SG feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_sg` / `google_news_sg` news 跨源按 ticker + Singapore day（`Asia/Singapore`）+ normalized title 配对。无 SG 披露连接器，监管 filings 永无去重键且永不标注。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）。目录缓存温热时可回填名称、board 与 ISIN；冷启动仍保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。官方 SGX 披露仍未接入，不能用 StocksSG 的有限 announcements 页面代替监管 filings。
 
 ### 瑞士数据源（CH）
 

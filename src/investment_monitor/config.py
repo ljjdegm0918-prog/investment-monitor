@@ -32,6 +32,7 @@ DEFAULT_SOURCE_META = {
     "mock": ("Mock", "mock"),
     "mock_community": ("Mock Community", "community"),
     "ceoca_ca": ("CEO.ca (CA)", "community"),
+    "ceoca_sedar": ("CEO.ca SEDAR 文件镜像 (CA)", "filings"),
     "hotcopper_au": ("HotCopper (AU)", "community"),
     "lse_share_chat": ("LSE Share Chat (UK)", "community"),
     "xueqiu": ("Xueqiu (CN/HK)", "community"),

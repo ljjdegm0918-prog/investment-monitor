@@ -54,7 +54,7 @@ class CoverageReportTests(unittest.TestCase):
 
     def test_all_disclosure_statuses_use_the_canonical_market_key(self):
         expected = {
-            "CA": "unavailable", "MX": "stub", "US": "live",
+            "CA": "partial", "MX": "stub", "US": "live",
             "AT": "stub", "BE": "live", "CH": "partial",
             "DE": "partial", "EE": "live", "ES": "live",
             "FR": "live", "GB": "live", "HU": "stub",

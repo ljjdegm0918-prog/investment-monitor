@@ -140,6 +140,10 @@ sources:
     label: CEO.ca (CA)
     source_type: community
     enabled: true          # key-free CEO.ca JSON API (new-api.ceo.ca); channel page URL only; may change without notice
+  - name: ceoca_sedar
+    label: CEO.ca SEDAR 文件镜像 (CA)
+    source_type: filings
+    enabled: true          # 第三方 SEDAR PDF 镜像；无 key；只标 partial，不能证明 SEDAR+ 全量完整
   - name: hotcopper_au
     label: HotCopper (AU)
     source_type: community

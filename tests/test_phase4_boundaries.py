@@ -18,11 +18,11 @@ from investment_monitor.registry import SOURCE_MARKETS
 class Phase4BoundaryTests(unittest.TestCase):
     def test_ca_boundary_is_locked_partial(self):
         self.assertEqual(CA_BOUNDARY["universe"], "partial")
-        self.assertEqual(CA_BOUNDARY["disclosure"], "unavailable")
+        self.assertEqual(CA_BOUNDARY["disclosure"], "partial")
         self.assertIn("SEDAR+", CA_BOUNDARY["evidence"])
 
-    def test_sg_boundary_is_locked_stub(self):
-        self.assertEqual(SG_BOUNDARY["universe"], "stub")
+    def test_sg_boundary_is_locked_partial(self):
+        self.assertEqual(SG_BOUNDARY["universe"], "partial")
         self.assertEqual(SG_BOUNDARY["disclosure"], "unavailable")
         self.assertIn("api.sgx.com", SG_BOUNDARY["evidence"])
 

@@ -6,8 +6,8 @@
 
 当前自动报告结果：
 
-- 股票/证券目录：14 live、6 partial、7 stub、1 unavailable。
-- 公司披露：15 live、4 partial、6 stub、3 unavailable。
+- 股票/证券目录：14 live、7 partial、6 stub、1 unavailable。
+- 公司披露：15 live、5 partial、6 stub、2 unavailable。
 - 新闻：27 live、1 unavailable；这里表示已配置 Yahoo/Google News 查询链，不保证新闻穷尽性。
 - ETF 目录：3 live（美国、德国、日本）、13 unknown、12 unavailable。
 - ETF 专属发行人披露：28 个国家全部 unavailable。公司公告不能冒充基金招募书、份额变更、指数或分红文件。
@@ -28,7 +28,7 @@
 
 | 国家 | IBKR 场所（venue ID） | 股票目录 | 公司披露 | 新闻 | ETF 目录 | ETF 披露 | 判断与主要缺口 |
 |---|---|---:|---:|---:|---:|---:|---|
-| CA 加拿大 | ALPHA, AEQLITN, AEQLITL, CHIXCA, LYNX, OMEGA, CSE, TSE, VENTURE | partial | unavailable | live | unavailable | unavailable | 官方 TSX/TSXV 可用；CSE、NEO/ATS 未形成完整目录；SEDAR+ 有 WAF/TLS 边界。 |
+| CA 加拿大 | ALPHA, AEQLITN, AEQLITL, CHIXCA, LYNX, OMEGA, CSE, TSE, VENTURE | partial | partial | live | unavailable | unavailable | 官方 TSX/TSXV 可用；新增 CEO.ca SEDAR PDF 第三方镜像；CSE、NEO/ATS 与官方 SEDAR+ 全量仍未完成。 |
 | MX 墨西哥 | MEXI | stub | stub | live | unavailable | unavailable | BMV 已探测的上市公司/重大事件候选地址返回 404；没有稳定免 key 结构化源。 |
 | US 美国 | ARCA, ARCAEDGE, BATS, CHX, DRCTEDGE, EDGEA, IEX, ISLAND, ISE, KNIGHT, LTSE, MEMX, PEARL, NASDAQ, BEX, PSX, NYSE, NSX, NYSENAT, AMEX, PINK | partial | live | live | live | unavailable | Nasdaq Trader 覆盖交易所上市股票/ETF，SEC 补 CIK；OTC/Pink 完整性未证明，路由 venue 不是独立发行人目录。 |
 | AT 奥地利 | VSE | stub | stub | live | unavailable | unavailable | 维也纳交易所目前仅稳定取得 HTML 展示，未找到稳定免 key 导出。 |
@@ -54,7 +54,7 @@
 | HK 香港 | SEHK, SEHKSZSE, SEHKSTAR | partial | live | live | unavailable | unavailable | HKEX 主板目录/披露可用；沪港通与 STAR Connect 是路由范围，不等于 SEHK 全目录，故保持 partial。 |
 | IN 印度 | NSE | live | live | live | unknown | unavailable | NSE 官方 equity CSV 与公告已接；不混入 BSE-only 股票，ETF 分类待验证。 |
 | JP 日本 | CBOEJP, JPNNEXT, TSEJ | unavailable | live | live | live | unavailable | 本次新增 JPX 官方 TSE ETF 目录（实测 408 条）；股票全市场及两个 PTS 仍无稳定免 key 完整目录。 |
-| SG 新加坡 | SGX | stub | unavailable | live | unavailable | unavailable | SGX 目录/公告受 SPA/403 限制；不能用 STI 成分股冒充全市场。 |
+| SG 新加坡 | SGX | partial | unavailable | live | unavailable | unavailable | 新增 StocksSG 公开公司目录（约 183 行，第三方 partial）；官方 SGX 目录/公告仍受 SPA/403 限制。 |
 | TW 台湾 | TWSE | partial | live | live | unavailable | unavailable | TWSE/TPEx 披露可用，但当前目录范围和 IBKR 可交易范围仍不能证明完全一致。 |
 
 ## 4. 已经覆盖得较好的部分
@@ -77,21 +77,24 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 - 新增 JPX 官方 ETF 目录：解析 `Listed Issues - ETFs` 的 Listing Date、Index、Code、Fund Name、Management Company；现场页验证 408 条。
 - 修正日本新式字母证券代码：例如 `473A` 不再被错误改成 `0473`，因此目录、新闻查询可保持同一代码。
 - JPX 表头变化、空表、畸形行、重复代码、无效代码都会明确失败，不会静默写入坏缓存。
+- 新增 `ceoca_sedar`：按 ticker 从 CEO.ca 公司频道提取 SEDAR bot 的真实 PDF 链接（不扫描全局历史），精确校验 bot、频道、格式、host 和路径；日期最多 31 天，分页触顶失败关闭；来源固定为 third_party/partial，不能冒充官方 SEDAR+ 全量。
+- 新加坡证券目录从 stub 升为 partial：接入 StocksSG 公司 API，保存 ticker、名称、board、UEN、ISIN、LEI，并以总数、最小规模、重复代码检查失败关闭。
+- DeepSeek 已用于高风险 connector 的来源扫描和候选实现建议；GPT 发现并修正其字段与 HTML 表结构假设错误，最终代码及验收仍由强模型负责。
 
 ## 7. 下一轮最值得做的接口（按质量收益排序）
 
 1. **IBKR 合约校验层。** 用户运行 TWS/IB Gateway 后，以现有官方目录为候选，通过 `contractDetails/secdef` 得到真实 conid、validExchanges 和账户可交易性。这是缩小“交易所目录 ≠ IBKR 可交易目录”差距的唯一权威办法，但需要本机 IBKR 登录会话。
 2. **Euronext ETF 官方列表。** 官方页面覆盖 Amsterdam、Brussels、Milan、Oslo、Paris 等地点，但当前为动态列表；应先找到稳定官方数据端点或可验证导出，再接入 FR/BE/NL/IT/NO/PT，不能直接依赖脆弱 DOM。
 3. **JPX 股票全目录。** 继续寻找 JPX 官方日更列表或授权下载；若只能获得 PDF/网页分片，需要建立分页完整性和退市处理，不能以 ETF 页代替股票页。
-4. **加拿大缺口。** 接 CSE 官方目录并寻找 NEO/ATS 参考数据；SEDAR+ 若继续 WAF 阻断，只能采用获授权 API、浏览器会话型采集或付费供应商。
-5. **SG/IL/CH。** 这些市场的核心阻碍是 WAF/SPA 或商业参考数据授权，不是解析代码本身。质量优先时，应购买/申请官方授权，而不是用指数成分股或抓取镜像伪装全量。
+4. **加拿大缺口。** CEO.ca 镜像现在可提高 SEDAR 文件召回，但不承诺全量；下一步仍需接 CSE 官方目录并寻找 NEO/ATS 参考数据，或购买获授权的 SEDAR+ 数据源。
+5. **SG/IL/CH/SE/AT/HU/MX。** SG 已有 third-party partial；StockAnalysis 等公开目录可作为其余市场的候选发现层，但含跨上市、口径变化且无完整性 SLA。质量优先时只能保持 partial，或购买/申请 SIX、交易所及授权供应商数据。
 6. **ETF 发行人披露。** 按高持仓市场逐个接入交易所/基金管理人正式文件；这是独立项目，不宜用公司披露源自动推断。
 
 ## 8. 仍然无法完成的部分与所需条件
 
 | 阻碍 | 受影响市场 | 真正可行的解法 |
 |---|---|---|
-| WAF、SPA、需要浏览器令牌 | CA SEDAR+、IL、SG、SE、NO 等 | 官方 API/授权、合规浏览器会话或供应商；不能靠无限重试 |
+| WAF、SPA、需要浏览器令牌 | CA SEDAR+、IL、SG、SE、NO 等 | CEO.ca/StocksSG 已补 partial；要升为 live 仍需官方 API/授权、合规浏览器会话或供应商，不能靠无限重试 |
 | 商业参考数据许可 | CH/SIX、部分 venue 级证券主数据 | 购买许可或用 IBKR 登录后的合约查询做账户范围校验 |
 | 没有稳定结构化导出 | AT、HU、MX、PT 等 | 与交易所确认 API/文件；否则只保留 stub，禁止假全量 |
 | IBKR 账户/地区权限差异 | 全部 87 场所 | 在用户已登录的 IB Gateway/TWS 上运行 secdef/contractDetails |
