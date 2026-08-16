@@ -2469,6 +2469,7 @@ def _market_region(market: str) -> str:
         "pt": "Portugal",
         "at": "Austria",
         "in": "India",
+        "mx": "Mexico",
     }.get(market, "Unavailable")
 
 
@@ -3176,6 +3177,37 @@ def normalize_in_ticker(ticker: str) -> str:
         changed = False
         for separator in _IN_TICKER_SEPARATORS:
             for suffix in _IN_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
+
+
+_MX_TICKER_SUFFIXES = ("MX",)
+_MX_TICKER_SEPARATORS = (".", " ", "-")
+_MX_ISIN_PATTERN = re.compile(r"MX[0-9A-Z]{10}")
+
+
+def normalize_mx_ticker(ticker: str) -> str:
+    """Normalize a Mexican (BMV) symbol.
+
+    Accepts plain symbols (``WALMEX``) and the common ``.MX`` quote suffix;
+    a bare ``MX`` word is never erased, and a Mexican ISIN (``MX`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _MX_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _MX_TICKER_SEPARATORS:
+            for suffix in _MX_TICKER_SUFFIXES:
                 marker = separator + suffix
                 if cleaned.endswith(marker):
                     cleaned = cleaned[: -len(marker)].strip()
