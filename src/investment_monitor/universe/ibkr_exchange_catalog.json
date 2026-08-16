@@ -1607,7 +1607,7 @@
    "region": "Asia",
    "trading_status": "active",
    "primary_exchange": [],
-   "notes": "IBKR shows China access via HK Stock Connect; future cn<->Connect mapping."
+   "notes": "Plan §3.4: China access via HK Stock Connect; see universe/stock_connect.py. No CN disclosure connector."
   },
   {
    "country_code": "KR",
