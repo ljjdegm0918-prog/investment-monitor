@@ -90,10 +90,6 @@ from .universe.global_equity_reference import (
 )
 from .universe.exchange_catalog import catalog_summary
 from .universe.coverage_report import coverage_report
-from .universe.ibkr_secdef import (
-    ibkr_secdef_configured,
-    search_contracts,
-)
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -553,9 +549,6 @@ class WebApplication:
                             for source in relevant_sources
                             for ticker in added_tickers
                         ))
-                if added and ibkr_secdef_configured():
-                    # P5-3：只有配置齐备才写真实 conid；未配置 0 HTTP。
-                    self._enrich_added_with_ibkr_conids(added)
                 markets_map = {
                     str(record["ticker"]): str(record["market"])
                     for record in added
@@ -627,8 +620,8 @@ class WebApplication:
                 updated = self.repository.bulk_set_read(filters, _required_bool(payload, "is_read"))
                 return self._json({"updated": updated})
             if method == "GET" and parsed.path == "/api/coverage":
-                # Phase 0: IBKR exchange catalog + per-country coverage board.
-                # No credentials are ever included in this payload.
+                # Independent per-country information-source coverage board.
+                # The static venue benchmark is not a broker integration.
                 try:
                     return self._json({
                         "catalog": catalog_summary(),
@@ -1381,45 +1374,6 @@ class WebApplication:
                 "instrument_type": str(item.get("instrument_type") or ""),
             }
         return merged or None
-
-    def _enrich_added_with_ibkr_conids(
-        self,
-        added: List[Mapping[str, Any]],
-    ) -> None:
-        """Write verified IBKR conids for newly added companies (P5-3).
-
-        Only called when ``ibkr_secdef_configured()`` is True. Failures are
-        logged and never block the add-company response.
-        """
-        for record in added:
-            ticker = str(record.get("ticker") or "").strip()
-            market = str(record.get("market") or "").strip()
-            if not ticker or not market:
-                continue
-            try:
-                rows = search_contracts(ticker, market=market)
-            except Exception:  # noqa: BLE001 - 身份核验失败不阻断添加
-                LOGGER.warning(
-                    "ibkr secdef enrichment failed for %s@%s",
-                    ticker,
-                    market,
-                    exc_info=True,
-                )
-                continue
-            if not rows or not rows[0].get("conid"):
-                continue
-            row = rows[0]
-            conid = str(row["conid"])
-            primary_exchange = str(row.get("primaryExchange") or "")
-            currency = str(row.get("currency") or "")
-            self.repository.set_company_ibkr_contract(
-                ticker=ticker,
-                market=market,
-                conid=conid,
-                primary_exchange=primary_exchange,
-                currency=currency,
-            )
-            record["ibkr_conid"] = conid
 
     @staticmethod
     def _normalize_global_reference_symbol(market: str, symbol: str) -> str:

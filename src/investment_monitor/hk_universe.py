@@ -1,8 +1,8 @@
 """HK tradeable universe cache (breadth only) from HKEXnews stock lists.
 
 Source: HKEXnews active (and optionally inactive) stock lists. This is an
-unofficial JSON mirror and may change without notice; it is NOT an
-IBKR-complete universe, and structured products / multi-counter edge cases
+unofficial JSON mirror and may change without notice; it is NOT a complete
+Hong Kong universe, and structured products / multi-counter edge cases
 may be partial. The cache never flows into information_items / Today feed.
 """
 

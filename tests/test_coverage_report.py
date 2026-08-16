@@ -14,6 +14,16 @@ class CoverageReportTests(unittest.TestCase):
         self.rows = {row["country_code"]: row for row in self.report["countries"]}
 
     def test_report_covers_28_countries_and_87_venues(self):
+        self.assertEqual(self.report["schema"], "coverage_report/v2")
+        self.assertEqual(
+            self.report["scope"],
+            {
+                "kind": "independent_market_information_coverage",
+                "broker_runtime_dependency": False,
+                "broker_account_required": False,
+                "trading_capability_assessed": False,
+            },
+        )
         self.assertEqual(self.report["summary"]["countries"], 28)
         self.assertEqual(self.report["summary"]["venues"], 87)
         self.assertEqual(len(self.rows), 28)
@@ -29,17 +39,21 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(in_row["universe"], "live")
         self.assertEqual(in_row["disclosure"], "live")
 
+        gb = self.rows["GB"]
+        self.assertEqual(gb["disclosure"], "live")
+
         for code in ("AT", "MX"):
             row = self.rows[code]
             self.assertEqual(row["universe"], "stub")
             self.assertEqual(row["disclosure"], "stub")
 
         ru = self.rows["RU"]
-        self.assertEqual(ru["trading_status"], "suspended")
+        self.assertNotIn("trading_status", ru)
         self.assertEqual(ru["universe"], "partial")
         self.assertEqual(ru["disclosure"], "unavailable")
         self.assertEqual(ru["news"], "unavailable")
         self.assertEqual(ru["source_tier_summary"], "mixed")
+        self.assertIn("research-only", ru["notes"])
 
     def test_boundary_stubs_are_never_live(self):
         for code in ("AT", "HU", "IL", "MX", "NO", "PT"):
@@ -48,6 +62,24 @@ class CoverageReportTests(unittest.TestCase):
             )
         for code in ("AT", "CH", "HU", "IL", "MX", "SE", "SG"):
             self.assertNotEqual(self.rows[code]["universe"], "live", code)
+
+    def test_all_disclosure_statuses_use_the_canonical_market_key(self):
+        expected = {
+            "CA": "partial", "MX": "stub", "US": "live",
+            "AT": "stub", "BE": "live", "CH": "partial",
+            "DE": "partial", "EE": "live", "ES": "live",
+            "FR": "live", "GB": "live", "HU": "stub",
+            "IL": "stub", "IT": "partial", "LT": "live",
+            "LV": "live", "NL": "partial", "NO": "stub",
+            "PL": "live", "PT": "stub", "RU": "unavailable",
+            "SE": "live", "AU": "live", "HK": "live",
+            "IN": "live", "JP": "live", "SG": "unavailable",
+            "TW": "live",
+        }
+        self.assertEqual(
+            {code: row["disclosure"] for code, row in self.rows.items()},
+            expected,
+        )
 
     def test_etf_candidates_flip_partial(self):
         with TemporaryDirectory() as tmp:
@@ -77,9 +109,12 @@ class CoverageReportTests(unittest.TestCase):
 
     def test_zero_sweep_us_jp_boundaries(self):
         self.assertEqual(self.rows["US"]["universe"], "partial")
+        self.assertEqual(self.rows["US"]["etf_universe"], "live")
         self.assertEqual(self.rows["JP"]["universe"], "unavailable")
-        self.assertIn("SEC company_tickers", self.rows["US"]["notes"])
-        self.assertIn("no xlsx/xls", self.rows["JP"]["notes"])
+        self.assertEqual(self.rows["JP"]["etf_universe"], "live")
+        self.assertIn("Nasdaq Trader", self.rows["US"]["notes"])
+        self.assertIn("OTC/Pink", self.rows["US"]["notes"])
+        self.assertIn("Listed Issues", self.rows["JP"]["notes"])
 
 
 if __name__ == "__main__":

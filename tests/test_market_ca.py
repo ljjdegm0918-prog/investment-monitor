@@ -244,21 +244,22 @@ class MarketCAFinnhubSkipTests(unittest.TestCase):
 
 
 class MarketCADisclosureStatusTests(unittest.TestCase):
-    def test_no_ca_disclosure_connector_is_registered(self) -> None:
-        """Lock the CA-1 A3 spike decision.
+    def test_only_partial_mirror_disclosure_connector_is_registered(self) -> None:
+        """Keep official CA sources blocked while allowing a marked mirror.
 
         SEDAR+ has no official public API and its Radware edge blocks
         stdlib HTTP clients on the real search endpoints (403), returning
         only a JavaScript SPA shell elsewhere; CSE fails the TLS handshake
         and NEO returns origin timeouts from the current network. CA-4
         re-verified the same breakpoints (2026-08-08): no stable key-free
-        disclosure source exists, so no CA disclosure connector is
-        registered. Remove this test when a real source lands.
+        disclosure source exists.  CEO.ca's SEDAR bot is permitted only as
+        a third-party partial mirror; official placeholders remain unwired.
         """
         registry = create_default_registry()
 
         names = registry.registered_names
-        self.assertFalse(any("sedar" in name for name in names))
+        self.assertIn("ceoca_sedar", names)
+        self.assertEqual(registry.factory_for("ceoca_sedar")().status, "partial")
         for blocked_name in ("sedar_plus", "sedarplus", "cse_filings", "neo_filings"):
             self.assertNotIn(blocked_name, names)
 

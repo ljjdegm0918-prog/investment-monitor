@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Per-country coverage aggregator for the IBKR exchange catalog (P0-1).
+"""Per-country coverage aggregator for the independent market monitor.
 
 The report is derived automatically from the repo's existing facts:
 
@@ -30,22 +30,22 @@ from .exchange_catalog import (
 from .global_equity_reference import etf_candidates_for
 
 # 显式边界 stub（对应各轨 spike 结论；禁止标 live）。
-UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se", "sg"})
+UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se"})
 # 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
-UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us"})
+UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg"})
 DISCLOSURE_BOUNDARY_STUBS = frozenset({"at", "hu", "il", "mx", "no", "pt"})
-DISCLOSURE_PARTIAL = frozenset({"ch", "de", "it", "nl"})
-DISCLOSURE_UNAVAILABLE = frozenset({"ca", "ru", "sg"})
+DISCLOSURE_PARTIAL = frozenset({"ca", "ch", "de", "it", "nl"})
+DISCLOSURE_UNAVAILABLE = frozenset({"ru", "sg"})
 
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
-    "US": "SEC company_tickers_exchange official JSON (~10k rows); breadth-only SEC-registration boundary, not a full exchange directory",
-    "JP": "No stable key-free JPX static directory (page exposes no xlsx/xls; Z0 re-probe 2026-08-16); TDnet/EDINET disclosure stays live, universe stays unavailable",
-    "CA": "TSX/TSXV official universe only; CSE/NEO directory and SEDAR+ stay unavailable (WAF/TLS boundary locked)",
-    "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
+    "US": "Nasdaq Trader official nasdaqlisted/otherlisted directories provide exchange-listed stock and ETF breadth; SEC company_tickers_exchange adds CIKs only; OTC/Pink completeness remains unproven, so the country universe stays partial",
+    "JP": "JPX official Listed Issues page provides the TSE ETF directory; the broader JP stock universe still has no stable key-free directory, while TDnet/EDINET disclosure stays live",
+    "CA": "Official-source boundary: TSX/TSXV universe plus partial CEO.ca SEDAR PDF mirror; CSE/NEO breadth and official SEDAR+ completeness remain unavailable",
+    "SG": "Official-source boundary: StocksSG provides a partial third-party universe; official SGX directory/announcements remain SPA/403",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
-    "RU": "MOEX ISS read-only official directory (TQBR); IBKR trading suspended, no pricing, research-only",
+    "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
     "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
     "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
     "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
@@ -64,7 +64,7 @@ ETF_DISCLOSURE_SOURCES: Dict[str, tuple] = {}
 # market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
 _DISCLOSURE_SOURCES: Dict[str, tuple] = {
     "us": ("sec",),
-    "ca": ("ceoca_ca",),
+    "ca": ("ceoca_sedar",),
     "au": ("asx_announcements",),
     "hk": ("hkexnews", "hkex_di"),
     "tw": ("twse_material", "tpex_material"),
@@ -96,7 +96,7 @@ _DISCLOSURE_SOURCES: Dict[str, tuple] = {
 
 def _universe_status(market_code: str | None, market: str) -> str:
     if market == "ru":
-        # P5-0：官方 MOEX ISS 只读目录已接；交易状态仍由 catalog 标 suspended。
+        # 官方 MOEX ISS 只读目录已接；本产品不表达经纪商交易状态。
         try:
             __import__(
                 "investment_monitor.universe.ru_universe", fromlist=["*"]
@@ -133,7 +133,9 @@ def _universe_module_name(market_code: str) -> str:
 
 
 def _disclosure_status(market_code: str | None, market: str) -> str:
-    market = str(market or "").lower()
+    # ``country_code`` is only a fallback.  GB's canonical source-registry key
+    # is ``uk`` and must not be overwritten by its ISO country code.
+    market = str(market_code or market or "").lower()
     if market in DISCLOSURE_UNAVAILABLE:
         return "unavailable"
     if market in DISCLOSURE_BOUNDARY_STUBS:
@@ -163,7 +165,7 @@ def _etf_disclosure_status(market: str) -> str:
 
 
 def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
-    if market == "de":
+    if market in ("de", "jp", "us"):
         return "live"
     if market in ("uk", "gb"):
         try:
@@ -203,7 +205,7 @@ def _source_tier_summary(universe: str, disclosure: str, news: str) -> str:
 def coverage_report(
     cache_path: Any = None,
 ) -> Mapping[str, Any]:
-    """Return per-country coverage rows for the 28 core IBKR countries."""
+    """Return coverage rows for the 28-country comparison benchmark."""
     countries = list_countries()
     venues_by_country: Dict[str, int] = {}
     for row in list_venues():
@@ -228,7 +230,6 @@ def coverage_report(
             "country_name": str(country.get("country_name") or country_code),
             "region": str(country.get("region") or ""),
             "market_code": country.get("market_code"),
-            "trading_status": str(country.get("trading_status") or "active"),
             "universe": universe,
             "disclosure": disclosure,
             "news": news,
@@ -251,7 +252,13 @@ def coverage_report(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "schema": "coverage_report/v1",
+        "schema": "coverage_report/v2",
+        "scope": {
+            "kind": "independent_market_information_coverage",
+            "broker_runtime_dependency": False,
+            "broker_account_required": False,
+            "trading_capability_assessed": False,
+        },
         "summary": {
             "countries": len(rows),
             "venues": sum(row["venue_count"] for row in rows),
@@ -268,8 +275,6 @@ def _notes_for(
     etf_universe: str,
     etf_disclosure: str,
 ) -> str:
-    if country_code == "RU":
-        return "IBKR MOEX positions are suspended; read-only catalog entry."
     if country_code in MARKET_NOTES:
         return str(MARKET_NOTES[country_code])
     notes = []
@@ -278,7 +283,7 @@ def _notes_for(
     if disclosure == "stub":
         notes.append("disclosure connector is an honest stub")
     if etf_universe == "live":
-        notes.append("official Xetra universe carries ETF/ETN/ETC")
+        notes.append("official exchange directory carries ETF instruments")
     if etf_universe == "partial":
         notes.append("third_party ETF candidates present")
     if etf_disclosure == "unavailable" and etf_universe in ("live", "partial"):

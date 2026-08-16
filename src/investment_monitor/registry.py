@@ -42,6 +42,7 @@ from .sources.au_news import (
     YahooAuNewsConnector,
 )
 from .sources.ceoca_ca import CeocaCaConnector
+from .sources.ceoca_sedar import CeocaSedarConnector
 from .sources.hotcopper_au import HotCopperAuConnector
 from .sources.stockhead_au import StockheadAuConnector
 from .sources.lse_share_chat import LseShareChatConnector
@@ -187,6 +188,7 @@ SOURCE_MARKETS = {
     "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
     "google_news_hk": "hk", "xueqiu": frozenset({"cn", "hk"}),
     "yahoo_ca": "ca", "google_news_ca": "ca", "ceoca_ca": "ca",
+    "ceoca_sedar": "ca",
     "sedar_plus": "ca", "cse_filings": "ca", "neo_filings": "ca",
     "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
     "google_news_tw": "tw",
@@ -379,6 +381,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooAuNewsConnector.name, YahooAuNewsConnector)
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
+    registry.register(CeocaSedarConnector.name, CeocaSedarConnector)
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
     registry.register(StockheadAuConnector.name, StockheadAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)

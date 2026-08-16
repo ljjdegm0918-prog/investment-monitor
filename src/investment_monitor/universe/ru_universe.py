@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Russia (RU) read-only tradeable universe from MOEX ISS (P5-0).
+"""Russia (RU) research universe from MOEX ISS.
 
 Source (live verified 2026-08-16): the key-free official MOEX ISS JSON
 endpoint ``/iss/engines/stock/markets/shares/boards/TQBR/securities.json``
 (505 rows on TQBR, 770 rows across the shares market).
 
-IBKR cannot open or close MOEX positions at this time and does not receive
-MOEX pricing, so this universe is **read-only research data**:
-``trading_status`` is always ``"unavailable"`` and the payload never flows
-into information_items / the daily feed. It only backfills name / ISIN /
-board for RU symbols in the catalog and coverage board.
+This is **read-only research data**. The product does not assess trading
+availability or provide pricing. The payload never flows into
+information_items / the daily feed; it only backfills name / ISIN / board
+for RU symbols in the catalog and coverage board.
 """
 
 from __future__ import annotations
@@ -96,7 +95,6 @@ def refresh_ru_universe(
         "updated_at": refreshed_at or datetime.now(timezone.utc).isoformat(),
         "source": ["moex_iss"],
         "source_tier": "official",
-        "trading_status": "unavailable",
         "readonly": True,
         "counts": {"tqbr": len(entries)},
         "items": sorted(

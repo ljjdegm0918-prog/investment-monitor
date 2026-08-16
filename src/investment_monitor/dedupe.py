@@ -180,6 +180,7 @@ RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
 FILING_SOURCE_PRIORITY = {
+    "ceoca_sedar": 19,
     "dart": 0,
     "investegate": 1,
     "companies_house": 2,
@@ -286,6 +287,7 @@ COMMUNITY_SOURCE_PRIORITY = {
     "vic": 0,
 }
 SOURCE_DISPLAY_LABELS = {
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "dart": "OpenDART",
     "investegate": "Investegate",
     "companies_house": "Companies House",

@@ -18,11 +18,11 @@ from investment_monitor.registry import SOURCE_MARKETS
 class Phase4BoundaryTests(unittest.TestCase):
     def test_ca_boundary_is_locked_partial(self):
         self.assertEqual(CA_BOUNDARY["universe"], "partial")
-        self.assertEqual(CA_BOUNDARY["disclosure"], "unavailable")
+        self.assertEqual(CA_BOUNDARY["disclosure"], "partial")
         self.assertIn("SEDAR+", CA_BOUNDARY["evidence"])
 
-    def test_sg_boundary_is_locked_stub(self):
-        self.assertEqual(SG_BOUNDARY["universe"], "stub")
+    def test_sg_boundary_is_locked_partial(self):
+        self.assertEqual(SG_BOUNDARY["universe"], "partial")
         self.assertEqual(SG_BOUNDARY["disclosure"], "unavailable")
         self.assertIn("api.sgx.com", SG_BOUNDARY["evidence"])
 
@@ -62,7 +62,7 @@ class Phase4CoverageTests(unittest.TestCase):
         self.assertEqual(self.rows["DE"]["etf_universe"], "live")
         self.assertEqual(self.rows["DE"]["universe"], "live")
 
-    def test_etf_candidates_flip_seven_markets_to_partial(self):
+    def test_etf_candidates_flip_uncovered_markets_to_partial(self):
         with TemporaryDirectory() as tmp:
             cache = Path(tmp) / "global.json"
             items = []
@@ -77,12 +77,13 @@ class Phase4CoverageTests(unittest.TestCase):
                 row["country_code"]: row for row in report["countries"]
             }
             for code, market in (
-                ("GB", "uk"), ("HK", "hk"), ("JP", "jp"), ("TW", "tw"),
+                ("GB", "uk"), ("HK", "hk"), ("TW", "tw"),
                 ("AU", "au"), ("PL", "pl"), ("ES", "es"),
             ):
                 self.assertEqual(
                     rows[code]["etf_universe"], "partial", code
                 )
+            self.assertEqual(rows["JP"]["etf_universe"], "live")
 
 
 class Phase4VenueAndUkEtfTests(unittest.TestCase):

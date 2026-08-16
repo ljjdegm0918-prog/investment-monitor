@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
-"""IBKR exchange catalog: 28-country / 87-stock-venue Phase 0 seed.
+"""Static 28-country / 87-stock-venue comparison benchmark.
 
 The catalog is the Phase 0 "exchange directory" layer. It is static seed
-data (normalized from the live IBKR products/exchanges snapshot; see the
+data (originally normalized from a public broker products/exchanges snapshot; see the
 ``normalization`` block in :file:`ibkr_exchange_catalog.json`) and never
 flows into information_items / the daily feed. Routing venues (BATS,
 Cboe, Turquoise, Aquis, …) are recorded as *venues*, not as issuer
 disclosure connectors.
+
+This packaged snapshot is provenance, not a broker integration. Loading it
+requires no account, credential, network request, or runtime broker service.
 
 Counts are the frozen Phase 0 contract and are asserted by tests:
 28 core countries (Americas 3, Europe 19, Asia 6) and 87 stock venues
@@ -41,16 +44,16 @@ def load_exchange_catalog(
     if seed_path in _CACHE:
         return _CACHE[seed_path]
     if not seed_path.exists():
-        raise ExchangeCatalogError(f"IBKR exchange catalog missing: {seed_path}")
+        raise ExchangeCatalogError(f"reference exchange catalog missing: {seed_path}")
     try:
         with seed_path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
     except (OSError, json.JSONDecodeError) as error:
         raise ExchangeCatalogError(
-            f"IBKR exchange catalog unreadable: {seed_path}: {error}"
+            f"reference exchange catalog unreadable: {seed_path}: {error}"
         ) from error
     if not isinstance(payload, Mapping):
-        raise ExchangeCatalogError("IBKR exchange catalog must be a JSON object")
+        raise ExchangeCatalogError("reference exchange catalog must be a JSON object")
     _CACHE[seed_path] = payload
     return payload
 
@@ -73,7 +76,7 @@ def list_venues(
     *,
     path: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
-    """Return stock venue rows, optionally filtered by IBKR country code."""
+    """Return stock venue rows, optionally filtered by country code."""
     catalog = load_exchange_catalog(path)
     wanted = (country or "").strip().upper()
     rows: List[Dict[str, Any]] = []
@@ -103,7 +106,7 @@ def primary_exchanges_for(
     *,
     path: Optional[Path] = None,
 ) -> List[str]:
-    """Primary exchange venue ids for one IBKR country."""
+    """Primary reference venue ids for one country."""
     wanted = country.strip().upper()
     for item in list_countries(path=path):
         if str(item.get("country_code") or "").upper() == wanted:

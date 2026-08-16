@@ -63,6 +63,7 @@ SOURCE_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -129,6 +130,7 @@ PROVIDER_LABELS = {
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
+    "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -2388,91 +2390,6 @@ class WebRepository:
             (company_id, now, list_slug),
         )
         return cursor.rowcount > 0
-
-    def set_company_ibkr_contract(
-        self,
-        *,
-        ticker: str,
-        market: str,
-        conid: str,
-        primary_exchange: str = "",
-        currency: str = "",
-    ) -> None:
-        """Persist a verified IBKR contract identity for a watched company.
-
-        Only real values returned by a configured ``ibkr_secdef`` session
-        may be written here; callers never fabricate conids.
-        """
-        now = _utc_now()
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS company_ibkr_contracts (
-                    ticker TEXT NOT NULL,
-                    market TEXT NOT NULL,
-                    conid TEXT NOT NULL,
-                    primary_exchange TEXT NOT NULL DEFAULT '',
-                    currency TEXT NOT NULL DEFAULT '',
-                    updated_at TEXT NOT NULL,
-                    UNIQUE (ticker, market)
-                )
-                """
-            )
-            connection.execute(
-                """
-                INSERT INTO company_ibkr_contracts (
-                    ticker, market, conid, primary_exchange, currency,
-                    updated_at
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(ticker, market) DO UPDATE SET
-                    conid = excluded.conid,
-                    primary_exchange = excluded.primary_exchange,
-                    currency = excluded.currency,
-                    updated_at = excluded.updated_at
-                """,
-                (ticker, market, conid, primary_exchange, currency, now),
-            )
-
-    def company_ibkr_contract(
-        self,
-        ticker: str,
-        market: str,
-    ) -> Optional[Mapping[str, str]]:
-        """Return the stored IBKR contract identity, or None."""
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS company_ibkr_contracts (
-                    ticker TEXT NOT NULL,
-                    market TEXT NOT NULL,
-                    conid TEXT NOT NULL,
-                    primary_exchange TEXT NOT NULL DEFAULT '',
-                    currency TEXT NOT NULL DEFAULT '',
-                    updated_at TEXT NOT NULL,
-                    UNIQUE (ticker, market)
-                )
-                """
-            )
-            row = connection.execute(
-                """
-                SELECT ticker, market, conid, primary_exchange, currency,
-                       updated_at
-                FROM company_ibkr_contracts
-                WHERE ticker = ? AND market = ?
-                """,
-                (ticker, market),
-            ).fetchone()
-        if row is None:
-            return None
-        return {
-            "ticker": str(row["ticker"]),
-            "market": str(row["market"]),
-            "conid": str(row["conid"]),
-            "primary_exchange": str(row["primary_exchange"]),
-            "currency": str(row["currency"]),
-            "updated_at": str(row["updated_at"]),
-        }
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:

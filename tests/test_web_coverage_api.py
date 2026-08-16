@@ -42,7 +42,10 @@ class CoverageApiTests(unittest.TestCase):
         self.assertEqual(report["summary"]["countries"], 28)
         self.assertEqual(report["summary"]["venues"], 87)
         rows = {row["country_code"]: row for row in report["countries"]}
-        self.assertEqual(rows["RU"]["trading_status"], "suspended")
+        self.assertNotIn("trading_status", rows["RU"])
+        self.assertFalse(report["scope"]["broker_runtime_dependency"])
+        self.assertFalse(report["scope"]["broker_account_required"])
+        self.assertFalse(report["scope"]["trading_capability_assessed"])
         self.assertEqual(rows["DE"]["etf_universe"], "live")
         for required in (
             "universe", "disclosure", "news", "etf_universe",
