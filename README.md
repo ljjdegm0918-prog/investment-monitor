@@ -408,6 +408,37 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Tallinn 日 + 标题）；三国新闻在 Yahoo↔Google 间按 ticker + Tallinn 日 +
   归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
 
+### 挪威与葡萄牙（NO/PT）— Euronext 扩展轨
+
+- 市场代码：`no`（挪威 / Oslo Børs）、`pt`（葡萄牙 / Euronext Lisbon），
+  2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；`TICKER@NO|PT` 与
+  Yahoo 后缀 `.OL` / `.LS` 均可导入。
+- **披露主链（诚实 stub）**：`newsweb_no`（NewsWeb，挪威法定 OAM）与
+  `euronext_lisbon_news`（Euronext Lisbon 公司新闻）。ENP-1 live 侦察
+  （2026-08-15）：NewsWeb 消息列表为混淆 JS SPA，`/api/*` 全部返回 SPA
+  外壳，无稳定免 key 数据端点；Euronext Lisbon 公司页 200，但公告由前端
+  组件渲染，探测的 press-release ajax 端点 404。两个连接器 `collect()`
+  诚实返回空并标注 stub，不伪造数据。付费聚合商不接。
+- **可交易宇宙**：复用 Euronext live CSV
+  （`live.euronext.com/en/pd_es/data/stocks/download?mics=dm_all_stock`，
+  同 NL/FR 家族），按 `market` 列的 **live 锁定写法**过滤：
+  NO 保留含 `Oslo` 的行（`Oslo Børs` 198 + `Euronext Growth Oslo` 87 +
+  `Euronext Expand Oslo` 10 = **295**）；PT 保留含 `Lisbon` 的行
+  （`Euronext Lisbon` 33 + `Euronext Access Lisbon` 14 +
+  `Euronext Growth Lisbon` 1 = **48**）。Amsterdam/Paris/Brussels 行一律
+  丢弃；无 OBX/PSI20 手写种子；缓存不进 feed。
+- **新闻**：`yahoo_no`/`google_news_no`、`yahoo_pt`/`google_news_pt`
+  （免 key RSS）。Yahoo 请求后缀 `.OL`/`.LS`，本地语言 `nb-NO`/`pt-PT` 与
+  `en-US` 双查合并；Google 参数 `hl=no&gl=NO&ceid=NO:no` 与
+  `hl=pt&gl=PT&ceid=PT:pt`。可能松散相关。**Finnhub 永不查 no/pt。**
+- **第二源（ENP-4 锁死）**：NO 主源 NewsWeb 尚无可用实现，Euronext Oslo
+  公司新闻未找到稳定免 key 端点，第二源同样锁死；PT 的 CMVM 公开通道与
+  Euronext 公司新闻均未发现稳定免 key JSON（`cmvm.pt` 英文路径 404，
+  EQS News API 对 EQNR/EDP 返回空记录），披露侧保持 stub 诚实边界。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；NO/PT 新闻在
+  Yahoo↔Google 间按 ticker + Oslo/Lisbon 日 + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：

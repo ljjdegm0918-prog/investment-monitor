@@ -64,6 +64,11 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For Norway (no) and Portugal (pt) the disclosure primary chains are
+honest stubs (no rows are produced), so no filing pairing exists yet;
+NO/PT news (yahoo_no / google_news_no, yahoo_pt / google_news_pt)
+pairs across sources on ticker + Oslo/Lisbon day + normalized title.
+
 For Baltic (ee/lv/lt), the only wired disclosure source is
 nasdaq_baltic_news, which pairs on its stable disclosure id with a
 source-scoped Tallinn-day title fallback; Baltic news (yahoo_ee /
@@ -138,6 +143,8 @@ SINGAPORE = ZoneInfo("Asia/Singapore")
 ZURICH = ZoneInfo("Europe/Zurich")
 WARSAW = ZoneInfo("Europe/Warsaw")
 TALLINN = ZoneInfo("Europe/Tallinn")
+OSLO = ZoneInfo("Europe/Oslo")
+LISBON = ZoneInfo("Europe/Lisbon")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
 LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
@@ -204,6 +211,10 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_lv": 36,
     "yahoo_lt": 37,
     "google_news_lt": 38,
+    "yahoo_no": 39,
+    "google_news_no": 40,
+    "yahoo_pt": 41,
+    "google_news_pt": 42,
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
@@ -290,6 +301,12 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_lv": "Google News (LV)",
     "yahoo_lt": "Yahoo Finance LT",
     "google_news_lt": "Google News (LT)",
+    "newsweb_no": "NewsWeb (Oslo Bors)",
+    "euronext_lisbon_news": "Euronext Lisbon",
+    "yahoo_no": "Yahoo Finance NO",
+    "google_news_no": "Google News (NO)",
+    "yahoo_pt": "Yahoo Finance PT",
+    "google_news_pt": "Google News (PT)",
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
@@ -338,7 +355,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "aq", "cxe", "emf", "trq", "eux",
+        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "aq", "cxe", "emf", "trq", "eux",
         "cn", "us", "jp",
     }:
         return None
@@ -471,6 +488,10 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "ch":
         return _ch_filing_key(item)
+    if market in ("no", "pt"):
+        # Disclosure primary chains are honest stubs (no rows produced);
+        # a stray filing row must never be cross-annotated.
+        return None
     if market in ("ee", "lv", "lt"):
         return _baltic_filing_key(item)
     if market == "pl":
@@ -851,6 +872,10 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "pl"
         else TALLINN
         if market in ("ee", "lv", "lt")
+        else OSLO
+        if market == "no"
+        else LISBON
+        if market == "pt"
         else STOCKHOLM
         if market == "se"
         else BRUSSELS

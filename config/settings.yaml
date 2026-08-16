@@ -307,6 +307,22 @@ sources:
     label: Google News (LT)
     source_type: news
     enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: yahoo_no
+    label: Yahoo Finance NO
+    source_type: news
+    enabled: true                 # key-free RSS; .OL suffix at request time; may be loosely related
+  - name: google_news_no
+    label: Google News (NO)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=no&gl=NO&ceid=NO:no
+  - name: yahoo_pt
+    label: Yahoo Finance PT
+    source_type: news
+    enabled: true                 # key-free RSS; .LS suffix at request time; may be loosely related
+  - name: google_news_pt
+    label: Google News (PT)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=pt&gl=PT&ceid=PT:pt
   - name: yahoo_pl
     label: Yahoo Finance PL
     source_type: news
@@ -361,6 +377,14 @@ sources:
   # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
   # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
   # still unreachable from this network; GPW paid data products are unused.
+  - name: newsweb_no
+    label: NewsWeb (Oslo Bors)
+    source_type: filings
+    enabled: true                 # honest stub: SPA, no stable key-free API (ENP-1 2026-08-15)
+  - name: euronext_lisbon_news
+    label: Euronext Lisbon news
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free press-release API (ENP-1 2026-08-15)
   - name: nasdaq_baltic_news
     label: Nasdaq Baltic
     source_type: filings          # official Nasdaq Baltic issuer announcements (ee/lv/lt)
