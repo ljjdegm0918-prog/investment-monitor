@@ -361,6 +361,14 @@ sources:
   # based on espi.gpw.pl TLS failure and EQS emptiness, not this page).
   # Needs a Polish ISIN from the PL universe cache. espi.gpw.pl itself is
   # still unreachable from this network; GPW paid data products are unused.
+  - name: newsweb_no
+    label: NewsWeb (Oslo Bors)
+    source_type: filings
+    enabled: true                 # honest stub: SPA, no stable key-free API (ENP-1 2026-08-15)
+  - name: euronext_lisbon_news
+    label: Euronext Lisbon news
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free press-release API (ENP-1 2026-08-15)
   - name: nasdaq_baltic_news
     label: Nasdaq Baltic
     source_type: filings          # official Nasdaq Baltic issuer announcements (ee/lv/lt)

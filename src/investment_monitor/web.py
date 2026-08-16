@@ -107,6 +107,7 @@ CollectionRunner = Callable[..., ConfiguredCollectionResult]
 # - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
 # - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
 ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
+    "newsweb_no", "euronext_lisbon_news",
     "hotcopper_au",
     "lse_share_chat",
     "yellowbrick",

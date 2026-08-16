@@ -134,6 +134,10 @@ from .sources.emf_news import GoogleEmfNewsConnector
 from .sources.trq_news import GoogleTrqNewsConnector
 from .sources.eux_news import GoogleEuxNewsConnector
 from .sources.gpw_espi import GpwEspiConnector
+from .sources.no_pt_disclosures import (
+    EuronextLisbonNewsConnector,
+    NewswebNoConnector,
+)
 from .sources.nasdaq_baltic_news import NasdaqBalticNewsConnector
 from .sources.nasdaq_se import NasdaqSeFilingsConnector
 from .sources.eurex_circulars import EurexCircularsConnector
@@ -172,7 +176,8 @@ SOURCE_MARKETS = {
     "eqs_ch": "ch", "six_official_notices": "ch", "yahoo_ch": "ch",
     "google_news_ch": "ch",
     "gpw_espi": "pl",
-    "nasdaq_baltic_news": frozenset({"ee", "lv", "lt"}), "yahoo_pl": "pl", "google_news_pl": "pl",
+    "nasdaq_baltic_news": frozenset({"ee", "lv", "lt"}),
+    "newsweb_no": "no", "euronext_lisbon_news": "pt", "yahoo_pl": "pl", "google_news_pl": "pl",
     "yahoo_ee": "ee", "google_news_ee": "ee",
     "yahoo_lv": "lv", "google_news_lv": "lv",
     "yahoo_lt": "lt", "google_news_lt": "lt",
@@ -397,6 +402,11 @@ def create_default_registry() -> SourceRegistry:
     registry.register(EurexCircularsConnector.name, EurexCircularsConnector)
     registry.register(GpwEspiConnector.name, GpwEspiConnector)
     registry.register(NasdaqBalticNewsConnector.name, NasdaqBalticNewsConnector)
+    registry.register(NewswebNoConnector.name, NewswebNoConnector)
+    registry.register(
+        EuronextLisbonNewsConnector.name,
+        EuronextLisbonNewsConnector,
+    )
     registry.register(YahooDeNewsConnector.name, YahooDeNewsConnector)
     registry.register(GoogleDeNewsConnector.name, GoogleDeNewsConnector)
     registry.register(
