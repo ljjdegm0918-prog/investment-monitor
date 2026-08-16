@@ -88,6 +88,8 @@ from .universe.global_equity_reference import (
     DEFAULT_CACHE_PATH as GLOBAL_EQUITY_REFERENCE_CACHE_PATH,
     search_global_equity_reference,
 )
+from .universe.exchange_catalog import catalog_summary
+from .universe.coverage_report import coverage_report
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -617,6 +619,19 @@ class WebApplication:
                 filters = _filters_from_mapping(payload.get("filters") or {})
                 updated = self.repository.bulk_set_read(filters, _required_bool(payload, "is_read"))
                 return self._json({"updated": updated})
+            if method == "GET" and parsed.path == "/api/coverage":
+                # Phase 0: IBKR exchange catalog + per-country coverage board.
+                # No credentials are ever included in this payload.
+                try:
+                    return self._json({
+                        "catalog": catalog_summary(),
+                        "report": coverage_report(),
+                    })
+                except Exception:  # noqa: BLE001 - 目录损坏要给出 500 而不是空表
+                    LOGGER.exception("coverage payload failed")
+                    return self._json(
+                        {"error": "Coverage data is unavailable"}, 500
+                    )
             if method == "GET" and parsed.path == "/api/settings":
                 return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
