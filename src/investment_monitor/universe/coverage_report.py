@@ -40,6 +40,7 @@ DISCLOSURE_UNAVAILABLE = frozenset({"ca", "ru", "sg"})
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
     "US": "SEC company_tickers_exchange official JSON (~10k rows); breadth-only SEC-registration boundary, not a full exchange directory",
+    "JP": "No stable key-free JPX static directory (page exposes no xlsx/xls; Z0 re-probe 2026-08-16); TDnet/EDINET disclosure stays live, universe stays unavailable",
     "CA": "TSX/TSXV official universe only; CSE/NEO directory and SEDAR+ stay unavailable (WAF/TLS boundary locked)",
     "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
