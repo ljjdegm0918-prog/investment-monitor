@@ -75,6 +75,12 @@ class CoverageReportTests(unittest.TestCase):
         self.assertIn("NewsWeb", self.rows["NO"]["notes"])
         self.assertIn("CMVM", self.rows["PT"]["notes"])
 
+    def test_zero_sweep_us_jp_boundaries(self):
+        self.assertEqual(self.rows["US"]["universe"], "partial")
+        self.assertEqual(self.rows["JP"]["universe"], "unavailable")
+        self.assertIn("SEC company_tickers", self.rows["US"]["notes"])
+        self.assertIn("no xlsx/xls", self.rows["JP"]["notes"])
+
 
 if __name__ == "__main__":
     unittest.main()

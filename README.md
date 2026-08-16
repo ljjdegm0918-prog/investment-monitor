@@ -673,6 +673,24 @@ IBKR `conid`（可选）提供统一契约。缓存位于
   官方宇宙（保持 live）；AT Wiener Börse 仅 HTML、MX 候选全 404、
   IL TASE/MAYA 400/403 WAF、HU BSE 无结构化导出——均锁 stub，不假 LIVE。
 
+## 1.8 零注册免费扫尾（Z，2026-08-16）
+
+- **US**：新增 `us_universe.py`，官方 SEC
+  `company_tickers_exchange.json`（约 10k 行，必须带 User-Agent）；这是
+  SEC 注册边界内的 breadth-only 目录，coverage 标 `partial`，不冒充完整
+  交易所目录。
+- **JP**：JPX 上市公司页未暴露静态 xlsx/xls 直链（Z0 复验），无稳定免
+  key 官方目录 → universe 保持 `unavailable`；TDnet/EDINET 披露保持 live。
+- **公开 ETF 目录**：未发现新的免 key 官方静态文件（LSE/HKEX/ASX SPA、
+  JPX/BME 404、GPW 不稳）；七国 ETF 状态维持 unknown，第三方候选行出现
+  才转 partial。不申请 EODHD/新 key。
+- **薄国**：无新稳免 key 源，AT/MX/IL/HU 继续锁 stub；NO/PT 保持已有
+  Euronext live。
+- **文档**：`docs/IBKR_PLAN_OUT_OF_SCOPE_ZH.md`（范围外清单）与
+  `docs/IBKR_FREE_VS_PAID_SHORT_ZH.md`（免费 vs 付费短表）入库。
+- **禁止项**：不注册账号、不申请 key、不用 Playwright、不把新闻标成
+  披露/ETF 文件。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：
