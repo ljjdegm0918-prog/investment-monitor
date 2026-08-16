@@ -554,6 +554,40 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Yahoo↔Google 按 ticker + **Budapest 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
+## 1.5 共享股票身份 + ETF 子类型基建（Phase 1）
+
+`universe/global_equity_reference.py` 是跨市场的第三方候选参考层
+（`source_tier="third_party"`），为 Euronext ETF 候选、ISIN/FIGI 富化与
+IBKR `conid`（可选）提供统一契约。缓存位于
+`.cache/investment_monitor/global_equity_reference.json`。
+
+- **官方宇宙永远赢**：`refresh_global_equity_reference()` 把 DE/BE/FR/NL/IT
+  官方 `name_map` 作为锚；同一 symbol 的官方 name/ISIN/board 覆盖第三方
+  候选，候选只保留 provenance。DE Xetra 官方目录（含 3000+ ETF）不受影响。
+- **EODHD（P1-2）**：`EODHD_API_KEY` 从 `.env`/环境注入（不写进仓库，
+  不进 Web Settings extra-env——密钥后缀被安全白名单拒绝）。
+  `exchange-symbol-list/{EXCHANGE}` 逐交易所收编权益行，默认每日预算
+  `EODHD_DAILY_BUDGET=20` 次调用，预算日期与已刷交易所都持久化在缓存里，
+  防止坏 token 空转。未配置 key 时管线如实记录 `skipped_eodhd_no_key`，
+  **不产生任何假候选**。
+- **OpenFIGI（P1-1）**：`POST https://api.openfigi.com/v3/mapping` 免 key
+  可用（2026-08-15 live 实测；GET 返回 405）。只对缺 ISIN/FIGI 的 ETF
+  候选批量富化（默认最多 100 条、每请求 10 个 job），尊重其 25 次/60 秒
+  限速窗口；可选 `OPENFIGI_API_KEY` 头。
+- **Twelve Data（P1-3，可选）**：无 `TWELVE_DATA_API_KEY` 时跳过并记录
+  `skipped_twelve_no_key`；显式 `allow_no_key=True` 才走免 key
+  `symbol_search`，只写 `twelve_*` provenance 字段。
+- **IBKR（P1-6，可选）**：无 Gateway/TWS session 时为诚实 mock——
+  `ibkr_conid_for()` 返回 `None`，绝不编造 `conid`；传入带
+  `lookup_contract(symbol, exchange)` 的 session 即返回真实契约元数据。
+- **add-company 接线**：`/api/companies/batch` 在官方 `name_fallback`
+  之下合并参考层条目（官方命中保留，参考层只补官方没有的 ticker，如
+  Euronext ETF 候选），无需改前端。
+- **测试**：`test_global_equity_reference.py`、`test_phase1_equity_reference.py`
+  （DE 黄金样本 + Euronext ETF 候选）、`test_eodhd_client.py`、
+  `test_openfigi_client.py`、`test_twelve_data_client.py`、
+  `test_ibkr_reference.py`，全部离线 fake opener，不发真实网络请求。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：
