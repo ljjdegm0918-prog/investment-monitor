@@ -31,6 +31,17 @@ from typing import Any, List, Mapping, Optional
 
 DEFAULT_CACHE_PATH = ".cache/investment_monitor/sg_universe.json"
 
+# Phase 4 锁边（2026-08-16 live 复验）：api.sgx.com/securities 返回行情
+# prices 结构而非证券目录（params 未公开）；announcements 403；网页仍 SPA。
+PHASE4_BOUNDARY = {
+    "universe": "stub",
+    "disclosure": "unavailable",
+    "evidence": (
+        "api.sgx.com/securities/v1.1: prices shape only; "
+        "api.sgx.com/announcements/v1.1: 403; sgx.com/securities: SPA"
+    ),
+}
+
 
 class SgUniverseError(RuntimeError):
     """Raised when the SG universe cannot be refreshed at all."""
