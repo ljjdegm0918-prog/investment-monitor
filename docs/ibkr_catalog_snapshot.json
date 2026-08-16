@@ -1,0 +1,1673 @@
+{
+ "schema_version": 2,
+ "updated_at": "2026-08-16",
+ "source": {
+  "plan": "IBKR_EXCHANGE_COVERAGE_PLAN_ZH.md §3.1-3.3",
+  "live_snapshot": "https://www.interactivebrokers.com/webrest/exchanges/ (2026-08-16, id alignment)"
+ },
+ "normalization": {
+  "countries": "plan §3.1-3.3 country tables (28 core)",
+  "venues": "plan §3.1-3.3 venue rows; US 'Nasdaq/BX/PSX' and 'Direct Edge/EDGEA' split to reach the plan's 21/31 count",
+  "etf_columns": {
+   "Americas": 11,
+   "Europe": 15,
+   "Asia": 1,
+   "total": 27,
+   "note": "ETF section mostly duplicates stock venues; Phase 0 keeps one venue system and records counts only"
+  }
+ },
+ "countries": [
+  {
+   "country_code": "CA",
+   "country_name": "Canada",
+   "region": "Americas",
+   "market_code": "ca",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "CSE",
+    "TSE",
+    "VENTURE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "MX",
+   "country_name": "Mexico",
+   "region": "Americas",
+   "market_code": "mx",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "MEXI"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "US",
+   "country_name": "United States",
+   "region": "Americas",
+   "market_code": "us",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "ARCA",
+    "CHX",
+    "IEX",
+    "ISE",
+    "LTSE",
+    "MEMX",
+    "PEARL",
+    "NASDAQ",
+    "BEX",
+    "PSX",
+    "NYSE",
+    "NSX",
+    "NYSENAT",
+    "AMEX",
+    "PINK"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "AT",
+   "country_name": "Austria",
+   "region": "Europe",
+   "market_code": "at",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "VSE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "BE",
+   "country_name": "Belgium",
+   "region": "Europe",
+   "market_code": "be",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "ENEXT.BE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "CH",
+   "country_name": "Switzerland",
+   "region": "Europe",
+   "market_code": "ch",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "EBS"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "DE",
+   "country_name": "Germany",
+   "region": "Europe",
+   "market_code": "de",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "FWB",
+    "GETTEX",
+    "SWB",
+    "TGATE",
+    "IBIS"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "EE",
+   "country_name": "Estonia",
+   "region": "Europe",
+   "market_code": "ee",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "N.TALLINN"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "ES",
+   "country_name": "Spain",
+   "region": "Europe",
+   "market_code": "es",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "BM"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "FR",
+   "country_name": "France",
+   "region": "Europe",
+   "market_code": "fr",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "SBF"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "GB",
+   "country_name": "United Kingdom",
+   "region": "Europe",
+   "market_code": "uk",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "LSE",
+    "LSEIOB1"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "HU",
+   "country_name": "Hungary",
+   "region": "Europe",
+   "market_code": "hu",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "BUX"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "IL",
+   "country_name": "Israel",
+   "region": "Europe",
+   "market_code": "il",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "TASE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "IT",
+   "country_name": "Italy",
+   "region": "Europe",
+   "market_code": "it",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "BVME"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "LT",
+   "country_name": "Lithuania",
+   "region": "Europe",
+   "market_code": "lt",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "N.VILNIUS"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "LV",
+   "country_name": "Latvia",
+   "region": "Europe",
+   "market_code": "lv",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "N.RIGA"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "NL",
+   "country_name": "Netherlands",
+   "region": "Europe",
+   "market_code": "nl",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "AEB"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "NO",
+   "country_name": "Norway",
+   "region": "Europe",
+   "market_code": "no",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "OSE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "PL",
+   "country_name": "Poland",
+   "region": "Europe",
+   "market_code": "pl",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "WSE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "PT",
+   "country_name": "Portugal",
+   "region": "Europe",
+   "market_code": "pt",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "BVL"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "RU",
+   "country_name": "Russian Federation",
+   "region": "Europe",
+   "market_code": null,
+   "trading_status": "suspended",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "MOEX"
+   ],
+   "notes": "IBKR cannot open or close MOEX positions at this time."
+  },
+  {
+   "country_code": "SE",
+   "country_name": "Sweden",
+   "region": "Europe",
+   "market_code": "se",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "SFB"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "AU",
+   "country_name": "Australia",
+   "region": "Asia",
+   "market_code": "au",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "ASX",
+    "ASXCEN",
+    "CHIXAU"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "HK",
+   "country_name": "Hong Kong",
+   "region": "Asia",
+   "market_code": "hk",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "SEHK"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "IN",
+   "country_name": "India",
+   "region": "Asia",
+   "market_code": "in",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "NSE"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "JP",
+   "country_name": "Japan",
+   "region": "Asia",
+   "market_code": "jp",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "CBOEJP",
+    "TSEJ"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "SG",
+   "country_name": "Singapore",
+   "region": "Asia",
+   "market_code": "sg",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "SGX"
+   ],
+   "notes": ""
+  },
+  {
+   "country_code": "TW",
+   "country_name": "Taiwan",
+   "region": "Asia",
+   "market_code": "tw",
+   "trading_status": "active",
+   "catalog_role": "core",
+   "primary_exchange": [
+    "TWSE"
+   ],
+   "notes": ""
+  }
+ ],
+ "venues": [
+  {
+   "venue_id": "ALPHA",
+   "venue_name": "Alpha ATS",
+   "ibkr_label": "Alpha ATS",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ALPHA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "AEQLITN",
+   "venue_name": "Aequitas NEO",
+   "ibkr_label": "Aequitas NEO",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "AEQLITN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "AEQLITL",
+   "venue_name": "Aequitas NEO Lit",
+   "ibkr_label": "NEO Lit",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "AEQLITL"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXCA",
+   "venue_name": "Chi-X Canada",
+   "ibkr_label": "Chi-X",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXCA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "LYNX",
+   "venue_name": "LYNX ATS",
+   "ibkr_label": "LYNX",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "LYNX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "OMEGA",
+   "venue_name": "OMEGA ATS",
+   "ibkr_label": "OMEGA ATS",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "OMEGA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CSE",
+   "venue_name": "Canadian Securities Exchange",
+   "ibkr_label": "CSE",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TSE",
+   "venue_name": "Toronto Stock Exchange",
+   "ibkr_label": "TSX",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "VENTURE",
+   "venue_name": "TSX Venture Exchange",
+   "ibkr_label": "TSX Venture",
+   "country_code": "CA",
+   "market_code": "ca",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "VENTURE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "MEXI",
+   "venue_name": "Mexican Stock Exchange (BMV)",
+   "ibkr_label": "Mexican Stock Exchange / BMV",
+   "country_code": "MX",
+   "market_code": "mx",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "MEXI"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ARCA",
+   "venue_name": "NYSE Arca",
+   "ibkr_label": "NYSE Arca",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ARCA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ARCAEDGE",
+   "venue_name": "ArcaEdge",
+   "ibkr_label": "ArcaEdge",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ARCAEDGE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATS",
+   "venue_name": "BATS",
+   "ibkr_label": "BATS",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATS"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHX",
+   "venue_name": "Chicago Stock Exchange",
+   "ibkr_label": "CHX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "DRCTEDGE",
+   "venue_name": "Direct Edge ECN",
+   "ibkr_label": "Direct Edge",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "DRCTEDGE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "EDGEA",
+   "venue_name": "EDGEA",
+   "ibkr_label": "EDGEA",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "EDGEA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "IEX",
+   "venue_name": "Investors Exchange",
+   "ibkr_label": "IEX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "IEX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ISLAND",
+   "venue_name": "INET (ISLAND)",
+   "ibkr_label": "INET",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ISLAND"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ISE",
+   "venue_name": "ISE Stock",
+   "ibkr_label": "ISE Stock",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ISE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "KNIGHT",
+   "venue_name": "Knight",
+   "ibkr_label": "Knight",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "KNIGHT"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "LTSE",
+   "venue_name": "Long Term Stock Exchange",
+   "ibkr_label": "LTSE",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "LTSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "MEMX",
+   "venue_name": "Members Exchange",
+   "ibkr_label": "MEMX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "MEMX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "PEARL",
+   "venue_name": "MIAX PEARL",
+   "ibkr_label": "MIAX Pearl",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "PEARL"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "NASDAQ",
+   "venue_name": "Nasdaq",
+   "ibkr_label": "Nasdaq",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "NASDAQ"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BEX",
+   "venue_name": "Nasdaq BX",
+   "ibkr_label": "BX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BEX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "PSX",
+   "venue_name": "Nasdaq PSX",
+   "ibkr_label": "PSX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "PSX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "NYSE",
+   "venue_name": "New York Stock Exchange",
+   "ibkr_label": "NYSE",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "NYSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "NSX",
+   "venue_name": "National Stock Exchange",
+   "ibkr_label": "NSX",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "NSX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "NYSENAT",
+   "venue_name": "NYSE National",
+   "ibkr_label": "NYSENAT",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "NYSENAT"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "AMEX",
+   "venue_name": "NYSE American",
+   "ibkr_label": "NYSE American",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "AMEX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "PINK",
+   "venue_name": "Pink OTC",
+   "ibkr_label": "Pink OTC",
+   "country_code": "US",
+   "market_code": "us",
+   "region": "Americas",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "PINK"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "VSE",
+   "venue_name": "Vienna Stock Exchange",
+   "ibkr_label": "Vienna Stock Exchange",
+   "country_code": "AT",
+   "market_code": "at",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "VSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEEN",
+   "venue_name": "BATS Europe (Cboe BXE)",
+   "ibkr_label": "BATS Europe",
+   "country_code": "BE",
+   "market_code": "be",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXEN",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "BE",
+   "market_code": "be",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ENEXT.BE",
+   "venue_name": "Euronext Brussels",
+   "ibkr_label": "Euronext Brussels",
+   "country_code": "BE",
+   "market_code": "be",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ENEXT.BE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TRQXEN",
+   "venue_name": "Turquoise Europe",
+   "ibkr_label": "Turquoise",
+   "country_code": "BE",
+   "market_code": "be",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TRQXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATECH",
+   "venue_name": "BATS (Cboe BXE)",
+   "ibkr_label": "BATS",
+   "country_code": "CH",
+   "market_code": "ch",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATECH"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXCH",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "CH",
+   "market_code": "ch",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXCH"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "EBS",
+   "venue_name": "SIX Swiss Exchange",
+   "ibkr_label": "SIX",
+   "country_code": "CH",
+   "market_code": "ch",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "EBS"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TRQXCH",
+   "venue_name": "Turquoise Europe",
+   "ibkr_label": "Turquoise",
+   "country_code": "CH",
+   "market_code": "ch",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TRQXCH"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "VIRTX",
+   "venue_name": "Virt-X",
+   "ibkr_label": "Virt-X",
+   "country_code": "CH",
+   "market_code": "ch",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "VIRTX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEDE",
+   "venue_name": "BATS (Cboe BXE)",
+   "ibkr_label": "BATS",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEDE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXDE",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXDE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "FWB",
+   "venue_name": "Frankfurt (FWB)",
+   "ibkr_label": "Frankfurt",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "FWB"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "GETTEX",
+   "venue_name": "Gettex",
+   "ibkr_label": "Gettex",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "GETTEX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SWB",
+   "venue_name": "Stuttgart (SWB)",
+   "ibkr_label": "Stuttgart",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SWB"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TGATE",
+   "venue_name": "Tradegate",
+   "ibkr_label": "Tradegate",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TGATE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TRQXDE",
+   "venue_name": "Turquoise Europe",
+   "ibkr_label": "Turquoise",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TRQXDE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "IBIS",
+   "venue_name": "Xetra (IBIS)",
+   "ibkr_label": "Xetra",
+   "country_code": "DE",
+   "market_code": "de",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "IBIS"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "N.TALLINN",
+   "venue_name": "Nasdaq Tallinn",
+   "ibkr_label": "Nasdaq Baltic Tallinn",
+   "country_code": "EE",
+   "market_code": "ee",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "N.TALLINN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEES",
+   "venue_name": "BATS Europe (Cboe BXE)",
+   "ibkr_label": "BATS Europe",
+   "country_code": "ES",
+   "market_code": "es",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEES"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BM",
+   "venue_name": "Bolsa de Madrid",
+   "ibkr_label": "Bolsa de Madrid",
+   "country_code": "ES",
+   "market_code": "es",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BM"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXES",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "ES",
+   "market_code": "es",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXES"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEEN",
+   "venue_name": "BATS Europe (Cboe BXE)",
+   "ibkr_label": "BATS Europe",
+   "country_code": "FR",
+   "market_code": "fr",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXEN",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "FR",
+   "market_code": "fr",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SBF",
+   "venue_name": "Euronext Paris",
+   "ibkr_label": "Euronext Paris",
+   "country_code": "FR",
+   "market_code": "fr",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SBF"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TRQXEN",
+   "venue_name": "Turquoise Europe",
+   "ibkr_label": "Turquoise",
+   "country_code": "FR",
+   "market_code": "fr",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TRQXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEUK",
+   "venue_name": "BATS Europe (Cboe BXE)",
+   "ibkr_label": "BATS",
+   "country_code": "GB",
+   "market_code": "uk",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEUK"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXUK",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "GB",
+   "market_code": "uk",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXUK"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "LSE",
+   "venue_name": "London Stock Exchange",
+   "ibkr_label": "LSE",
+   "country_code": "GB",
+   "market_code": "uk",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "LSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "LSEIOB1",
+   "venue_name": "LSE International Order Book",
+   "ibkr_label": "LSE International Order Book",
+   "country_code": "GB",
+   "market_code": "uk",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "LSEIOB1"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BUX",
+   "venue_name": "Budapest Stock Exchange",
+   "ibkr_label": "Budapest Stock Exchange",
+   "country_code": "HU",
+   "market_code": "hu",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BUX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TASE",
+   "venue_name": "Tel Aviv Stock Exchange",
+   "ibkr_label": "Tel Aviv Stock Exchange",
+   "country_code": "IL",
+   "market_code": "il",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TASE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BVME",
+   "venue_name": "Borsa Italiana / Euronext Milan",
+   "ibkr_label": "Borsa Italiana / Euronext Milan",
+   "country_code": "IT",
+   "market_code": "it",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BVME"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "N.VILNIUS",
+   "venue_name": "Nasdaq Vilnius",
+   "ibkr_label": "Nasdaq Baltic Vilnius",
+   "country_code": "LT",
+   "market_code": "lt",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "N.VILNIUS"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "N.RIGA",
+   "venue_name": "Nasdaq Riga",
+   "ibkr_label": "Nasdaq Baltic Riga",
+   "country_code": "LV",
+   "market_code": "lv",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "N.RIGA"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BATEEN",
+   "venue_name": "BATS Europe (Cboe BXE)",
+   "ibkr_label": "BATS",
+   "country_code": "NL",
+   "market_code": "nl",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BATEEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXEN",
+   "venue_name": "Chi-X (Cboe CXE)",
+   "ibkr_label": "Chi-X",
+   "country_code": "NL",
+   "market_code": "nl",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "AEB",
+   "venue_name": "Euronext Amsterdam",
+   "ibkr_label": "Euronext Amsterdam",
+   "country_code": "NL",
+   "market_code": "nl",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "AEB"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TRQXEN",
+   "venue_name": "Turquoise Europe",
+   "ibkr_label": "Turquoise",
+   "country_code": "NL",
+   "market_code": "nl",
+   "region": "Europe",
+   "venue_role": "mtf",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TRQXEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "OSE",
+   "venue_name": "Oslo Børs",
+   "ibkr_label": "OMXNO / Oslo Børs",
+   "country_code": "NO",
+   "market_code": "no",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "OSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "WSE",
+   "venue_name": "Warsaw Stock Exchange",
+   "ibkr_label": "Warsaw Stock Exchange",
+   "country_code": "PL",
+   "market_code": "pl",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "WSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "BVL",
+   "venue_name": "Euronext Lisbon",
+   "ibkr_label": "BVL / Euronext Lisbon",
+   "country_code": "PT",
+   "market_code": "pt",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "BVL"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "MOEX",
+   "venue_name": "Moscow Exchange (MOEX)",
+   "ibkr_label": "Moscow Exchange",
+   "country_code": "RU",
+   "market_code": null,
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "MOEX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SFB",
+   "venue_name": "Nasdaq Stockholm",
+   "ibkr_label": "Swedish Stock Exchange / Nasdaq Stockholm",
+   "country_code": "SE",
+   "market_code": "se",
+   "region": "Europe",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SFB"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ASX",
+   "venue_name": "Australian Stock Exchange",
+   "ibkr_label": "ASX",
+   "country_code": "AU",
+   "market_code": "au",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ASX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "ASXCEN",
+   "venue_name": "ASX Centre Point",
+   "ibkr_label": "ASXCEN",
+   "country_code": "AU",
+   "market_code": "au",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "ASXCEN"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CHIXAU",
+   "venue_name": "Cboe Australia",
+   "ibkr_label": "Cboe Australia",
+   "country_code": "AU",
+   "market_code": "au",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CHIXAU"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SEHK",
+   "venue_name": "Hong Kong Stock Exchange",
+   "ibkr_label": "SEHK",
+   "country_code": "HK",
+   "market_code": "hk",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SEHK"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SEHKSZSE",
+   "venue_name": "Shanghai-HK Stock Connect",
+   "ibkr_label": "Shanghai-HK Stock Connect",
+   "country_code": "HK",
+   "market_code": "hk",
+   "region": "Asia",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SEHKSZSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SEHKSTAR",
+   "venue_name": "STAR Connect",
+   "ibkr_label": "STAR Connect",
+   "country_code": "HK",
+   "market_code": "hk",
+   "region": "Asia",
+   "venue_role": "routing",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SEHKSTAR"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "NSE",
+   "venue_name": "National Stock Exchange of India",
+   "ibkr_label": "National Stock Exchange of India",
+   "country_code": "IN",
+   "market_code": "in",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "NSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "CBOEJP",
+   "venue_name": "Cboe Japan",
+   "ibkr_label": "Cboe Japan",
+   "country_code": "JP",
+   "market_code": "jp",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "CBOEJP"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "JPNNEXT",
+   "venue_name": "JAPANNEXT PTS",
+   "ibkr_label": "JAPANNEXT",
+   "country_code": "JP",
+   "market_code": "jp",
+   "region": "Asia",
+   "venue_role": "ats",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "JPNNEXT"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TSEJ",
+   "venue_name": "Tokyo Stock Exchange",
+   "ibkr_label": "Tokyo Stock Exchange",
+   "country_code": "JP",
+   "market_code": "jp",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TSEJ"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "SGX",
+   "venue_name": "Singapore Exchange",
+   "ibkr_label": "Singapore Exchange",
+   "country_code": "SG",
+   "market_code": "sg",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "SGX"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  },
+  {
+   "venue_id": "TWSE",
+   "venue_name": "Taiwan Stock Exchange",
+   "ibkr_label": "Taiwan Stock Exchange",
+   "country_code": "TW",
+   "market_code": "tw",
+   "region": "Asia",
+   "venue_role": "primary",
+   "instrument_type": "stock",
+   "valid_exchanges": [
+    "TWSE"
+   ],
+   "source": "ibkr_global_access_plan_3.1_3.3"
+  }
+ ],
+ "extra_entries": [
+  {
+   "country_code": "CN",
+   "country_name": "China",
+   "market_code": "cn",
+   "catalog_role": "extra",
+   "region": "Asia",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Plan §3.4: China access via HK Stock Connect; see universe/stock_connect.py. No CN disclosure connector."
+  },
+  {
+   "country_code": "KR",
+   "country_name": "Republic of Korea",
+   "market_code": "kr",
+   "catalog_role": "extra",
+   "region": "Asia",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Existing repo market (OpenDART/KIND); kept outside the 28-country baseline."
+  },
+  {
+   "country_code": "AQ",
+   "country_name": "AQSE",
+   "market_code": "aq",
+   "catalog_role": "venue_only",
+   "region": "Europe",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Plan §3.4: belongs to UK extended market; not a 29th country."
+  },
+  {
+   "country_code": "CXE",
+   "country_name": "Cboe Europe (CXE/BXE)",
+   "market_code": "cxe",
+   "catalog_role": "venue_only",
+   "region": "Europe",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Routing venue data only; issuer disclosure stays with home country."
+  },
+  {
+   "country_code": "TRQ",
+   "country_name": "Turquoise (pan-European MTF)",
+   "market_code": "trq",
+   "catalog_role": "venue_only",
+   "region": "Europe",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Boundary kept; cannot replace any national primary market."
+  },
+  {
+   "country_code": "EUX",
+   "country_name": "Eurex",
+   "market_code": "eux",
+   "catalog_role": "out_of_scope",
+   "region": "Europe",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Derivatives exchange; excluded by plan scope."
+  },
+  {
+   "country_code": "EMF",
+   "country_name": "European Mutual Funds",
+   "market_code": "emf",
+   "catalog_role": "out_of_scope",
+   "region": "Europe",
+   "trading_status": "active",
+   "primary_exchange": [],
+   "notes": "Mutual-fund venues; excluded by plan scope."
+  }
+ ]
+}
