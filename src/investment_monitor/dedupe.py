@@ -64,6 +64,10 @@ stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
 BE news (yahoo_be / google_news_be) pairs across sources on ticker +
 Brussels day + normalized title.
+For India (in), the NSE disclosure source pairs on its stable seq_id
+and IN news (yahoo_in / google_news_in) pairs across sources on
+ticker + Kolkata day + normalized title.
+
 For Austria (at) the disclosure primary chain is an honest stub
 (no rows are produced), so no filing pairing exists yet; AT news
 (yahoo_at / google_news_at) pairs across sources on ticker + Vienna
@@ -151,6 +155,7 @@ TALLINN = ZoneInfo("Europe/Tallinn")
 OSLO = ZoneInfo("Europe/Oslo")
 LISBON = ZoneInfo("Europe/Lisbon")
 VIENNA = ZoneInfo("Europe/Vienna")
+KOLKATA = ZoneInfo("Asia/Kolkata")
 STOCKHOLM = ZoneInfo("Europe/Stockholm")
 LUXEMBOURG = ZoneInfo("Europe/Luxembourg")
 RECEIPT_LENGTH = 14
@@ -223,6 +228,9 @@ NEWS_SOURCE_PRIORITY = {
     "google_news_pt": 42,
     "yahoo_at": 43,
     "google_news_at": 44,
+    "nse_announcements": 45,
+    "yahoo_in": 46,
+    "google_news_in": 47,
     "yahoo_aq": 32,
     "google_news_aq": 33,
     "google_news_cxe": 34,
@@ -318,6 +326,9 @@ SOURCE_DISPLAY_LABELS = {
     "wiener_boerse_news": "Wiener Börse",
     "yahoo_at": "Yahoo Finance AT",
     "google_news_at": "Google News (AT)",
+    "nse_announcements": "NSE announcements",
+    "yahoo_in": "Yahoo Finance IN",
+    "google_news_in": "Google News (IN)",
     "yahoo_aq": "Yahoo Finance AQ",
     "google_news_aq": "Google News (AQ)",
     "google_news_cxe": "Google News (CXE)",
@@ -366,7 +377,7 @@ def dedupe_key(item: Mapping[str, Any]) -> Optional[str]:
     market = str(item.get("market") or "")
     if market not in {
         "kr", "uk", "hk", "tw", "ca", "au", "fr", "de", "nl", "it", "es",
-        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "at", "aq", "cxe", "emf", "trq", "eux",
+        "sg", "be", "ch", "pl", "se", "ee", "lv", "lt", "no", "pt", "at", "in", "aq", "cxe", "emf", "trq", "eux",
         "cn", "us", "jp",
     }:
         return None
@@ -499,6 +510,8 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         return None
     if market == "ch":
         return _ch_filing_key(item)
+    if market == "in":
+        return _in_filing_key(item)
     if market == "at":
         # Disclosure primary chain is an honest stub (no rows produced);
         # a stray filing row must never be cross-annotated.
@@ -626,6 +639,23 @@ def _baltic_filing_key(item: Mapping[str, Any]) -> Optional[str]:
     if title and day:
         return (
             f"{item.get('market')}:filing:title:{source}:"
+            f"{item.get('ticker')}:{day}:{title}"
+        )
+    return None
+
+
+def _in_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """IN filings pair on the stable NSE seq_id, with a source-scoped
+    Kolkata-day title fallback."""
+    source = str(item.get("source") or "")
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"in:filing:nse:{document_id}"
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, KOLKATA)
+    if title and day:
+        return (
+            f"in:filing:title:{source}:"
             f"{item.get('ticker')}:{day}:{title}"
         )
     return None
@@ -893,6 +923,8 @@ def _news_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         if market == "pt"
         else VIENNA
         if market == "at"
+        else KOLKATA
+        if market == "in"
         else STOCKHOLM
         if market == "se"
         else BRUSSELS
