@@ -62,13 +62,15 @@ def _configured(
     api_token: str,
 ) -> Tuple[bool, str, str]:
     if session is not None:
-        return True, (
+        resolved_base = (
             getattr(session, "base_url", "")
             or os.environ.get("IBKR_SECDEF_BASE_URL", "")
-        ).rstrip("/"), (
+        ).strip().rstrip("/")
+        resolved_token = (
             getattr(session, "api_token", "")
             or os.environ.get("IBKR_WEB_API_TOKEN", "")
-        )
+        ).strip()
+        return bool(resolved_base), resolved_base, resolved_token
     base = (base_url or os.environ.get("IBKR_SECDEF_BASE_URL", "")).strip()
     token = (api_token or os.environ.get("IBKR_WEB_API_TOKEN", "")).strip()
     return bool(base and token), base.rstrip("/"), token
