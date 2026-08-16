@@ -84,6 +84,10 @@ from .universe.cxe_universe import cxe_universe_name_map
 from .universe.emf_universe import emf_universe_name_map
 from .universe.trq_universe import trq_universe_name_map
 from .universe.eux_universe import eux_universe_name_map
+from .universe.global_equity_reference import (
+    DEFAULT_CACHE_PATH as GLOBAL_EQUITY_REFERENCE_CACHE_PATH,
+    search_global_equity_reference,
+)
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -97,7 +101,16 @@ from .sources.sec.client import SECConfigurationError
 from .sources.sec.company_resolver import SECCompanyResolver
 from .sqlite_repository import SQLiteInformationRepository
 from .uk_universe import uk_universe_name_map
-from .web_repository import EXTRA_ENV_PREFIX, FeedFilters, WebRepository
+from .web_repository import (
+    EXTRA_ENV_PREFIX,
+    FeedFilters,
+    WebRepository,
+    normalize_be_ticker,
+    normalize_de_ticker,
+    normalize_fr_ticker,
+    normalize_it_ticker,
+    normalize_nl_ticker,
+)
 from .company_import import group_by_market, parse_company_inputs
 from .research import ResearchScope, ResearchSettings, card_from_json, validate_language
 from .research_repository import CARD_STATUS_COMPLETED
@@ -504,6 +517,10 @@ class WebApplication:
                     tickers = tuple(item.ticker for item in items)
                     resolver = self._resolver_for(market)
                     name_fallback = self._name_fallback_for(market)
+                    name_fallback = self._with_global_reference_fallback(
+                        market,
+                        name_fallback,
+                    )
                     try:
                         result = dict(self.repository.add_companies_batch(
                             " ".join(tickers),
@@ -1291,6 +1308,72 @@ class WebApplication:
                 name_fallback = ca_universe_name_map() or None
             return name_fallback
         return None
+
+    def _with_global_reference_fallback(
+        self,
+        market: str,
+        name_fallback: Optional[Mapping[str, Mapping[str, str]]],
+    ) -> Optional[Mapping[str, Mapping[str, str]]]:
+        """Merge Phase 1 global equity reference entries below the official map.
+
+        Official universe fields always win (same ticker keeps the official
+        entry). The third-party reference only backfills tickers the official
+        universe does not know — today that is mostly ETF candidates for
+        Euronext markets while the EODHD key is configured.
+        """
+        env_cache_path = os.environ.get(
+            "GLOBAL_EQUITY_REFERENCE_CACHE_PATH"
+        )
+        cache_path = (
+            Path(env_cache_path)
+            if env_cache_path
+            else Path(self.project_root) / GLOBAL_EQUITY_REFERENCE_CACHE_PATH
+        )
+        try:
+            items = search_global_equity_reference(
+                "", market=market, path=cache_path
+            )
+        except Exception:  # noqa: BLE001 - 参考层损坏不阻断添加
+            LOGGER.warning(
+                "global_equity_reference lookup failed for market=%s",
+                market,
+                exc_info=True,
+            )
+            return name_fallback
+        if not items:
+            return name_fallback
+        merged = dict(name_fallback or {})
+        for item in items:
+            symbol = str(item.get("symbol") or "").strip()
+            normalized = self._normalize_global_reference_symbol(
+                market, symbol
+            )
+            if not normalized or normalized in merged:
+                continue
+            board = str(item.get("board") or item.get("exchange") or "")
+            merged[normalized] = {
+                "name": str(item.get("name") or normalized),
+                "exchange": board,
+                "board": board,
+                "isin": str(item.get("isin") or ""),
+                "instrument_type": str(item.get("instrument_type") or ""),
+            }
+        return merged or None
+
+    @staticmethod
+    def _normalize_global_reference_symbol(market: str, symbol: str) -> str:
+        """Normalize a third-party symbol the same way add-company normalizes it."""
+        if market == MARKET_BE:
+            return normalize_be_ticker(symbol)
+        if market == MARKET_DE:
+            return normalize_de_ticker(symbol)
+        if market == MARKET_FR:
+            return normalize_fr_ticker(symbol)
+        if market == MARKET_IT:
+            return normalize_it_ticker(symbol)
+        if market == MARKET_NL:
+            return normalize_nl_ticker(symbol)
+        return str(symbol or "").strip().upper()
 
     @staticmethod
     def _detect_unavailable_sources(

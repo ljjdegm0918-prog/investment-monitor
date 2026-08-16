@@ -70,6 +70,28 @@ from .se_universe import (
     search_se_universe,
     se_universe_name_map,
 )
+from .global_equity_reference import (
+    GlobalEquityReferenceError,
+    build_official_name_maps,
+    empty_payload,
+    etf_candidates_for,
+    euronext_etf_candidates,
+    load_global_equity_reference,
+    refresh_global_equity_reference,
+    save_global_equity_reference,
+    search_global_equity_reference,
+)
+from .eodhd_client import EodhdClientError, collect_eodhd_symbols
+from .openfigi_client import OpenFigiClientError, enrich_with_openfigi
+from .twelve_data_client import (
+    TwelveDataClientError,
+    enrich_with_twelve_quotes,
+)
+from .ibkr_reference import (
+    IbkrReferenceError,
+    enrich_with_ibkr_conids,
+    ibkr_conid_for,
+)
 
 __all__ = [
     "BeUniverseError",
@@ -82,6 +104,24 @@ __all__ = [
     "ChUniverseError",
     "PlUniverseError",
     "SeUniverseError",
+    "GlobalEquityReferenceError",
+    "EodhdClientError",
+    "OpenFigiClientError",
+    "TwelveDataClientError",
+    "IbkrReferenceError",
+    "build_official_name_maps",
+    "collect_eodhd_symbols",
+    "empty_payload",
+    "enrich_with_ibkr_conids",
+    "enrich_with_openfigi",
+    "enrich_with_twelve_quotes",
+    "etf_candidates_for",
+    "euronext_etf_candidates",
+    "ibkr_conid_for",
+    "load_global_equity_reference",
+    "refresh_global_equity_reference",
+    "save_global_equity_reference",
+    "search_global_equity_reference",
     "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",
