@@ -307,6 +307,18 @@ sources:
     label: Google News (LT)
     source_type: news
     enabled: true                 # key-free RSS; hl=lt&gl=LT&ceid=LT:lt
+  - name: bmv_relevant_events
+    label: BMV relevant events
+    source_type: filings
+    enabled: true                 # honest stub: no stable key-free endpoint (MX-1 2026-08-15)
+  - name: yahoo_mx
+    label: Yahoo Finance MX
+    source_type: news
+    enabled: true                 # key-free RSS; .MX suffix at request time; may be loosely related
+  - name: google_news_mx
+    label: Google News (MX)
+    source_type: news
+    enabled: true                 # key-free RSS; hl=es&gl=MX&ceid=MX:es
   - name: nse_announcements
     label: NSE announcements
     source_type: filings
