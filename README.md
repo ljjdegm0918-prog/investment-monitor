@@ -439,6 +439,29 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   Yahoo↔Google 间按 ticker + Oslo/Lisbon 日 + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
+### 奥地利（AT）— Vienna Stock Exchange / Wiener Börse
+
+- 市场代码：`at`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
+  `TICKER@AT` 与 Yahoo 后缀 `.VI` 均可导入。
+- **披露主链（诚实 stub）**：`wiener_boerse_news`。AT-1 live 侦察
+  （2026-08-15）：wienerborse.at 为 TYPO3 站点，发行人公告目录由前端
+  渲染，`/en/listed-companies/`、`/en/market-data/*` 下未发现稳定免 key
+  的 CSV/XLSX/JSON 端点；EQS Austria 对抽样 AT ISIN（如 OMV
+  AT0000743059）返回空记录。连接器 `collect()` 诚实返回空并标注 stub。
+  若未来用 EQS Austria，必须标注「非 Wiener Börse 官方、覆盖可能部分」。
+- **可交易宇宙（边界 stub）**：官方无稳定免 key 目录端点，`refresh` 抛
+  `AtUniverseError`；只读取手工放置的
+  `.cache/investment_monitor/at_universe.json`（若存在）。**无 ATX 或任何
+  手写种子冒充全宇宙**；缓存永不进 feed。
+- **新闻**：`yahoo_at`（`.VI` 后缀，`de-AT` + `en-US` 双查）与
+  `google_news_at`（`hl=de&gl=AT&ceid=AT:de`），免 key RSS，可能松散相关。
+  **Finnhub 永不查 at。**
+- **第二源（AT-4 锁死）**：官方主源尚未有可用实现，EQS Austria 样本
+  空记录，无第二官方源；不接付费终端/数据商。
+- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；AT 新闻在
+  Yahoo↔Google 间按 ticker + Vienna 日 + 归一化标题配对。只标注
+  `Also seen on`，保留所有行、不缩页。
+
 ## 2. 可选的手动 SEC 采集
 
 选择包含起止的申报日期范围：

@@ -2467,6 +2467,7 @@ def _market_region(market: str) -> str:
         "lt": "Lithuania",
         "no": "Norway",
         "pt": "Portugal",
+        "at": "Austria",
     }.get(market, "Unavailable")
 
 
@@ -3119,6 +3120,37 @@ def normalize_pt_ticker(ticker: str) -> str:
     return _normalize_euronext_ticker(
         ticker, _PT_TICKER_SUFFIXES, _PT_TICKER_SEPARATORS, _PT_ISIN_PATTERN
     )
+
+
+_AT_TICKER_SUFFIXES = ("VI",)
+_AT_TICKER_SEPARATORS = (".", " ", "-")
+_AT_ISIN_PATTERN = re.compile(r"AT[0-9A-Z]{10}")
+
+
+def normalize_at_ticker(ticker: str) -> str:
+    """Normalize a Vienna Stock Exchange symbol.
+
+    Accepts plain symbols (``VOE``) and the common ``.VI`` quote suffix;
+    a bare ``VI`` word is never erased, and an Austrian ISIN (``AT`` +
+    10 alphanumeric characters) is kept as-is.
+    """
+    cleaned = str(ticker).strip().upper()
+    isin_match = _AT_ISIN_PATTERN.search(cleaned)
+    if isin_match:
+        return isin_match.group(0)
+    changed = True
+    while changed:
+        changed = False
+        for separator in _AT_TICKER_SEPARATORS:
+            for suffix in _AT_TICKER_SUFFIXES:
+                marker = separator + suffix
+                if cleaned.endswith(marker):
+                    cleaned = cleaned[: -len(marker)].strip()
+                    changed = True
+                    break
+            if changed:
+                break
+    return cleaned
 
 
 def normalize_se_ticker(ticker: str) -> str:
