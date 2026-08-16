@@ -40,7 +40,7 @@ DISCLOSURE_UNAVAILABLE = frozenset({"ca", "ru", "sg"})
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
     "US": "Nasdaq Trader official nasdaqlisted/otherlisted directories provide exchange-listed stock and ETF breadth; SEC company_tickers_exchange adds CIKs only; OTC/Pink completeness remains unproven, so the country universe stays partial",
-    "JP": "No stable key-free JPX static directory (page exposes no xlsx/xls; Z0 re-probe 2026-08-16); TDnet/EDINET disclosure stays live, universe stays unavailable",
+    "JP": "JPX official Listed Issues page provides the TSE ETF directory; the broader JP stock universe still has no stable key-free directory, while TDnet/EDINET disclosure stays live",
     "CA": "TSX/TSXV official universe only; CSE/NEO directory and SEDAR+ stay unavailable (WAF/TLS boundary locked)",
     "SG": "SGX directory/announcements unavailable (SPA/403 boundary); third_party candidates may raise universe to partial, filings stay unavailable",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
@@ -133,7 +133,9 @@ def _universe_module_name(market_code: str) -> str:
 
 
 def _disclosure_status(market_code: str | None, market: str) -> str:
-    market = str(market or "").lower()
+    # ``country_code`` is only a fallback.  GB's canonical source-registry key
+    # is ``uk`` and must not be overwritten by its ISO country code.
+    market = str(market_code or market or "").lower()
     if market in DISCLOSURE_UNAVAILABLE:
         return "unavailable"
     if market in DISCLOSURE_BOUNDARY_STUBS:
@@ -163,7 +165,7 @@ def _etf_disclosure_status(market: str) -> str:
 
 
 def _etf_status(market_code: str | None, market: str, cache_path: Any = None) -> str:
-    if market in ("de", "us"):
+    if market in ("de", "jp", "us"):
         return "live"
     if market in ("uk", "gb"):
         try:
@@ -278,7 +280,7 @@ def _notes_for(
     if disclosure == "stub":
         notes.append("disclosure connector is an honest stub")
     if etf_universe == "live":
-        notes.append("official Xetra universe carries ETF/ETN/ETC")
+        notes.append("official exchange directory carries ETF instruments")
     if etf_universe == "partial":
         notes.append("third_party ETF candidates present")
     if etf_disclosure == "unavailable" and etf_universe in ("live", "partial"):

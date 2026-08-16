@@ -29,6 +29,9 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(in_row["universe"], "live")
         self.assertEqual(in_row["disclosure"], "live")
 
+        gb = self.rows["GB"]
+        self.assertEqual(gb["disclosure"], "live")
+
         for code in ("AT", "MX"):
             row = self.rows[code]
             self.assertEqual(row["universe"], "stub")
@@ -48,6 +51,24 @@ class CoverageReportTests(unittest.TestCase):
             )
         for code in ("AT", "CH", "HU", "IL", "MX", "SE", "SG"):
             self.assertNotEqual(self.rows[code]["universe"], "live", code)
+
+    def test_all_disclosure_statuses_use_the_canonical_market_key(self):
+        expected = {
+            "CA": "unavailable", "MX": "stub", "US": "live",
+            "AT": "stub", "BE": "live", "CH": "partial",
+            "DE": "partial", "EE": "live", "ES": "live",
+            "FR": "live", "GB": "live", "HU": "stub",
+            "IL": "stub", "IT": "partial", "LT": "live",
+            "LV": "live", "NL": "partial", "NO": "stub",
+            "PL": "live", "PT": "stub", "RU": "unavailable",
+            "SE": "live", "AU": "live", "HK": "live",
+            "IN": "live", "JP": "live", "SG": "unavailable",
+            "TW": "live",
+        }
+        self.assertEqual(
+            {code: row["disclosure"] for code, row in self.rows.items()},
+            expected,
+        )
 
     def test_etf_candidates_flip_partial(self):
         with TemporaryDirectory() as tmp:
@@ -79,9 +100,10 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(self.rows["US"]["universe"], "partial")
         self.assertEqual(self.rows["US"]["etf_universe"], "live")
         self.assertEqual(self.rows["JP"]["universe"], "unavailable")
+        self.assertEqual(self.rows["JP"]["etf_universe"], "live")
         self.assertIn("Nasdaq Trader", self.rows["US"]["notes"])
         self.assertIn("OTC/Pink", self.rows["US"]["notes"])
-        self.assertIn("no xlsx/xls", self.rows["JP"]["notes"])
+        self.assertIn("Listed Issues", self.rows["JP"]["notes"])
 
 
 if __name__ == "__main__":
