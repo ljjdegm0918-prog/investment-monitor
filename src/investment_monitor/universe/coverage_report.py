@@ -136,8 +136,10 @@ def _etf_status(market_code: str | None, market: str, cache_path: Any = None) ->
 
 
 def _source_tier_summary(universe: str, disclosure: str, news: str) -> str:
-    if universe == "live":
+    if universe == "live" and disclosure == "live":
         return "official"
+    if universe == "live":
+        return "mixed"
     if universe == "partial":
         return "mixed"
     if disclosure in ("live", "partial"):

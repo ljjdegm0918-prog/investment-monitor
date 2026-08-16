@@ -23,7 +23,7 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(de["universe"], "live")
         self.assertEqual(de["disclosure"], "partial")
         self.assertEqual(de["etf_universe"], "live")
-        self.assertEqual(de["source_tier_summary"], "official")
+        self.assertEqual(de["source_tier_summary"], "mixed")
 
         in_row = self.rows["IN"]
         self.assertEqual(in_row["universe"], "live")
