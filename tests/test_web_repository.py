@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from typing import Optional
 import unittest
 
 from investment_monitor.config import SourceConfig
@@ -74,13 +75,15 @@ def make_sync_event(
     effective_end: date = date(2026, 8, 1),
     error: str = "",
     coverage_kind: str = "complete_window",
+    started_at: Optional[datetime] = None,
+    finished_at: Optional[datetime] = None,
 ) -> CollectionEvent:
-    now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+    now = started_at or datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
     return CollectionEvent(
         source=source,
         ticker=ticker,
         started_at=now,
-        finished_at=now,
+        finished_at=finished_at or now,
         status=status,
         records_read=0,
         records_written=0,
@@ -213,6 +216,261 @@ class WebRepositoryTests(unittest.TestCase):
         for name, region in expected.items():
             with self.subTest(source=name):
                 self.assertEqual(statuses[name]["regions"], [region])
+
+    def test_stub_sources_with_empty_runs_never_report_connected(self) -> None:
+        stub_names = (
+            "maya_announcements",
+            "bmv_relevant_events",
+            "bse_hu_announcements",
+            "wiener_boerse_news",
+            "newsweb_no",
+            "euronext_lisbon_news",
+        )
+        sources = tuple(
+            SourceConfig(name=name, label=name, source_type="filings", enabled=True)
+            for name in stub_names
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=stub_names,
+            known_sources=sources,
+            implemented_sources=stub_names,
+        )
+        now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        repository.record_collection_events(tuple(
+            make_sync_event(name, "CANARY", "unknown", "empty", initial_backfill=False)
+            for name in stub_names
+        ))
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses(now=now)
+        }
+        for name in stub_names:
+            with self.subTest(source=name):
+                self.assertEqual(statuses[name]["status"], "stub")
+                self.assertIsNone(statuses[name]["latest_success"])
+
+        filings = next(
+            record
+            for record in repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "stub")
+
+    def test_stub_empty_run_does_not_lift_filings_for_real_source(self) -> None:
+        sources = (
+            SourceConfig(name="sec", label="SEC EDGAR", source_type="filings", enabled=True),
+            SourceConfig(
+                name="maya_announcements",
+                label="MAYA (TASE)",
+                source_type="filings",
+                enabled=True,
+            ),
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "maya_announcements"),
+            known_sources=sources,
+            implemented_sources=("sec", "maya_announcements"),
+        )
+        now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        repository.record_collection_events((
+            make_sync_event(
+                "maya_announcements",
+                "CANARY",
+                "il",
+                "empty",
+                initial_backfill=False,
+            ),
+        ))
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses(now=now)
+        }
+        self.assertEqual(statuses["maya_announcements"]["status"], "stub")
+        filings = next(
+            record
+            for record in repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "unavailable")
+
+    def test_real_source_empty_run_counts_as_connected(self) -> None:
+        now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        self.repository.record_collection_events((
+            make_sync_event(
+                "sec",
+                "AAPL",
+                "us",
+                "empty",
+                initial_backfill=False,
+            ),
+        ))
+
+        statuses = {
+            record["name"]: record
+            for record in self.repository.connector_statuses(now=now)
+        }
+        self.assertEqual(statuses["sec"]["status"], "connected")
+        self.assertIsNotNone(statuses["sec"]["latest_success"])
+        filings = next(
+            record
+            for record in self.repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+
+    def test_stub_failure_does_not_mask_real_source_filings_status(self) -> None:
+        sources = (
+            SourceConfig(name="sec", label="SEC EDGAR", source_type="filings", enabled=True),
+            SourceConfig(
+                name="maya_announcements",
+                label="MAYA (TASE)",
+                source_type="filings",
+                enabled=True,
+            ),
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "maya_announcements"),
+            known_sources=sources,
+            implemented_sources=("sec", "maya_announcements"),
+        )
+        now = datetime(2026, 8, 1, 13, tzinfo=timezone.utc)
+        repository.record_collection_events((
+            make_sync_event(
+                "sec",
+                "AAPL",
+                "us",
+                "success",
+                initial_backfill=False,
+                started_at=datetime(2026, 8, 1, 10, tzinfo=timezone.utc),
+            ),
+            make_sync_event(
+                "maya_announcements",
+                "CANARY",
+                "il",
+                "failure",
+                initial_backfill=False,
+                error="stub reported failure",
+                started_at=datetime(2026, 8, 1, 11, tzinfo=timezone.utc),
+            ),
+        ))
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses(now=now)
+        }
+        self.assertEqual(statuses["sec"]["status"], "connected")
+        self.assertEqual(statuses["maya_announcements"]["status"], "stub")
+        filings = next(
+            record
+            for record in repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "connected")
+
+    def test_stub_empty_does_not_mask_real_source_failure(self) -> None:
+        sources = (
+            SourceConfig(name="sec", label="SEC EDGAR", source_type="filings", enabled=True),
+            SourceConfig(
+                name="maya_announcements",
+                label="MAYA (TASE)",
+                source_type="filings",
+                enabled=True,
+            ),
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("sec", "maya_announcements"),
+            known_sources=sources,
+            implemented_sources=("sec", "maya_announcements"),
+        )
+        repository.record_collection_events((
+            make_sync_event(
+                "sec",
+                "AAPL",
+                "us",
+                "success",
+                initial_backfill=False,
+                started_at=datetime(2026, 8, 1, 9, tzinfo=timezone.utc),
+            ),
+        ))
+        repository.record_collection_events((
+            make_sync_event(
+                "sec",
+                "AAPL",
+                "us",
+                "failure",
+                initial_backfill=False,
+                error="edgar throttled",
+                started_at=datetime(2026, 8, 1, 10, tzinfo=timezone.utc),
+            ),
+            make_sync_event(
+                "maya_announcements",
+                "CANARY",
+                "il",
+                "empty",
+                initial_backfill=False,
+                started_at=datetime(2026, 8, 1, 11, tzinfo=timezone.utc),
+            ),
+        ))
+        now = datetime(2026, 8, 1, 13, tzinfo=timezone.utc)
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses(now=now)
+        }
+        self.assertEqual(statuses["sec"]["status"], "temporarily_unavailable")
+        self.assertEqual(statuses["maya_announcements"]["status"], "stub")
+        filings = next(
+            record
+            for record in repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "temporarily_unavailable")
+
+    def test_stub_only_failure_run_stays_stub(self) -> None:
+        stub_names = ("maya_announcements",)
+        sources = (
+            SourceConfig(
+                name="maya_announcements",
+                label="MAYA (TASE)",
+                source_type="filings",
+                enabled=True,
+            ),
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=stub_names,
+            known_sources=sources,
+            implemented_sources=stub_names,
+        )
+        now = datetime(2026, 8, 1, 13, tzinfo=timezone.utc)
+        repository.record_collection_events((
+            make_sync_event(
+                "maya_announcements",
+                "CANARY",
+                "il",
+                "failure",
+                initial_backfill=False,
+                error="stub reported failure",
+            ),
+        ))
+
+        statuses = {
+            record["name"]: record
+            for record in repository.connector_statuses(now=now)
+        }
+        self.assertEqual(statuses["maya_announcements"]["status"], "stub")
+        filings = next(
+            record
+            for record in repository.source_statuses(now=now)
+            if record["type"] == "Filings"
+        )
+        self.assertEqual(filings["status"], "stub")
 
     def test_sync_state_is_independent_per_source_ticker_and_market(self) -> None:
         repository = WebRepository(

@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 import unittest
 
 from investment_monitor.models import CollectionRequest
+from investment_monitor.pipeline import CollectionPipeline
 from investment_monitor.sources.nasdaq_baltic_news.client import (
     RELEASE_MARKETS,
 )
@@ -51,6 +52,52 @@ def record(disclosure_id, company, headline, published, market):
         "language": "en",
         "cnsTypeId": "1",
     }
+
+
+class MultiMarketPipelineScopeTests(unittest.TestCase):
+    class RecordingConnector:
+        name = "multi_market_test"
+        last_collection_status = "success"
+
+        def __init__(self) -> None:
+            self.requests: list = []
+
+        def collect(self, request: CollectionRequest) -> list:
+            self.requests.append(request)
+            return []
+
+    def test_frozenset_market_scope_receives_all_declared_markets(self) -> None:
+        connector = self.RecordingConnector()
+        pipeline = CollectionPipeline(
+            (connector,),
+            source_markets={
+                connector.name: frozenset({"ee", "lv", "lt"}),
+            },
+        )
+        request = CollectionRequest(
+            tickers=("AAPL", "TAL1T", "SAF1R", "IGN1L"),
+            start_date=date(2026, 8, 11),
+            end_date=date(2026, 8, 11),
+            markets={
+                "AAPL": "us",
+                "TAL1T": "ee",
+                "SAF1R": "lv",
+                "IGN1L": "lt",
+            },
+        )
+
+        items = pipeline.collect(request)
+
+        self.assertEqual(items, [])
+        received = tuple(
+            ticker
+            for request in connector.requests
+            for ticker in request.tickers
+        )
+        self.assertEqual(
+            tuple(sorted(received)),
+            ("IGN1L", "SAF1R", "TAL1T"),
+        )
 
 
 class NasdaqBalticNewsTests(unittest.TestCase):

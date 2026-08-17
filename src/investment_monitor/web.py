@@ -106,6 +106,7 @@ from .uk_universe import uk_universe_name_map
 from .web_repository import (
     EXTRA_ENV_PREFIX,
     FeedFilters,
+    REGISTERED_STUB_SOURCES,
     WebRepository,
     normalize_be_ticker,
     normalize_de_ticker,
@@ -126,14 +127,7 @@ CollectionRunner = Callable[..., ConfiguredCollectionResult]
 # Add-company 回填源过滤依据（大脑拍板）：
 # - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
 # - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
-ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
-    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news", "bmv_relevant_events", "maya_announcements", "bse_hu_announcements",
-    "hotcopper_au",
-    "lse_share_chat",
-    "yellowbrick",
-    "vic",
-    "x_community",
-})
+ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset(REGISTERED_STUB_SOURCES)
 ADD_COMPANY_BACKFILL_COMMUNITY_TAIL = frozenset({"xueqiu"})
 COMMUNITY_SOURCE_TYPE = "community"
 

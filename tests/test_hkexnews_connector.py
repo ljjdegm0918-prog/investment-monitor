@@ -145,6 +145,29 @@ class HkexNewsConnectorTests(unittest.TestCase):
         self.assertEqual(connector.last_errors, ())
         self.assertEqual(client.calls, [("stock_id_for", "00700")])
 
+    def test_hk_empty_search_packet_is_a_failure(self) -> None:
+        client = FakeClient(en=[], zh=[])
+        connector = HkexNewsConnector(client=client)
+
+        with self.assertRaises(HkexNewsRequestError):
+            connector.collect(self.request(("00700",), {"00700": "hk"}))
+
+        self.assertEqual(connector.last_errors, (("00700", "empty_packet"),))
+
+    def test_hk_empty_packet_is_recorded_for_multi_ticker_requests(self) -> None:
+        client = FakeClient(en=[], zh=[])
+        connector = HkexNewsConnector(client=client)
+
+        items = connector.collect(
+            self.request(("00700", "09988"), {"00700": "hk", "09988": "hk"})
+        )
+
+        self.assertEqual(items, [])
+        self.assertEqual(
+            connector.last_errors,
+            (("00700", "empty_packet"), ("09988", "empty_packet")),
+        )
+
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         client = FakeClient(
             error=HkexNewsRequestError("HKEXnews request failed: test")

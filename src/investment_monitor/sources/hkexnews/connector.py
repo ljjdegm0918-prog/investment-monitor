@@ -72,6 +72,13 @@ class HkexNewsConnector:
                     request.end_date,
                     lang="zh",
                 )
+                if not en_records and not zh_records:
+                    failures.append((ticker, "empty_packet"))
+                    LOGGER.warning(
+                        "hkexnews ticker=%s status=failure error=empty_packet",
+                        ticker,
+                    )
+                    continue
                 items.extend(
                     _map_records(
                         en_records,

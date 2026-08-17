@@ -135,6 +135,7 @@ const MESSAGES = {
     "manage.collection_partial": "Collection partial. {error}",
     "manage.collection_failed": "Collection failed. {error}",
     "status.connected": "Connected",
+    "status.stub": "Stub (official feed not wired)",
     "status.data_stale": "Data stale",
     "status.not_connected": "Not connected",
     "status.failed": "Failed",
@@ -378,6 +379,7 @@ const MESSAGES = {
     "manage.collection_partial": "采集部分完成。{error}",
     "manage.collection_failed": "采集失败。{error}",
     "status.connected": "已连接",
+    "status.stub": "存根（官方源未接通）",
     "status.data_stale": "数据过期",
     "status.not_connected": "未连接",
     "status.failed": "失败",
@@ -1298,7 +1300,7 @@ function renderSources(sources) {
 
 async function reloadBootstrap() { state.bootstrap = await api("/api/bootstrap"); }
 function listOptions(selected) { return state.bootstrap.lists.map(list => `<option value="${escAttr(list.slug)}" ${list.slug === selected ? "selected" : ""}>${esc(listDisplayName(list))}</option>`).join(""); }
-function statusLabel(status) { const key = {connected:"status.connected", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
+function statusLabel(status) { const key = {connected:"status.connected", stub:"status.stub", stale:"status.data_stale", not_connected:"status.not_connected", temporarily_unavailable:"status.failed", unavailable:"status.waiting_for_data"}[status]; return key ? t(key) : status; }
 function regionForMarket(market) { const key = {us:"region.us", jp:"region.jp", hk:"region.hk", cn:"region.cn", kr:"region.kr", uk:"region.uk", tw:"region.tw", ca:"region.ca", au:"region.au", be:"region.be", fr:"region.fr", de:"region.de", nl:"region.nl", it:"region.it", es:"region.es", sg:"region.sg", ch:"region.ch", pl:"region.pl", se:"region.se", ee:"region.ee", lv:"region.lv", lt:"region.lt", no:"region.no", pt:"region.pt", at:"region.at", in:"region.in", mx:"region.mx", il:"region.il", hu:"region.hu", aq:"region.aq", cxe:"region.cxe", emf:"region.emf", trq:"region.trq", eux:"region.eux"}[market]; return key ? t(key) : t("common.unavailable"); }
 function categoryLabel(type) { const key = {Filing:"cat.official_filings", News:"cat.news", Community:"cat.community"}[type]; return key ? t(key) : type; }
 function exchangeLabel(exchange) { return exchange && exchange !== "Unavailable" ? exchange : t("common.unavailable"); }
