@@ -23,6 +23,7 @@ the list shows issuer names/ISINs, not ticker mnemonics.
 from __future__ import annotations
 
 from html.parser import HTMLParser
+from http.client import IncompleteRead
 import html
 import logging
 import os
@@ -63,8 +64,8 @@ class GpwEspiClient:
         self,
         base_url: str = DEFAULT_BASE_URL,
         public_base: str = DEFAULT_PUBLIC_BASE,
-        timeout: float = 20.0,
-        max_retries: int = 1,
+        timeout: float = 45.0,
+        max_retries: int = 2,
         requests_per_second: float = 1.0,
         user_agent: str = "InvestmentMonitor/0.1 (internal workspace)",
         opener: Callable[..., Any] = urlopen,
@@ -98,10 +99,10 @@ class GpwEspiClient:
         return cls(
             base_url=os.environ.get("GPW_ESPI_URL", DEFAULT_BASE_URL),
             timeout=_read_float_environment(
-                "GPW_ESPI_TIMEOUT_SECONDS", 20.0
+                "GPW_ESPI_TIMEOUT_SECONDS", 45.0
             ),
             max_retries=_read_int_environment(
-                "GPW_ESPI_MAX_RETRIES", 1
+                "GPW_ESPI_MAX_RETRIES", 2
             ),
             requests_per_second=_read_float_environment(
                 "GPW_ESPI_REQUESTS_PER_SECOND", 1.0
@@ -162,7 +163,13 @@ class GpwEspiClient:
             )
             try:
                 with self._opener(request, timeout=self._timeout) as response:
-                    return response.read()
+                    return _read_http_body(response)
+            except IncompleteRead as error:
+                if attempt == self._max_retries:
+                    raise GpwEspiRequestError(
+                        f"GPW ESPI incomplete read after "
+                        f"{self._max_retries + 1} attempts: {url}"
+                    ) from error
             except HTTPError as error:
                 if (
                     error.code not in RETRYABLE_STATUS_CODES
@@ -351,6 +358,26 @@ def _parse_page(
             }
         )
     return records
+
+
+def _read_http_body(response: Any) -> bytes:
+    """Read an HTTP body, keeping a non-empty truncated HTML payload.
+
+    GPW sometimes closes the socket after sending a usable ``komunikaty``
+    page, which surfaces as ``http.client.IncompleteRead``. An empty
+    partial is left to the retry loop.
+    """
+    try:
+        return response.read()
+    except IncompleteRead as error:
+        partial = error.partial or b""
+        if partial.strip():
+            LOGGER.warning(
+                "GPW ESPI incomplete read; using %s partial bytes",
+                len(partial),
+            )
+            return partial
+        raise
 
 
 def _filter_window(

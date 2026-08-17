@@ -1,9 +1,11 @@
 """India market/disclosure/universe/news/dedupe tests."""
 
 from datetime import date, datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from urllib.error import HTTPError
 
 from investment_monitor import (
     ALLOWED_MARKETS,
@@ -20,6 +22,7 @@ from investment_monitor.sources.in_news import (
 )
 from investment_monitor.sources.in_news.symbols import in_yahoo_symbol
 from investment_monitor.sources.nse_announcements import (
+    NseAnnouncementsClient,
     NseAnnouncementsConnector,
 )
 from investment_monitor.universe.in_universe import (
@@ -107,6 +110,57 @@ class IndiaTests(unittest.TestCase):
         )
         self.assertEqual(connector2.collect(foreign), [])
         self.assertEqual(client2.calls, [])
+
+    def test_nse_client_warms_homepage_before_json(self):
+        requested = []
+
+        def opener(request, timeout=None):
+            requested.append(request.full_url)
+            if "corporate-announcements" in request.full_url:
+                return FakeResponse(b"[]")
+            return FakeResponse(b"<html>nse</html>")
+
+        client = NseAnnouncementsClient(
+            opener=opener,
+            warm_session=True,
+            requests_per_second=1000,
+            sleeper=lambda _delay: None,
+        )
+        payload = client.fetch_day(date(2026, 8, 14))
+        self.assertEqual(payload, [])
+        self.assertEqual(len(requested), 2)
+        self.assertTrue(requested[0].rstrip("/").endswith("www.nseindia.com"))
+        self.assertIn("corporate-announcements", requested[1])
+
+    def test_nse_client_retries_403_after_rewarm(self):
+        requested = []
+        api_calls = {"n": 0}
+
+        def opener(request, timeout=None):
+            requested.append(request.full_url)
+            if "corporate-announcements" in request.full_url:
+                api_calls["n"] += 1
+                if api_calls["n"] == 1:
+                    raise HTTPError(
+                        request.full_url,
+                        403,
+                        "Forbidden",
+                        None,
+                        BytesIO(b""),
+                    )
+                return FakeResponse(b"[]")
+            return FakeResponse(b"<html>nse</html>")
+
+        client = NseAnnouncementsClient(
+            opener=opener,
+            warm_session=True,
+            requests_per_second=1000,
+            sleeper=lambda _delay: None,
+        )
+        payload = client.fetch_day(date(2026, 8, 14))
+        self.assertEqual(payload, [])
+        self.assertEqual(api_calls["n"], 2)
+        self.assertGreaterEqual(len(requested), 4)
 
     def test_universe_keeps_only_eq_series(self):
         temporary = TemporaryDirectory()
