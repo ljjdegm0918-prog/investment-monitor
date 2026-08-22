@@ -264,6 +264,10 @@ sources:
     label: Google News (NL)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=nl); may be loosely related / break without notice
+  - name: afm_nl
+    label: AFM inside-information register
+    source_type: filings
+    enabled: true          # official public MAR Article 17 register; strict total/page reconciliation
   - name: eqs_nl
     label: EQS News (NL)
     source_type: filings
@@ -385,9 +389,9 @@ sources:
     source_type: news
     enabled: true                 # key-free RSS; hl=en&gl=IN&ceid=IN:en
   - name: wiener_boerse_news
-    label: Wiener Börse news
+    label: Wiener Börse Ad-hoc News
     source_type: filings
-    enabled: true                 # honest stub: no stable key-free issuer-news endpoint (AT-1 2026-08-15)
+    enabled: true                 # official public rolling archive; 30-day Ad-hoc coverage, strict pagination
   - name: yahoo_at
     label: Yahoo Finance AT
     source_type: news

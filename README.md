@@ -12,11 +12,11 @@ Investment Monitor 是一个以列表为中心的本地金融信息监控工作�
 
 | 地区 | 国家 / 参考场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
 |---|---:|---|---|---|
-| 美洲 | 3 / 31 | 0 live、2 partial、1 stub | 1 live、1 partial、1 stub | 加拿大 CSE/NEO 与官方 SEDAR+ 完整性；墨西哥 BMV 稳定接口；美国 OTC/Pink |
-| 欧洲 | 19 / 44 | 12 live、2 partial、5 stub | 9 live、4 partial、5 stub、1 unavailable | AT/CH/HU/IL/MX 的证券主数据；NO/PT 等法定披露；RU 仅只读 |
-| 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 unavailable | 日本股票全目录/PTS；新加坡官方公告；香港/台湾完整证券目录 |
+| 美洲 | 3 / 31 | 2 partial、1 stub | 2 live、1 partial | 加拿大 SEDAR+ 完整性/NEO；墨西哥官方证券目录；美国 OTC/Pink |
+| 欧洲 | 19 / 44 | 13 live、2 partial、4 stub | 12 live、6 partial、1 unavailable | CH/HU/IL/MX/SE 的证券主数据；AT/NL 等法定披露仍非全文件；RU 仅只读 |
+| 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 partial | 日本股票全目录/PTS；SGXNET 全市场发现；香港/台湾完整证券目录 |
 
-全局自动报告当前为：证券目录 **14 live、7 partial、6 stub、1 unavailable**；公司披露 **15 live、5 partial、6 stub、2 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、13 unknown、12 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
+全局自动报告当前为：证券目录 **15 live、7 partial、5 stub、1 unavailable**；公司披露 **19 live、8 partial、1 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、14 unknown、11 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
 
 本 PR 已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
 
@@ -232,14 +232,15 @@ CA feed 软去重只做关联、不删除来源行：Filing 优先使用 canonic
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free, unofficial WP API — may change; partial Dutch-issuer coverage; empty for issuers not on the platform; NOT an AFM official feed). AFM registers and Euronext announcement pages/APIs are not wired (no stable key-free JSON; Euronext web services are paid). NL-4 re-verified (2026-08-10): AFM registers are HTML-only, Euronext announcement pages use Drupal antibot and the guessed JSON endpoint 404s — no second free disclosure source. Needs ISIN from the NL universe cache or a typed Dutch ISIN. |
+| afm_nl | filings | none | AFM 官方 MAR Article 17 内幕信息登记册。调用官网公开 `PagedRegisters` HTML 端点，按 `DD-MM-YYYY` 日期窗读取，逐页核验 50 条 page size、active page、总数、唯一 AFM ID、日期边界和结构；只有明确 total=0 才是 empty。未匹配法定名称进入 pending，不能冒充荷兰全部年度报告/招股书/OAM 文件。 |
+| eqs_nl | filings | none | EQS News JSON by Dutch ISIN (key-free unofficial WP API, Tier 3 supplement); needs ISIN from the NL universe cache or a typed Dutch ISIN. It remains partial and is never labelled AFM/official regulatory coverage. |
 | nl_universe | breadth cache | none | Euronext live all-stocks CSV filtered to Amsterdam segment rows (key-free; live 2026-08-10: ~119 `Euronext Amsterdam` + ~16 multi-venue rows mentioning Amsterdam, e.g. `Euronext Amsterdam, Brussels`; non-Amsterdam boards, Global Equity Market, Trading After Hours and EuroTLX excluded); not a complete national universe; never enters the feed. |
 | yahoo_nl | news | none | Yahoo Finance NL public RSS (`region=NL`, `lang=nl-NL` + `en-US` merged); `.AS` at request time; may be loosely related and break without notice |
 | google_news_nl | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=nl&gl=NL&ceid=NL:nl`); may be loosely related and break without notice |
 
 `market=nl` 公司使用规范根 ticker（`ASML` / `ASML.AS` / `ASML-AMS` 均存为 `ASML`；交易所后缀 `.AS` / `.AMS` / `.AEA` 在添加时剥离，荷兰 ISIN 原样保留，board 可用时写入 `exchange`）并保持 unmapped；`nl_universe_name_map()` 为 add-company 回填 name、board 与 ISIN。Finnhub **仅 US**，不对 NL 查询。News 来自 `yahoo_nl` / `google_news_nl`。
 
-NL feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_nl` / `google_news_nl` news 跨源按 ticker + Amsterdam day（`Europe/Amsterdam`）+ normalized title 配对。`eqs_nl` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Amsterdam day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on …"；总数与分页大小永不缩减。
+NL feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_nl` / `google_news_nl` news 跨源按 ticker + Amsterdam day（`Europe/Amsterdam`）+ normalized title 配对。AFM 优先使用官方登记编号，EQS 使用自身平台 ID；无原生 ID 时才允许受信来源按 ticker + Amsterdam day + normalized title 回退。每行保留在 feed 中并标注 "Also seen on …"；总数与分页大小永不缩减。
 
 ### 意大利数据源（IT）
 
@@ -462,17 +463,21 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - 市场代码：`at`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@AT` 与 Yahoo 后缀 `.VI` 均可导入。
 - **披露主链**：`wiener_boerse_news` 分页读取 Wiener Börse 官方
-  `/en/news-1/`，解析 Ad-hoc/Corporate News，保存官方页面与原始 HTML
-  证据；这是交易所新闻档案覆盖，不宣称等同完整 OAM 文件库。
-- **可交易宇宙（边界 stub）**：官方无稳定免 key 目录端点，`refresh` 抛
-  `AtUniverseError`；只读取手工放置的
-  `.cache/investment_monitor/at_universe.json`（若存在）。**无 ATX 或任何
-  手写种子冒充全宇宙**；缓存永不进 feed。
+  `/en/news-1/`，只保留 issuer `Ad-hoc News`，排除交易所编辑内容和董事交易；
+  支持非数字 `c93603[file]` ID，严格核验总 hits、25 条分页、倒序、重页与
+  30 日日期边界。保存官方文件 URL 与原始 HTML；这是滚动 Ad-hoc 档案，不
+  宣称等同完整奥地利 OAM 文件库或 2008 年以来全历史。
+- **可交易宇宙**：`refresh_at_universe()` 读取 Wiener Börse 官方服务端渲染
+  companies list，保存 ISIN、发行人、国家、市场、板块、证券类型与 profile；
+  排除外国 `global market` 便利交易和基金/证书。官网表不发布 ticker，因此
+  默认以 ISIN 为诚实主键；可用 `AT_UNIVERSE_OVERLAY_PATH`（schema
+  `at_universe_overlay/v1`）追加经审核 ticker 与更名别名，绝不臆造代码。
 - **新闻**：`yahoo_at`（`.VI` 后缀，`de-AT` + `en-US` 双查）与
   `google_news_at`（`hl=de&gl=AT&ceid=AT:de`），免 key RSS，可能松散相关。
   **Finnhub 永不查 at。**
 - **第二源（AT-4 锁死）**：EQS Austria 样本空记录，暂不接第二披露源。
-- **软去重**：披露 filing 行永不跨源标注；AT 新闻在
+- **软去重**：Wiener filing 优先 opaque file ID，再回退 ticker/ISIN + Vienna
+  当地日 + 规范标题；AT 新闻在
   Yahoo↔Google 间按 ticker + Vienna 日 + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
@@ -679,9 +684,9 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - **季度覆盖对表工具**：`PYTHONPATH=src python -m investment_monitor.catalog_diff`
   可把当前静态 benchmark 与 `docs/ibkr_catalog_snapshot.json` 比较；该工具仅供
   离线发现范围变化，不是运行时依赖，也不调用账号/API。
-- **薄国结论（2026-08-16 live 复验）**：NO/PT 已有 Euronext Live CSV
-  官方宇宙（保持 live）；AT Wiener Börse 仅 HTML、MX 候选全 404、
-  IL TASE/MAYA 400/403 WAF、HU BSE 无结构化导出——均锁 stub，不假 LIVE。
+- **薄国结论（2026-08-16 历史复验）**：当时 NO/PT 已有 Euronext Live CSV，
+  AT/MX/IL/HU 尚锁 stub；这些结论已被后续官方连接器批次逐项更新，不能作为
+  当前状态读取。当前状态以顶部自动覆盖表和各市场专节为准。
 
 ## 1.8 零注册免费扫尾（Z，2026-08-16）
 
@@ -694,8 +699,9 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - **公开 ETF 目录**：未发现新的免 key 官方静态文件（LSE/HKEX/ASX SPA、
   JPX/BME 404、GPW 不稳）；七国 ETF 状态维持 unknown，第三方候选行出现
   才转 partial。不申请 EODHD/新 key。
-- **薄国**：无新稳免 key 源，AT/MX/IL/HU 继续锁 stub；NO/PT 保持已有
-  Euronext live。
+- **薄国（当时结论）**：2026-08-16 曾把 AT/MX/IL/HU 锁为 stub；后续批次
+  已分别接入可验证的官方边界。本节保留历史决策时间点，当前状态以顶部自动
+  覆盖表和各市场专节为准。
 - **文档**：`docs/MARKET_COVERAGE_OUT_OF_SCOPE_ZH.md`（范围外清单）与
   `docs/MARKET_DATA_FREE_VS_PAID_ZH.md`（免费 vs 付费短表）入库。
 - **禁止项**：不注册账号、不申请 key、不用 Playwright、不把新闻标成

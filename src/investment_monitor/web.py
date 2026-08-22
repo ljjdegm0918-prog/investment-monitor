@@ -83,6 +83,7 @@ from .universe.es_universe import es_universe_name_map
 from .universe.sg_universe import load_sg_universe, sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
 from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
+from .universe.at_universe import at_universe_name_map, refresh_at_universe
 from .universe.se_universe import se_universe_name_map
 from .universe.aq_universe import aq_universe_name_map
 from .universe.cxe_universe import cxe_universe_name_map
@@ -1303,8 +1304,11 @@ class WebApplication:
             from .universe.pt_universe import pt_universe_name_map
             return pt_universe_name_map()
         if market == MARKET_AT:
-            from .universe.at_universe import at_universe_name_map
-            return at_universe_name_map()
+            return _warm_universe_on_first_add(
+                market,
+                at_universe_name_map,
+                refresh_at_universe,
+            )
         if market == MARKET_IN:
             from .universe.in_universe import in_universe_name_map
             return in_universe_name_map()

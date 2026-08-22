@@ -195,21 +195,13 @@ class MarketNLDisclosureFollowupTests(unittest.TestCase):
 
         self.assertIsNotNone(registry.factory_for("eqs_nl"))
 
-    def test_no_second_nl_disclosure_connector_is_registered(self) -> None:
-        """Lock the NL-4 D2 spike decision.
-
-        NL-4 re-verified (2026-08-10): AFM registers are HTML-only with no
-        stable key-free JSON, Euronext announcement pages are Drupal
-        antibot HTML and the guessed JSON endpoint 404s, and Euronext web
-        services are paid. EQS News (NL) by Dutch ISIN stays the only wired
-        NL disclosure source. Remove this test when a real second source
-        lands.
-        """
+    def test_official_afm_is_registered_without_fake_euronext_source(self) -> None:
+        """AFM public paged HTML is official; guessed Euronext feeds stay out."""
         registry = create_default_registry()
 
         names = registry.registered_names
+        self.assertIn("afm_nl", names)
         for blocked_name in (
-            "afm_nl",
             "euronext_nl_announcements",
             "eqs_nl_alt",
         ):

@@ -258,6 +258,12 @@ from .sources.eqs_nl import (
     EqsNlError,
     EqsNlRequestError,
 )
+from .sources.afm_nl import (
+    AfmNlClient,
+    AfmNlConnector,
+    AfmNlDataError,
+    AfmNlRequestError,
+)
 from .sources.eqs_it import (
     EqsItClient,
     EqsItConnector,
@@ -818,6 +824,10 @@ __all__ = [
     "EqsNlDataError",
     "EqsNlError",
     "EqsNlRequestError",
+    "AfmNlClient",
+    "AfmNlConnector",
+    "AfmNlDataError",
+    "AfmNlRequestError",
     "EqsItClient",
     "EqsItConnector",
     "EqsItDataError",

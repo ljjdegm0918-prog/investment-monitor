@@ -159,6 +159,8 @@ class WebRepositoryTests(unittest.TestCase):
             "yahoo_de": "Germany",
             "google_news_de": "Germany",
             "eqs_nl": "Netherlands",
+            "afm_nl": "Netherlands",
+            "wiener_boerse_news": "Austria",
             "yahoo_nl": "Netherlands",
             "google_news_nl": "Netherlands",
             "eqs_it": "Italy",
@@ -191,10 +193,10 @@ class WebRepositoryTests(unittest.TestCase):
                 name=name,
                 label=name,
                 source_type="filings" if name in {
-                    "eqs_dgap", "eqs_nl", "eqs_it", "cnmv_hr",
+                    "eqs_dgap", "afm_nl", "eqs_nl", "eqs_it", "cnmv_hr",
                     "bme_relevant_facts", "sgx_announcements", "fsma_stori",
                     "be_second_disclosure", "eqs_ch", "six_official_notices",
-                    "gpw_espi", "fi_oam",
+                    "gpw_espi", "fi_oam", "wiener_boerse_news",
                 } else "news",
                 enabled=True,
             )

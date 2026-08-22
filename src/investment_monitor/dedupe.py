@@ -38,9 +38,9 @@ on ticker + Paris day + normalized title. For DE, the only wired disclosure
 source is eqs_dgap, which pairs on its stable EQS news id, or on a
 source-scoped title fallback (ticker + Berlin day + normalized title); DE
 news (yahoo_de / google_news_de) pairs across sources on ticker + Berlin day
-+ normalized title. For NL, the only wired disclosure source is eqs_nl,
-which pairs on its stable EQS news id, or on a source-scoped title fallback
-(ticker + Amsterdam day + normalized title); NL news (yahoo_nl /
++ normalized title. For NL, AFM filings pair on the official register id and
+EQS rows on their platform id, with a conservative Amsterdam-day title
+fallback; NL news (yahoo_nl /
 google_news_nl) pairs across sources on ticker + Amsterdam day + normalized
 title. For IT, the only wired disclosure source is eqs_it, which pairs on
 its stable EQS news id, or on a source-scoped title fallback (ticker + Rome
@@ -83,8 +83,8 @@ For India (in), the NSE disclosure source pairs on its stable seq_id
 and IN news (yahoo_in / google_news_in) pairs across sources on
 ticker + Kolkata day + normalized title.
 
-For Austria (at) the disclosure primary chain is an honest stub
-(no rows are produced), so no filing pairing exists yet; AT news
+For Austria (at), Wiener Börse filings pair on the official opaque file id,
+with a Vienna-day title fallback; AT news
 (yahoo_at / google_news_at) pairs across sources on ticker + Vienna
 day + normalized title.
 
@@ -200,6 +200,7 @@ FILING_SOURCE_PRIORITY = {
     "amf_oam": 10,
     "eqs_dgap": 11,
     "eqs_nl": 12,
+    "afm_nl": 10,
     "eqs_it": 13,
     "cnmv_hr": 14,
     "bme_relevant_facts": 15,
@@ -209,6 +210,7 @@ FILING_SOURCE_PRIORITY = {
     "bse_india_announcements": 20,
     "mops_disclosures": 21,
     "bse_hu_announcements": 22,
+    "wiener_boerse_news": 23,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -329,6 +331,7 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_de": "Yahoo Finance DE",
     "google_news_de": "Google News (DE)",
     "eqs_nl": "EQS News (NL)",
+    "afm_nl": "AFM inside-information register",
     "yahoo_nl": "Yahoo Finance NL",
     "google_news_nl": "Google News (NL)",
     "eqs_it": "EQS News (IT)",
@@ -573,9 +576,7 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         document_id = str(item.get("external_id") or "").strip()
         return f"hu:filing:{source}:{document_id}" if document_id else None
     if market == "at":
-        # Disclosure primary chain is an honest stub (no rows produced);
-        # a stray filing row must never be cross-annotated.
-        return None
+        return _at_filing_key(item)
     if market in ("no", "pt"):
         # Disclosure primary chains are honest stubs (no rows produced);
         # a stray filing row must never be cross-annotated.
@@ -772,25 +773,54 @@ def _de_filing_key(item: Mapping[str, Any]) -> Optional[str]:
 
 
 def _nl_filing_key(item: Mapping[str, Any]) -> Optional[str]:
-    """NL filings pair on the stable EQS news id, or a title fallback.
-
-    ``eqs_nl`` is the only wired NL disclosure source; its news id
-    (``external_id``) is the primary identity. Without one, the fallback is
-    source-scoped (source + ticker + Amsterdam day + normalized title), so a
-    hypothetical second NL disclosure source is never cross-annotated by
-    title.
-    """
+    """NL filings use the authority-native id before title fallback."""
     source = str(item.get("source") or "")
+    metadata = item.get("raw_metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    if source == "afm_nl":
+        afm_id = str(
+            metadata.get("afm_record_id")
+            or metadata.get("official_source_id")
+            or item.get("external_id")
+            or ""
+        ).strip().upper()
+        if afm_id:
+            return f"nl:filing:afm:{afm_id}"
     document_id = str(item.get("external_id") or "").strip()
-    if document_id:
+    if source == "eqs_nl" and document_id:
         return f"nl:filing:eqs:{document_id}"
     title = normalize_title(item.get("title"))
     day = _local_day(item, AMSTERDAM)
-    if title and day:
+    ticker = str(item.get("ticker") or "").strip().upper()
+    if source in {"afm_nl", "eqs_nl"} and ticker and title and day:
         return (
-            f"nl:filing:title:{source}:"
-            f"{item.get('ticker')}:{day}:{title}"
+            f"nl:filing:similar:{ticker}:{day}:{title}"
         )
+    return None
+
+
+def _at_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """AT filings pair on Wiener Börse's opaque official file id."""
+    source = str(item.get("source") or "")
+    if source != "wiener_boerse_news":
+        return None
+    metadata = item.get("raw_metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    document_id = str(
+        metadata.get("wiener_file_id")
+        or metadata.get("official_source_id")
+        or item.get("external_id")
+        or ""
+    ).strip()
+    if document_id:
+        return f"at:filing:wiener:{document_id}"
+    ticker = str(item.get("ticker") or "").strip().upper()
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, VIENNA)
+    if ticker and title and day:
+        return f"at:filing:title:{ticker}:{day}:{title}"
     return None
 
 

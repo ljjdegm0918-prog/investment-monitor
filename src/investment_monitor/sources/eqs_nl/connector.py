@@ -49,6 +49,7 @@ class EqsNlConnector:
             else nl_universe_name_map()
         )
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self.last_collection_status = "empty"
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
@@ -73,6 +74,7 @@ class EqsNlConnector:
             jobs.append((code, isin))
         if not jobs:
             self._last_errors = tuple(failures)
+            self.last_collection_status = "unavailable" if failures else "empty"
             return []
 
         collected_at = datetime.now(timezone.utc)
@@ -94,6 +96,7 @@ class EqsNlConnector:
                 )
                 if len(request.tickers) == 1:
                     self._last_errors = tuple(failures)
+                    self.last_collection_status = "unavailable"
                     raise EqsNlRequestError(message) from error
                 continue
             for record in records:
@@ -144,6 +147,11 @@ class EqsNlConnector:
                                 ),
                             ),
                             "provider": "eqs_news",
+                            "source_tier": 3,
+                            "source_tier_label": "distribution_platform",
+                            "official_document": False,
+                            "officiality": "supplementary_distribution_platform",
+                            "coverage_level": "partial_dutch_issuer_distribution",
                             "stock_code": code,
                             "isin": isin,
                             "category": record.get("category"),
@@ -156,6 +164,11 @@ class EqsNlConnector:
                     )
                 )
         self._last_errors = tuple(failures)
+        self.last_collection_status = (
+            "partial" if failures and items else
+            "unavailable" if failures else
+            "success" if items else "empty"
+        )
         return items
 
     def _isin_for(self, code: str) -> Optional[str]:

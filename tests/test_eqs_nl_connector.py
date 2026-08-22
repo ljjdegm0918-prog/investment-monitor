@@ -119,6 +119,7 @@ class EqsNlConnectorTests(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertEqual(opener.requested, [])
         self.assertEqual(connector.last_errors, (("ASML", "no_universe_isin"),))
+        self.assertEqual(connector.last_collection_status, "unavailable")
 
     def test_nl_typed_isin_collects_records(self) -> None:
         connector, opener = self.make_connector()
@@ -138,6 +139,9 @@ class EqsNlConnectorTests(unittest.TestCase):
             first.raw_metadata["provider"], "eqs_news"
         )
         self.assertEqual(first.raw_metadata["isin"], "NL0000235190")
+        self.assertEqual(first.raw_metadata["source_tier"], 3)
+        self.assertFalse(first.raw_metadata["official_document"])
+        self.assertEqual(connector.last_collection_status, "success")
         self.assertIn("isin=NL0000235190", opener.requested[0])
         payload = json.loads(
             (FIXTURES / "eqs_airbus.json").read_text(encoding="utf-8")
@@ -188,6 +192,7 @@ class EqsNlConnectorTests(unittest.TestCase):
 
         self.assertEqual(len(connector.last_errors), 1)
         self.assertEqual(connector.last_errors[0][0], "ASML")
+        self.assertEqual(connector.last_collection_status, "unavailable")
 
     def test_registry_registers_eqs_nl_without_secret_field(self) -> None:
         registry = create_default_registry()

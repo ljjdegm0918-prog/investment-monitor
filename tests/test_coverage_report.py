@@ -42,10 +42,9 @@ class CoverageReportTests(unittest.TestCase):
         gb = self.rows["GB"]
         self.assertEqual(gb["disclosure"], "live")
 
-        for code in ("AT",):
-            row = self.rows[code]
-            self.assertEqual(row["universe"], "stub")
-            self.assertEqual(row["disclosure"], "stub")
+        at = self.rows["AT"]
+        self.assertEqual(at["universe"], "live")
+        self.assertEqual(at["disclosure"], "partial")
 
         ru = self.rows["RU"]
         self.assertNotIn("trading_status", ru)
@@ -56,17 +55,13 @@ class CoverageReportTests(unittest.TestCase):
         self.assertIn("research-only", ru["notes"])
 
     def test_boundary_stubs_are_never_live(self):
-        for code in ("AT",):
-            self.assertEqual(
-                self.rows[code]["disclosure"], "stub", f"{code} disclosure"
-            )
-        for code in ("AT", "CH", "HU", "IL", "MX", "SE", "SG"):
+        for code in ("CH", "HU", "IL", "MX", "SE", "SG"):
             self.assertNotEqual(self.rows[code]["universe"], "live", code)
 
     def test_all_disclosure_statuses_use_the_canonical_market_key(self):
         expected = {
             "CA": "partial", "MX": "live", "US": "live",
-            "AT": "stub", "BE": "live", "CH": "partial",
+            "AT": "partial", "BE": "live", "CH": "partial",
             "DE": "partial", "EE": "live", "ES": "live",
             "FR": "live", "GB": "live", "HU": "partial",
             "IL": "live", "IT": "partial", "LT": "live",
@@ -102,7 +97,7 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(self.rows["RU"]["news"], "unavailable")
 
     def test_phase5_thin_country_notes_are_locked(self):
-        self.assertIn("stub", self.rows["AT"]["notes"])
+        self.assertIn("rolling", self.rows["AT"]["notes"])
         for code in ("MX", "IL", "PT"):
             self.assertEqual(self.rows[code]["disclosure"], "live", code)
         self.assertIn("partial", self.rows["HU"]["notes"])

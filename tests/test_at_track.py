@@ -1,4 +1,4 @@
-"""Austria stub/news/dedupe tests."""
+"""Austria official disclosure, news, and dedupe tests."""
 
 from datetime import date, datetime, timezone
 import unittest
@@ -82,7 +82,7 @@ class AustriaTests(unittest.TestCase):
         for name in ("wiener_boerse_news", "yahoo_at", "google_news_at"):
             self.assertIn(name, registry.registered_names)
 
-    def test_dedupe_news_pairs_and_stub_filing_never_annotates(self):
+    def test_dedupe_news_pairs_and_official_filing_uses_native_id(self):
         annotated = annotate_feed_items([
             {
                 "source": "yahoo_at", "source_type": "news", "market": "at",
@@ -102,7 +102,7 @@ class AustriaTests(unittest.TestCase):
             "market": "at", "ticker": "VOE", "title": "x",
             "external_id": "at:1", "published_at": "2026-08-14T09:00:00+00:00",
         }
-        self.assertIsNone(dedupe_key(filing))
+        self.assertEqual(dedupe_key(filing), "at:filing:wiener:at:1")
 
 
 if __name__ == "__main__":

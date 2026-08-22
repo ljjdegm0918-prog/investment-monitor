@@ -1,4 +1,4 @@
-# 独立全球市场信息覆盖现状与缺口（2026-08-22）
+# 独立全球市场信息覆盖现状与缺口（2026-08-23）
 
 ## 1. 结论
 
@@ -8,10 +8,10 @@
 
 当前自动报告结果：
 
-- 股票/证券目录：14 live、7 partial、6 stub、1 unavailable。
-- 公司披露：19 live、6 partial、1 stub、2 unavailable。
+- 股票/证券目录：15 live、7 partial、5 stub、1 unavailable。
+- 公司披露：19 live、8 partial、1 unavailable。
 - 新闻：27 live、1 unavailable；这里表示已配置 Yahoo/Google News 查询链，不保证新闻穷尽性。
-- ETF 目录：3 live（美国、德国、日本）、13 unknown、12 unavailable。
+- ETF 目录：3 live（美国、德国、日本）、14 unknown、11 unavailable。
 - ETF 专属发行人披露：28 个国家全部 unavailable。公司公告不能冒充基金招募书、份额变更、指数或分红文件。
 
 “live”只表示项目已有可运行的官方接口、解析器和离线测试；不表示免费源承诺永久 SLA，也不表示覆盖清单等于任何经纪商的可交易证券清单。
@@ -33,7 +33,7 @@
 | CA 加拿大 | ALPHA, AEQLITN, AEQLITL, CHIXCA, LYNX, OMEGA, CSE, TSE, VENTURE | partial | partial | live | unavailable | unavailable | 官方 TMX TSX/TSXV + CSE 官网全证券 JSON；CSE 官方逐发行人 filing mirror、公司 IR 与双重上市 EDGAR 补漏已接，CEO.ca 仅 Tier 4；SEDAR+ 全国主链与 NEO/ATS 全量仍未完成，评级上限 high。 |
 | MX 墨西哥 | MEXI | stub | live | live | unavailable | unavailable | BMV 官方 Eventos Relevantes 滚动公告已接并严格分页；完整定期财务/XBRL 登录产品未接入。 |
 | US 美国 | ARCA, ARCAEDGE, BATS, CHX, DRCTEDGE, EDGEA, IEX, ISLAND, ISE, KNIGHT, LTSE, MEMX, PEARL, NASDAQ, BEX, PSX, NYSE, NSX, NYSENAT, AMEX, PINK | partial | live | live | live | unavailable | Nasdaq Trader 覆盖交易所上市股票/ETF，SEC 补 CIK；OTC/Pink 完整性未证明，路由 venue 不是独立发行人目录。 |
-| AT 奥地利 | VSE | stub | stub | live | unavailable | unavailable | 维也纳交易所目前仅稳定取得 HTML 展示，未找到稳定免 key 导出。 |
+| AT 奥地利 | VSE | live | partial | live | unknown | unavailable | Wiener Börse 官方公司目录已接（无 ticker 时用 ISIN，可选审核 overlay）；官方 Ad-hoc News 严格分页与 opaque ID 已接，但滚动档案不等于完整 OAM/全历史。 |
 | BE 比利时 | BATEEN, CHIXEN, ENEXT.BE, TRQXEN | live | live | live | unknown | unavailable | Euronext Brussels 股票 CSV + FSMA STORI；MTF 场所依赖主上市证券映射。 |
 | CH 瑞士 | BATECH, CHIXCH, EBS, TRQXCH, VIRTX | stub | partial | live | unavailable | unavailable | SIX 完整参考数据偏商业授权/SPA；EQS 只能提供部分披露，不能证明法定披露完整。 |
 | DE 德国 | BATEDE, CHIXDE, FWB, GETTEX, SWB, TGATE, TRQXDE, IBIS | live | partial | live | live | unavailable | Xetra 全可交易 CSV 含股票/ETF/ETN/ETC；其他德国场所及 EQS 披露不能证明全量。 |
@@ -46,7 +46,7 @@
 | IT 意大利 | BVME | live | partial | live | unknown | unavailable | Euronext Milan 股票 CSV 已接；EQS 披露只是补充源；ETF 未单独验证。 |
 | LT 立陶宛 | N.VILNIUS | live | live | live | unknown | unavailable | Nasdaq Baltic 官方证券表与公告已接；ETF 分类仍未单独验证。 |
 | LV 拉脱维亚 | N.RIGA | live | live | live | unknown | unavailable | Nasdaq Baltic 官方证券表与公告已接；ETF 分类仍未单独验证。 |
-| NL 荷兰 | BATEEN, CHIXEN, AEB, TRQXEN | live | partial | live | unknown | unavailable | Euronext Amsterdam 股票 CSV 已接；EQS 非完整法定源；ETF 动态列表待接。 |
+| NL 荷兰 | BATEEN, CHIXEN, AEB, TRQXEN | live | partial | live | unknown | unavailable | Euronext Amsterdam 股票 CSV + AFM 官方 MAR Article 17 登记册已接并按总数分页对账；EQS 仅补充。年度报告/招股书等其他法定文件与 ETF 动态列表仍待接。 |
 | NO 挪威 | OSE | live | live | live | unknown | unavailable | NewsWeb 官方 list/detail/attachment 已接，覆盖 Oslo 各市场并对 overflow 拆窗；单日溢出失败关闭。 |
 | PL 波兰 | WSE | live | live | live | unknown | unavailable | GPW 目录和 ESPI 披露已接；ETF 分类仍未单独验证。 |
 | PT 葡萄牙 | BVL | live | live | live | unknown | unavailable | Euronext Lisbon canonical 官方档案已接并限定 Filing 类别；CMVM 未接入。 |
@@ -90,7 +90,7 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 1. **Euronext ETF 官方列表。** 官方页面覆盖 Amsterdam、Brussels、Milan、Oslo、Paris 等地点，但当前为动态列表；应先找到稳定官方数据端点或可验证导出，再接入 FR/BE/NL/IT/NO/PT，不能直接依赖脆弱 DOM。
 2. **JPX 股票全目录。** 继续寻找 JPX 官方日更列表或授权下载；若只能获得 PDF/网页分片，需要建立分页完整性和退市处理，不能以 ETF 页代替股票页。
 3. **加拿大缺口。** CSE 官方目录与 filing mirror 已接；下一步是扩大 TSX/TSXV issuer IR 审核配置、寻找 NEO/ATS 免费官方参考数据，并继续用人工 SEDAR+ 抽样量化缺口。没有许可时不构建 SEDAR+ 自动主链。
-4. **SG/IL/CH/SE/AT/HU/MX。** SG 已有 third-party partial；StockAnalysis 等公开目录可作为其余市场的候选发现层，但含跨上市、口径变化且无完整性 SLA。质量优先时只能保持 partial，或购买/申请 SIX、交易所及授权供应商数据。
+4. **SG/IL/CH/SE/HU/MX。** SG 已有受审 IR/known-link/EDGAR 补充；其他市场若只能依赖聚合目录，仍需保持 partial，或购买/申请 SIX、交易所及授权供应商数据。AT 已改用 Wiener Börse 官方目录，不再列为 stub。
 5. **ETF 发行人披露。** 按高持仓市场逐个接入交易所/基金管理人正式文件；这是独立项目，不宜用公司披露源自动推断。
 
 ## 8. 仍然无法完成的部分与所需条件
@@ -99,7 +99,7 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 |---|---|---|
 | WAF、SPA、需要浏览器令牌 | CA SEDAR+、SGX 全市场枚举、UOB ListedCompany、部分 SE 等 | CSE/Singtel/OCBC 等免费可达源已补 partial；要升为全国/全市场完整仍需公开 API/授权或供应商，不能靠 token 重放、挑战绕过或无限重试 |
 | 商业参考数据许可 | CH/SIX、部分 venue 级证券主数据 | 购买许可，或寻找允许再利用的正规第三方目录；不接经纪商账号 |
-| 没有稳定结构化导出 | AT、HU、MX、PT 等 | 与交易所确认 API/文件；否则只保留 stub，禁止假全量 |
+| 没有完整机器合同或全历史 | HU、MX、PT，以及 AT 完整 OAM 历史 | 与交易所/监管机构确认 API/文件；当前可用公开源只按已验证边界运行，禁止假全量 |
 | ETF 法律文件分散在发行人 | 28 国 | 按发行人/监管体系建设专门 connector，接受需要授权或付费源 |
 | 信息取得与使用受制裁/许可影响 | RU 等 | 只接许可允许的官方研究数据；不实现交易，也不通过技术规避法律或来源限制 |
 

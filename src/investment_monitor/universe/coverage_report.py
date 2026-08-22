@@ -12,8 +12,8 @@ The report is derived automatically from the repo's existing facts:
                   ETF candidate rows exist, else unavailable);
 * source_tier_summary — official > mixed > third_party > none.
 
-Statuses are honest: remaining boundary stubs (AT disclosure,
-AT/CH/HU/IL/MX/SE/SG universes) are never upgraded to live.
+Statuses are honest: remaining boundary stubs (CH/HU/IL/MX/SE/SG universes)
+are never upgraded to live.
 The report never flows into information_items / the daily feed.
 """
 
@@ -30,11 +30,11 @@ from .exchange_catalog import (
 from .global_equity_reference import etf_candidates_for
 
 # 显式边界 stub（对应各轨 spike 结论；禁止标 live）。
-UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se"})
+UNIVERSE_BOUNDARY_STUBS = frozenset({"ch", "hu", "il", "mx", "se"})
 # 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
 UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg"})
-DISCLOSURE_BOUNDARY_STUBS = frozenset({"at"})
-DISCLOSURE_PARTIAL = frozenset({"ca", "ch", "de", "hu", "it", "nl", "sg"})
+DISCLOSURE_BOUNDARY_STUBS = frozenset()
+DISCLOSURE_PARTIAL = frozenset({"at", "ca", "ch", "de", "hu", "it", "nl", "sg"})
 DISCLOSURE_UNAVAILABLE = frozenset({"ru"})
 
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
@@ -46,12 +46,13 @@ MARKET_NOTES = {
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
     "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
-    "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
+    "AT": "Wiener Börse official server-rendered Austrian equity directory and rolling Ad-hoc News archive are wired; ticker-less rows use ISIN unless a reviewed overlay supplies a symbol, and disclosure stays partial because the rolling archive is not the complete Austrian OAM history",
     "MX": "BMV public Eventos Relevantes bulletin is wired; periodic financial/XBRL archives remain a paid product and the official universe is unavailable",
     "IL": "MAYA official per-company reports API is wired with strict total-count pagination and Hebrew originals; no market-wide issuer directory/feed is claimed",
     "HU": "BSE official session/CSRF archive pagination is wired with a bounded page limit; older windows may be partial, and the official ticker universe remains unavailable",
     "NO": "Euronext Oslo live CSV universe; official NewsWeb list, message detail, corrections and attachments are collected with overflow fail-closed semantics",
     "PT": "Euronext Lisbon official exchange archive is wired; CMVM is not connected without a documented, version-stable public data contract",
+    "NL": "Euronext Amsterdam official stock CSV and the AFM MAR Article 17 public register are wired with strict total/page reconciliation; EQS is supplementary, while annual reports, prospectuses and other OAM document classes are not yet complete",
 }
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
@@ -82,7 +83,7 @@ _DISCLOSURE_SOURCES: Dict[str, tuple[str, ...]] = {
     "hu": ("bse_hu_announcements",),
     "il": ("maya_announcements",),
     "it": ("eqs_it",),
-    "nl": ("eqs_nl",),
+    "nl": ("afm_nl", "eqs_nl"),
     "no": ("newsweb_no",),
     "pl": ("gpw_espi",),
     "pt": ("euronext_lisbon_news",),

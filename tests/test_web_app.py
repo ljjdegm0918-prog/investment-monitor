@@ -790,6 +790,7 @@ class WebApplicationTests(unittest.TestCase):
             ("it", "ENI", "Eni SpA", "Euronext Milan", "it"),
             ("be", "ABI", "Anheuser-Busch InBev SA/NV", "Euronext Brussels", "be"),
             ("pl", "PKO", "PKO Bank Polski SA", "GPW Main Market", "pl"),
+            ("at", "VOE", "voestalpine AG", "Wiener Börse", "at"),
         )
         for market, ticker, name, exchange, module_name in cases:
             with self.subTest(market=market):
@@ -833,6 +834,7 @@ class WebApplicationTests(unittest.TestCase):
             ("it", "ENI"),
             ("be", "ABI"),
             ("pl", "PKO"),
+            ("at", "VOE"),
         )
         for market, ticker in cases:
             with self.subTest(market=market):

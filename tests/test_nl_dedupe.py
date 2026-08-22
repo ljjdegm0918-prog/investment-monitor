@@ -115,7 +115,7 @@ class NlDedupeKeyTests(unittest.TestCase):
         self.assertEqual(dedupe_key(first), dedupe_key(second))
         self.assertTrue(dedupe_key(first).startswith("nl:filing:eqs:"))
 
-    def test_nl_filing_title_fallback_is_source_scoped(self) -> None:
+    def test_nl_filing_title_fallback_is_limited_to_trusted_sources(self) -> None:
         title = "Airbus reports Half-Year results"
         first = feed_item(
             "eqs_nl",
@@ -130,10 +130,18 @@ class NlDedupeKeyTests(unittest.TestCase):
             title=title,
         )
 
-        self.assertTrue(
-            dedupe_key(first).startswith("nl:filing:title:eqs_nl:")
+        self.assertTrue(dedupe_key(first).startswith("nl:filing:similar:"))
+        self.assertIsNone(dedupe_key(second))
+
+    def test_afm_filing_uses_official_register_id(self) -> None:
+        item = feed_item(
+            "afm_nl",
+            "afm:C2608-00947",
+            source_type="regulatory_filing",
         )
-        self.assertNotEqual(dedupe_key(first), dedupe_key(second))
+        item["raw_metadata"] = {"afm_record_id": "C2608-00947"}
+
+        self.assertEqual(dedupe_key(item), "nl:filing:afm:C2608-00947")
 
     def test_us_market_still_has_no_key(self) -> None:
         item = feed_item("sec", "sec-1", market="us")

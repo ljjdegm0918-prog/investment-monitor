@@ -84,6 +84,7 @@ from .sources.tdnet import TDnetConnector
 from .sources.edinet import EDINETConnector
 from .sources.eqs_dgap import EqsDgapConnector
 from .sources.eqs_nl import EqsNlConnector
+from .sources.afm_nl import AfmNlConnector
 from .sources.eqs_it import EqsItConnector
 from .sources.nl_news import (
     GoogleNlNewsConnector,
@@ -209,7 +210,7 @@ SOURCE_MARKETS = {
     "amf_oam": "fr", "yahoo_fr": "fr", "google_news_fr": "fr",
     "eqs_dgap": "de", "de_community": "de", "yahoo_de": "de",
     "google_news_de": "de",
-    "eqs_nl": "nl", "yahoo_nl": "nl", "google_news_nl": "nl",
+    "afm_nl": "nl", "eqs_nl": "nl", "yahoo_nl": "nl", "google_news_nl": "nl",
     "eqs_it": "it", "yahoo_it": "it", "google_news_it": "it",
     "cnmv_hr": "es", "bme_relevant_facts": "es", "yahoo_es": "es",
     "google_news_es": "es",
@@ -435,6 +436,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooFrNewsConnector.name, YahooFrNewsConnector)
     registry.register(GoogleFrNewsConnector.name, GoogleFrNewsConnector)
     registry.register(EqsDgapConnector.name, EqsDgapConnector)
+    registry.register(AfmNlConnector.name, AfmNlConnector)
     registry.register(EqsNlConnector.name, EqsNlConnector)
     registry.register(EqsItConnector.name, EqsItConnector)
     registry.register(YahooNlNewsConnector.name, YahooNlNewsConnector)
