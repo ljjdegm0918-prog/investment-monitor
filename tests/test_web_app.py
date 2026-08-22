@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from investment_monitor.application import ConfiguredCollectionResult
-from investment_monitor.pipeline import CollectionFailure
+from investment_monitor.pipeline import CollectionEvent, CollectionFailure
 from investment_monitor.web import DailyCollectionScheduler, WebApplication
 from investment_monitor.models import InformationItem
 from investment_monitor.repository import SaveResult
@@ -182,6 +182,50 @@ class WebApplicationTests(unittest.TestCase):
         self.assertEqual(payload["sources"][2]["status"], "not_connected")
         self.assertEqual(payload["sources"][3]["status"], "not_connected")
         self.assertEqual(payload["sources"][3]["type"], "Research")
+
+    def test_stub_source_empty_run_is_not_connected_in_sources_api(self) -> None:
+        (self.project_root / "config" / "settings.yaml").write_text(
+            "enabled_sources:\n  - hotcopper_au\n"
+            "database_path: ../data/web.sqlite3\n",
+            encoding="utf-8",
+        )
+        application = WebApplication(
+            self.project_root,
+            collection_runner=self.noop_collection_runner,
+        )
+        now = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
+        application.repository.record_collection_events((
+            CollectionEvent(
+                source="hotcopper_au",
+                ticker="CANARY",
+                started_at=now,
+                finished_at=now,
+                status="empty",
+                records_read=0,
+                records_written=0,
+                records_inserted=0,
+                records_updated=0,
+                duplicate_records=0,
+                error_message=None,
+                market="au",
+                requested_start_date=date(2026, 8, 1),
+                requested_end_date=date(2026, 8, 1),
+                effective_start_date=date(2026, 8, 1),
+                effective_end_date=date(2026, 8, 1),
+                coverage_kind="unknown",
+                initial_backfill=False,
+            ),
+        ))
+
+        payload = self.payload(application.handle("GET", "/api/sources"))
+        stub = next(
+            record
+            for record in payload["sources"]
+            if record["name"] == "hotcopper_au"
+        )
+        self.assertEqual(stub["status"], "stub")
+        self.assertNotEqual(stub["status"], "connected")
+        self.assertIsNone(stub["latest_success"])
 
     def test_initial_csv_does_not_restore_removed_memberships_on_restart(self) -> None:
         removed = self.application.handle(

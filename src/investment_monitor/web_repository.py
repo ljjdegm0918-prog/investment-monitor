@@ -42,6 +42,16 @@ FIXED_LISTS = (
     ("watchlist", "Watchlist", 3),
 )
 PRODUCTION_SOURCES = ("sec",)
+# 注册 stub：collect() 恒空且不发真实请求。它们即使产生 empty 运行记录，
+# 也绝不能把 UI/API 状态抬成 connected。已在本分支接通真实采集能力的
+# NewsWeb、Euronext Lisbon、Vienna、BMV、MAYA 与 Budapest 不属于此集合。
+REGISTERED_STUB_SOURCES = frozenset({
+    "hotcopper_au",
+    "lse_share_chat",
+    "yellowbrick",
+    "vic",
+    "x_community",
+})
 SOURCE_LABELS = {
     "sec": "SEC EDGAR",
     "dart": "OpenDART",
@@ -1401,24 +1411,36 @@ class WebRepository:
                 and run_row
                 and run_row["status"] == "partial"
             )
-            latest_success = (
-                (run_row["finished_at"] or run_row["started_at"])
-                if run_row and run_row["status"] in {"success", "empty"}
-                else (None if bounded_incomplete else latest_item)
-            )
-            is_stale = bool(
-                latest_success
-                and current_time.astimezone(timezone.utc)
-                - _parse_datetime(str(latest_success)).astimezone(timezone.utc)
-                > stale_after
-            )
             enabled = source.name in self._allowed_sources
             implemented = source.name in self._implemented_sources
             unavailable_reason = self._unavailable_sources.get(source.name)
+            is_stub_source = source.name in REGISTERED_STUB_SOURCES
+            latest_success = (
+                None
+                if is_stub_source or bounded_incomplete
+                else (
+                    (run_row["finished_at"] or run_row["started_at"])
+                    if run_row
+                    and run_row["status"] in {"success", "partial", "empty"}
+                    else latest_item
+                )
+            )
+            is_stale = (
+                False
+                if is_stub_source
+                else bool(
+                    latest_success
+                    and current_time.astimezone(timezone.utc)
+                    - _parse_datetime(str(latest_success)).astimezone(timezone.utc)
+                    > stale_after
+                )
+            )
             if not enabled or not implemented:
                 status = "not_connected"
             elif unavailable_reason:
                 status = "not_connected"
+            elif is_stub_source:
+                status = "stub"
             elif run_row and run_row["status"] == "failure":
                 status = "temporarily_unavailable"
             elif bounded_incomplete:
@@ -1468,55 +1490,91 @@ class WebRepository:
                 "is_stale": False,
                 "stale_after_hours": int(stale_after.total_seconds() // 3600),
             }
-        placeholders = ",".join("?" for _ in filings_sources)
-        parameters = tuple(filings_sources)
-        with self._connect() as connection:
-            items_row = connection.execute(
-                f"""
-                SELECT MAX(collected_at) AS latest
-                FROM information_items
-                WHERE source IN ({placeholders})
-                  AND source_type = 'regulatory_filing'
-                """,
-                parameters,
-            ).fetchone()
-            run_row = connection.execute(
-                f"""
-                SELECT * FROM ingestion_runs
-                WHERE source IN ({placeholders})
-                ORDER BY started_at DESC LIMIT 1
-                """,
-                parameters,
-            ).fetchone()
-            success_row = connection.execute(
-                f"""
-                SELECT MAX(finished_at) AS latest
-                FROM ingestion_runs
-                WHERE source IN ({placeholders})
-                  AND status IN ('success', 'partial', 'empty')
-                """,
-                parameters,
-            ).fetchone()
-            failure_row = connection.execute(
-                f"""
-                SELECT error_summary
-                FROM ingestion_runs
-                WHERE source IN ({placeholders})
-                  AND status IN ('failure', 'partial')
-                ORDER BY started_at DESC LIMIT 1
-                """,
-                parameters,
-            ).fetchone()
-        latest = (success_row["latest"] if success_row else None) or (
-            items_row["latest"] if items_row else None
+        real_filings_sources = tuple(
+            source
+            for source in filings_sources
+            if source not in REGISTERED_STUB_SOURCES
         )
+        stub_filings_sources = tuple(
+            source
+            for source in filings_sources
+            if source in REGISTERED_STUB_SOURCES
+        )
+        # stub 的空跑/失败不能遮蔽真实源的运行状态：latest / failure /
+        # status 判定都只看 real_filings_sources；仅当完全没有真实源时，
+        # 才用 stub 自身的最近一次运行展示 latest_attempt。
+        real_placeholders = (
+            ",".join("?" for _ in real_filings_sources)
+            if real_filings_sources
+            else ""
+        )
+        real_parameters = tuple(real_filings_sources)
+        with self._connect() as connection:
+            latest = None
+            run_row = None
+            failure_row = None
+            if real_filings_sources:
+                items_row = connection.execute(
+                    f"""
+                    SELECT MAX(collected_at) AS latest
+                    FROM information_items
+                    WHERE source IN ({real_placeholders})
+                      AND source_type = 'regulatory_filing'
+                    """,
+                    real_parameters,
+                ).fetchone()
+                success_row = connection.execute(
+                    f"""
+                    SELECT MAX(finished_at) AS latest
+                    FROM ingestion_runs
+                    WHERE source IN ({real_placeholders})
+                      AND status IN ('success', 'partial', 'empty')
+                    """,
+                    real_parameters,
+                ).fetchone()
+                latest = (success_row["latest"] if success_row else None) or (
+                    items_row["latest"] if items_row else None
+                )
+                run_row = connection.execute(
+                    f"""
+                    SELECT * FROM ingestion_runs
+                    WHERE source IN ({real_placeholders})
+                    ORDER BY started_at DESC LIMIT 1
+                    """,
+                    real_parameters,
+                ).fetchone()
+                failure_row = connection.execute(
+                    f"""
+                    SELECT error_summary
+                    FROM ingestion_runs
+                    WHERE source IN ({real_placeholders})
+                      AND status IN ('failure', 'partial')
+                    ORDER BY started_at DESC LIMIT 1
+                    """,
+                    real_parameters,
+                ).fetchone()
+            elif filings_sources:
+                placeholders = ",".join("?" for _ in filings_sources)
+                parameters = tuple(filings_sources)
+                run_row = connection.execute(
+                    f"""
+                    SELECT * FROM ingestion_runs
+                    WHERE source IN ({placeholders})
+                    ORDER BY started_at DESC LIMIT 1
+                    """,
+                    parameters,
+                ).fetchone()
         is_stale = bool(
             latest
             and current_time.astimezone(timezone.utc)
             - _parse_datetime(str(latest)).astimezone(timezone.utc)
             > stale_after
         )
-        if run_row and run_row["status"] == "failure":
+        if not real_filings_sources:
+            filings_status = (
+                "stub" if stub_filings_sources else "unavailable"
+            )
+        elif run_row and run_row["status"] == "failure":
             filings_status = "temporarily_unavailable"
         elif latest and is_stale:
             filings_status = "stale"
@@ -1526,11 +1584,12 @@ class WebRepository:
             catalog_source.name: catalog_source.label
             for catalog_source in self._source_catalog
         }
+        provider_sources = real_filings_sources or stub_filings_sources
         provider = (
             "SEC EDGAR"
-            if filings_sources == ("sec",)
+            if provider_sources == ("sec",)
             else ", ".join(
-                label_by_name.get(name, name) for name in filings_sources
+                label_by_name.get(name, name) for name in provider_sources
             )
         )
         return {

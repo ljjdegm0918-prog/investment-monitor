@@ -8,6 +8,7 @@ unreachable and EQS stays empty for Polish ISINs).
 """
 
 from datetime import date, datetime, timezone
+from http.client import IncompleteRead
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -40,6 +41,21 @@ class FakeResponse:
 
     def read(self) -> bytes:
         return self._body
+
+
+class TruncatingResponse:
+    def __init__(self, partial: bytes, expected: int = 999) -> None:
+        self._partial = partial
+        self._expected = expected
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return None
+
+    def read(self) -> bytes:
+        raise IncompleteRead(self._partial, self._expected)
 
 
 class FakeOpener:
@@ -192,6 +208,57 @@ class GpwEspiClientTests(unittest.TestCase):
         )
 
         self.assertEqual(fetched, [])
+
+    def test_incomplete_read_with_partial_html_is_usable(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        body = (FIXTURES / "komunikaty_pko.html").read_bytes()
+
+        def opener(request, timeout=None):
+            opener.requested.append(request.full_url)
+            return TruncatingResponse(body)
+
+        opener.requested = []
+        client = GpwEspiClient(
+            opener=opener,
+            requests_per_second=1000,
+            sleeper=lambda _delay: None,
+        )
+
+        fetched = client.fetch_reports(
+            "PLPKO0000016",
+            date(2026, 7, 1),
+            date(2026, 8, 10),
+        )
+
+        self.assertGreaterEqual(len(fetched), 1)
+        self.assertEqual(len(opener.requested), 1)
+
+    def test_empty_incomplete_read_retries_then_succeeds(self) -> None:
+        from investment_monitor.sources.gpw_espi.client import GpwEspiClient
+
+        body = (FIXTURES / "komunikaty_pko.html").read_bytes()
+        bodies = [TruncatingResponse(b""), FakeResponse(body)]
+
+        def opener(request, timeout=None):
+            opener.requested.append(request.full_url)
+            return bodies.pop(0)
+
+        opener.requested = []
+        client = GpwEspiClient(
+            opener=opener,
+            requests_per_second=1000,
+            sleeper=lambda _delay: None,
+        )
+
+        fetched = client.fetch_reports(
+            "PLPKO0000016",
+            date(2026, 7, 1),
+            date(2026, 8, 10),
+        )
+
+        self.assertGreaterEqual(len(fetched), 1)
+        self.assertEqual(len(opener.requested), 2)
 
     def test_broken_page_raises_data_error(self) -> None:
         from investment_monitor.sources.gpw_espi.client import _parse_page

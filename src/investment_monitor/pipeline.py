@@ -263,16 +263,25 @@ class CollectionPipeline:
                     ))
                 continue
             declared_market = self._source_markets.get(connector.name)
-            connector_tickers = (
-                request.tickers
-                if declared_market is None
-                else tuple(
+            if declared_market is None:
+                connector_tickers = request.tickers
+            else:
+                # 多市场源（如 Nasdaq Baltic 覆盖 ee/lv/lt）用 frozenset 声明
+                # 范围；这里展开成集合后比较，避免把整个 frozenset 当单值。
+                declared_markets = (
+                    set(declared_market)
+                    if isinstance(
+                        declared_market,
+                        (tuple, list, set, frozenset),
+                    )
+                    else {declared_market}
+                )
+                connector_tickers = tuple(
                     ticker
                     for ticker in request.tickers
                     if request.market_for(ticker)
-                    in {declared_market, MARKET_UNKNOWN}
+                    in declared_markets | {MARKET_UNKNOWN}
                 )
-            )
             for ticker in connector_tickers:
                 if breaker.is_open(connector.name):
                     message = breaker.message(connector.name)

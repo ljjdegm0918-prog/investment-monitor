@@ -64,10 +64,12 @@ assert.strictEqual(r.t("daily.generate"), "生成报告");
 assert.strictEqual(r.t("daily.eyebrow"), "每日报告");
 assert.strictEqual(r.t("cat.news"), "新闻");
 assert.strictEqual(r.t("status.connected"), "已连接");
+assert.strictEqual(r.t("status.stub"), "存根（官方源未接通）");
 
 // 8. t() returns English by default.
 r = runApp("", null);
 assert.strictEqual(r.t("daily.generate"), "Generate reports");
+assert.strictEqual(r.t("status.stub"), "Stub (official feed not wired)");
 
 // 9. t() interpolates parameters.
 r = runApp("", null);

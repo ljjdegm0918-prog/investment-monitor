@@ -23,6 +23,7 @@ import logging
 import os
 import time
 from datetime import date, datetime, timedelta
+from http.client import IncompleteRead
 from typing import Any, Callable, Mapping, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -54,8 +55,8 @@ class AmfOamClient:
     def __init__(
         self,
         base_url: str = DEFAULT_BASE_URL,
-        timeout: float = 20.0,
-        max_retries: int = 1,
+        timeout: float = 45.0,
+        max_retries: int = 3,
         requests_per_second: float = 1.0,
         user_agent: str = "InvestmentMonitor/0.1 (internal workspace)",
         opener: Callable[..., Any] = urlopen,
@@ -74,8 +75,8 @@ class AmfOamClient:
     def from_environment(cls) -> "AmfOamClient":
         return cls(
             base_url=os.environ.get("AMF_OAM_URL", DEFAULT_BASE_URL),
-            timeout=_env_float("AMF_OAM_TIMEOUT_SECONDS", 20.0),
-            max_retries=_env_int("AMF_OAM_MAX_RETRIES", 1),
+            timeout=_env_float("AMF_OAM_TIMEOUT_SECONDS", 45.0),
+            max_retries=_env_int("AMF_OAM_MAX_RETRIES", 3),
             requests_per_second=_env_float(
                 "AMF_OAM_REQUESTS_PER_SECOND", 1.0
             ),
@@ -128,6 +129,12 @@ class AmfOamClient:
                     ) from error
             except AmfOamDataError:
                 raise
+            except IncompleteRead as error:
+                if attempt == self._max_retries:
+                    raise AmfOamRequestError(
+                        f"AMF OAM incomplete read after "
+                        f"{self._max_retries + 1} attempts: {url}"
+                    ) from error
             except HTTPError as error:
                 if (
                     error.code not in RETRYABLE_STATUS_CODES

@@ -36,7 +36,7 @@ class BalticCompanyMatcher:
         self._loaded = False
 
     def load_universe(self, market: str) -> None:
-        from ..universe.nasdaq_baltic_universe import (
+        from ...universe.nasdaq_baltic_universe import (
             baltic_universe_name_map,
         )
 
