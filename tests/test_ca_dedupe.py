@@ -98,7 +98,7 @@ class CaDedupeKeyTests(unittest.TestCase):
         self.assertIn("2026-08-05", dedupe_key(late_utc))
         self.assertIn("2026-08-06", dedupe_key(early_utc))
 
-    def test_ca_filing_without_connector_has_no_key(self) -> None:
+    def test_unwired_ca_filing_without_evidence_has_no_key(self) -> None:
         item = feed_item(
             "sedar_plus",
             "s-1",
@@ -106,6 +106,25 @@ class CaDedupeKeyTests(unittest.TestCase):
         )
 
         self.assertIsNone(dedupe_key(item))
+
+    def test_ca_filings_cross_annotate_by_explicit_canonical_key(self) -> None:
+        first = feed_item("ca_ir", "ir-1", source_type="regulatory_filing")
+        second = feed_item("ca_edgar", "sec-1", source_type="regulatory_filing")
+        first["raw_metadata"] = {"canonical_key": "ry-q2-2026"}
+        second["raw_metadata"] = {"canonical_key": "ry-q2-2026"}
+
+        self.assertEqual(dedupe_key(first), dedupe_key(second))
+        annotated = annotate_feed_items([first, second])
+        self.assertEqual(annotated[0]["also_seen_on"], ["ca_edgar"])
+
+    def test_ca_filing_prefers_official_document_url(self) -> None:
+        first = feed_item("ca_ir", "ir-1", source_type="regulatory_filing")
+        second = feed_item("ceoca_sedar", "mirror-1", source_type="regulatory_filing")
+        for item in (first, second):
+            item["raw_metadata"] = {
+                "official_document_url": "https://issuer.example/report.pdf#page=1"
+            }
+        self.assertEqual(dedupe_key(first), dedupe_key(second))
 
     def test_us_market_still_has_no_key(self) -> None:
         item = feed_item("sec", "sec-1", market="us")

@@ -29,7 +29,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Mapping, Optional
+from typing import Any, Callable, List, Mapping, Optional, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -40,7 +40,7 @@ DIRECTORY_URL = "https://stocks.com.sg/api/v1/companies"
 # prices 结构而非证券目录（params 未公开）；announcements 403；网页仍 SPA。
 PHASE4_BOUNDARY = {
     "universe": "partial",
-    "disclosure": "unavailable",
+    "disclosure": "partial",
     "evidence": (
         "StocksSG public company directory (third-party, incomplete); "
         "official api.sgx.com announcements remains 403 / website SPA"
@@ -59,7 +59,8 @@ def load_sg_universe(
     cache_path = _cache_path(path)
     try:
         with cache_path.open("r", encoding="utf-8") as cache_file:
-            return json.load(cache_file)
+            loaded = json.load(cache_file)
+            return cast(Mapping[str, Any], loaded) if isinstance(loaded, Mapping) else None
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -67,7 +68,7 @@ def load_sg_universe(
 def refresh_sg_universe(
     *,
     path: Optional[Path] = None,
-    opener=None,
+    opener: Optional[Callable[..., Any]] = None,
     refreshed_at: Optional[str] = None,
 ) -> Mapping[str, Any]:
     """Refresh the partial third-party SG directory with strict validation."""
@@ -89,13 +90,15 @@ def refresh_sg_universe(
     raw_rows = decoded["data"]
     meta = decoded.get("meta")
     try:
-        reported_count = int(meta.get("count")) if isinstance(meta, Mapping) else -1
+        count_value = meta.get("count") if isinstance(meta, Mapping) else None
+        reported_count = int(count_value) if count_value is not None else -1
     except (TypeError, ValueError):
         reported_count = -1
     if reported_count != len(raw_rows):
         raise SgUniverseError("StocksSG directory count mismatch")
     if len(raw_rows) < 100:
         raise SgUniverseError("StocksSG directory is unexpectedly small")
+    verified_at = refreshed_at or datetime.now(timezone.utc).isoformat()
     items = []
     seen: set[str] = set()
     for row in raw_rows:
@@ -125,6 +128,14 @@ def refresh_sg_universe(
             "uen": uen,
             "lei": lei,
             "source_tier": "third_party",
+            "website": str(row.get("website") or "").strip(),
+            "investor_relations_url": str(
+                row.get("investor_relations_url") or row.get("ir_url") or ""
+            ).strip(),
+            "issuer_type": _issuer_type(row),
+            "listing_type": str(row.get("listing_type") or "").strip(),
+            "source": "stockssg_public_companies",
+            "last_verified_at": verified_at,
         })
     if len(items) < 100:
         raise SgUniverseError("StocksSG usable company directory is unexpectedly small")
@@ -132,7 +143,7 @@ def refresh_sg_universe(
     for item in items:
         counts[item["board"]] = counts.get(item["board"], 0) + 1
     payload = {
-        "updated_at": refreshed_at or datetime.now(timezone.utc).isoformat(),
+        "updated_at": verified_at,
         "source": ["stockssg_public_companies"],
         "source_url": DIRECTORY_URL,
         "source_tier": "third_party",
@@ -158,7 +169,7 @@ def sg_universe_name_map(
     payload = load_sg_universe(path)
     if not payload:
         return {}
-    result: dict = {}
+    result: dict[str, Mapping[str, str]] = {}
     for item in payload.get("items") or []:
         ticker = str(item.get("ticker") or "").strip()
         if not ticker:
@@ -214,3 +225,19 @@ def _optional_identifier(raw: Any, pattern: str, label: str) -> str:
     if value and re.fullmatch(pattern, value) is None:
         raise SgUniverseError(f"StocksSG company row has invalid {label}")
     return value
+
+
+def _issuer_type(row: Mapping[str, Any]) -> str:
+    value = " ".join(str(row.get(key) or "") for key in (
+        "issuer_type", "instrument_type", "security_type", "listing_type",
+        "company_name",
+    )).casefold()
+    if "etf" in value or "exchange traded fund" in value:
+        return "etf"
+    if "business trust" in value:
+        return "business_trust"
+    if "reit" in value or "real estate investment trust" in value:
+        return "reit"
+    if "secondary" in value:
+        return "secondary_listing"
+    return "ordinary_share"

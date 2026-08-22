@@ -180,7 +180,13 @@ RECEIPT_LENGTH = 14
 BRUSSELS = ZoneInfo("Europe/Brussels")
 
 FILING_SOURCE_PRIORITY = {
+    "sgx_announcements": 0,
+    "sg_ir": 1,
+    "sg_edgar": 2,
+    "ca_edgar": 4,
+    "ca_ir": 5,
     "ceoca_sedar": 19,
+    "cse_filings": 3,
     "dart": 0,
     "investegate": 1,
     "companies_house": 2,
@@ -200,6 +206,9 @@ FILING_SOURCE_PRIORITY = {
     "fsma_stori": 16,
     "eqs_ch": 17,
     "gpw_espi": 18,
+    "bse_india_announcements": 20,
+    "mops_disclosures": 21,
+    "bse_hu_announcements": 22,
 }
 NEWS_SOURCE_PRIORITY = {
     "naver_news": 0,
@@ -287,6 +296,9 @@ COMMUNITY_SOURCE_PRIORITY = {
     "vic": 0,
 }
 SOURCE_DISPLAY_LABELS = {
+    "ca_edgar": "SEC EDGAR (Canadian cross-listing)",
+    "ca_ir": "Canadian issuer IR",
+    "cse_filings": "CSE official issuer filing mirror",
     "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
     "dart": "OpenDART",
     "investegate": "Investegate",
@@ -356,6 +368,7 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_at": "Yahoo Finance AT",
     "google_news_at": "Google News (AT)",
     "nse_announcements": "NSE announcements",
+    "bse_india_announcements": "BSE India corporate announcements",
     "yahoo_in": "Yahoo Finance IN",
     "google_news_in": "Google News (IN)",
     "bmv_relevant_events": "BMV relevant events",
@@ -365,6 +378,7 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_il": "Yahoo Finance IL",
     "google_news_il": "Google News (IL)",
     "bse_hu_announcements": "BSE (Budapest)",
+    "mops_disclosures": "MOPS material disclosures",
     "yahoo_hu": "Yahoo Finance HU",
     "google_news_hu": "Google News (HU)",
     "yahoo_aq": "Yahoo Finance AQ",
@@ -514,9 +528,7 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     if market == "tw":
         return _tw_filing_key(item)
     if market == "ca":
-        # No CA disclosure connector is wired (SEDAR+ A3 spike); a stray
-        # regulatory_filing row must never be cross-annotated.
-        return None
+        return _ca_filing_key(item)
     if market == "aq":
         # No AQ disclosure connector is wired (AQSE Vercel-challenge A3
         # spike); a stray regulatory_filing row must never be
@@ -539,9 +551,7 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         # stray regulatory_filing row must never be cross-annotated.
         return None
     if market == "sg":
-        # No SG disclosure connector is wired (SGX A3 spike); a stray
-        # regulatory_filing row must never be cross-annotated.
-        return None
+        return _sg_filing_key(item)
     if market == "se":
         # No SE disclosure connector is wired (FI/Nasdaq/EQS A3 spike); a
         # stray regulatory_filing row must never be cross-annotated.
@@ -559,9 +569,9 @@ def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
         # a stray filing row must never be cross-annotated.
         return None
     if market == "hu":
-        # Disclosure primary chain is an honest stub (no rows produced);
-        # a stray filing row must never be cross-annotated.
-        return None
+        source = str(item.get("source") or "")
+        document_id = str(item.get("external_id") or "").strip()
+        return f"hu:filing:{source}:{document_id}" if document_id else None
     if market == "at":
         # Disclosure primary chain is an honest stub (no rows produced);
         # a stray filing row must never be cross-annotated.
@@ -695,14 +705,20 @@ def _baltic_filing_key(item: Mapping[str, Any]) -> Optional[str]:
 
 
 def _in_filing_key(item: Mapping[str, Any]) -> Optional[str]:
-    """IN filings pair on the stable NSE seq_id, with a source-scoped
-    Kolkata-day title fallback."""
+    """Soft-link NSE/BSE rows only on exact ticker/day/normalized title.
+
+    Exchange-native IDs are unrelated. The annotator retains both records;
+    this key only supplies ``also_seen_on`` metadata.
+    """
     source = str(item.get("source") or "")
-    document_id = str(item.get("external_id") or "").strip()
-    if document_id:
-        return f"in:filing:nse:{document_id}"
     title = normalize_title(item.get("title"))
     day = _local_day(item, KOLKATA)
+    ticker = str(item.get("ticker") or "").strip().upper()
+    if source in {"nse_announcements", "bse_india_announcements"} and title and day and ticker:
+        return f"in:filing:cross-venue:{ticker}:{day}:{title}"
+    document_id = str(item.get("external_id") or "").strip()
+    if document_id:
+        return f"in:filing:{source}:{document_id}"
     if title and day:
         return (
             f"in:filing:title:{source}:"
@@ -1108,6 +1124,102 @@ def _receipt_number(item: Mapping[str, Any]) -> Optional[str]:
     )
     digits = re.sub(r"\D", "", str(raw or ""))
     return digits if len(digits) == RECEIPT_LENGTH else None
+
+
+def _ca_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """Return an auditable Canadian cross-source filing identity.
+
+    Strong identities supplied by a regulator, exchange, issuer feed, or
+    document digest take precedence.  The final title/day fallback is only
+    used for the explicitly wired Canadian disclosure sources and is marked
+    as a similarity key; it annotates records but never deletes source rows.
+    """
+    metadata = item.get("raw_metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    canonical = str(metadata.get("canonical_key") or "").strip()
+    if canonical:
+        return f"ca:filing:canonical:{canonical}"
+    official_id = str(metadata.get("official_source_id") or "").strip()
+    authority = str(
+        metadata.get("regulator")
+        or metadata.get("exchange")
+        or metadata.get("source_name")
+        or item.get("source")
+        or "unknown"
+    ).strip().lower()
+    if official_id:
+        return f"ca:filing:official:{authority}:{official_id}"
+    document_hash = str(metadata.get("document_hash") or "").strip().lower()
+    if document_hash:
+        return f"ca:filing:hash:{document_hash}"
+    official_url = str(
+        metadata.get("official_document_url")
+        or metadata.get("official_source_url")
+        or ""
+    ).strip()
+    if official_url:
+        normalized_url = official_url.split("#", 1)[0].rstrip("/").lower()
+        return f"ca:filing:url:{normalized_url}"
+    trusted_sources = {
+        "ca_ir",
+        "ca_edgar",
+        "cse_filings",
+        "cse_bulletins",
+        "ceoca_sedar",
+    }
+    source = str(item.get("source") or "")
+    ticker = str(item.get("ticker") or "").strip().upper()
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, TORONTO)
+    if source in trusted_sources and ticker and title and day:
+        return f"ca:filing:similar:{ticker}:{day}:{title}"
+    return None
+
+
+def _sg_filing_key(item: Mapping[str, Any]) -> Optional[str]:
+    """Return an auditable identity for the bounded SG disclosure sources."""
+    metadata = item.get("raw_metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    canonical = str(metadata.get("canonical_key") or "").strip()
+    if canonical:
+        return f"sg:filing:canonical:{canonical}"
+    source = str(item.get("source") or "")
+    reference = str(
+        metadata.get("announcement_reference")
+        or metadata.get("sgx_announcement_reference")
+        or ""
+    ).strip()
+    if source == "sgx_announcements" and reference:
+        return f"sg:filing:sgx:{reference.upper()}"
+    official_url = str(
+        metadata.get("official_document_url")
+        or metadata.get("official_source_url")
+        or ""
+    ).strip()
+    if official_url:
+        normalized_url = official_url.split("#", 1)[0].rstrip("/").lower()
+        return f"sg:filing:url:{normalized_url}"
+    document_hash = str(metadata.get("document_hash") or "").strip().lower()
+    if document_hash:
+        return f"sg:filing:hash:{document_hash}"
+    attachments = metadata.get("attachment_urls") or metadata.get("attachments")
+    if isinstance(attachments, (list, tuple)) and attachments:
+        first = attachments[0]
+        if isinstance(first, Mapping):
+            first = first.get("url")
+        attachment_url = str(first or "").split("#", 1)[0].rstrip("/").lower()
+        if attachment_url:
+            return f"sg:filing:attachment:{attachment_url}"
+    if source not in {"sgx_announcements", "sg_ir", "sg_edgar", "mas_opera"}:
+        return None
+    ticker = str(item.get("ticker") or "").strip().upper()
+    title = normalize_title(item.get("title"))
+    day = _local_day(item, SINGAPORE)
+    if ticker and title and day:
+        return f"sg:filing:similar:{ticker}:{day}:{title}"
+    return None
 
 
 def _local_day(

@@ -101,8 +101,17 @@ class HkexNewsConnectorTests(unittest.TestCase):
             first.url,
             "https://www1.hkexnews.hk/listedco/20260303001234.htm",
         )
+        self.assertEqual(
+            first.raw_metadata["official_document_url"],
+            first.url,
+        )
+        self.assertEqual(
+            first.raw_metadata["raw_announcement_en"]["news_id"],
+            "20260303001234",
+        )
         self.assertEqual(client.calls.count(("search", "15157", "E")), 1)
         self.assertEqual(client.calls.count(("search", "15157", "zh")), 1)
+        self.assertEqual(connector.last_collection_status, "success")
 
     def test_bilingual_records_merge_by_news_id(self) -> None:
         client = FakeClient(
@@ -133,17 +142,16 @@ class HkexNewsConnectorTests(unittest.TestCase):
         en_only = by_id["20260303001235"]
         self.assertEqual(en_only.title, "Monthly Return")
 
-    def test_missing_stock_id_skips_silently_without_search(self) -> None:
+    def test_missing_stock_id_fails_closed_without_search(self) -> None:
         client = FakeClient(stock_id=None)
         connector = HkexNewsConnector(client=client)
 
-        items = connector.collect(
-            self.request(("00700",), {"00700": "hk"})
-        )
+        with self.assertRaises(HkexNewsRequestError):
+            connector.collect(self.request(("00700",), {"00700": "hk"}))
 
-        self.assertEqual(items, [])
-        self.assertEqual(connector.last_errors, ())
+        self.assertEqual(connector.last_errors[0][0], "00700")
         self.assertEqual(client.calls, [("stock_id_for", "00700")])
+        self.assertEqual(connector.last_collection_status, "failure")
 
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         client = FakeClient(
@@ -155,6 +163,17 @@ class HkexNewsConnectorTests(unittest.TestCase):
             connector.collect(self.request(("00700",), {"00700": "hk"}))
 
         self.assertEqual(len(connector.last_errors), 1)
+        self.assertEqual(connector.last_errors[0][0], "00700")
+        self.assertEqual(connector.last_collection_status, "failure")
+
+    def test_mismatched_stock_code_fails_closed(self) -> None:
+        record = en_record()
+        record["stock_code"] = "00001"
+        connector = HkexNewsConnector(client=FakeClient(en=[record]))
+
+        with self.assertRaises(HkexNewsRequestError):
+            connector.collect(self.request(("00700",), {"00700": "hk"}))
+
         self.assertEqual(connector.last_errors[0][0], "00700")
 
     def test_registry_registers_hkexnews_without_secret_field(self) -> None:

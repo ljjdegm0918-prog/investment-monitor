@@ -1,6 +1,6 @@
 """Austria stub/news/dedupe tests."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 import unittest
 
 from investment_monitor.dedupe import annotate_feed_items, dedupe_key
@@ -34,14 +34,24 @@ class FakeGoogleClient:
         return []
 
 
+class FakeDisclosureClient:
+    timezone = timezone.utc
+    def fetch(self, start_date, end_date):
+        return [{"external_id": "at:1", "ticker": "VOE", "issuer": "VOE",
+                 "published_at": datetime(2026, 8, 1, 9, tzinfo=timezone.utc),
+                 "title": "Results", "document_type": "Ad-hoc News",
+                 "url": "https://www.wienerborse.at/news/1", "raw_payload": {"id": 1}}]
+
+
 class AustriaTests(unittest.TestCase):
-    def test_disclosure_connector_is_honest_stub(self):
-        connector = WienerBoerseNewsConnector()
-        self.assertEqual(connector.collect(CollectionRequest(
+    def test_disclosure_connector_maps_official_record(self):
+        connector = WienerBoerseNewsConnector(client=FakeDisclosureClient(), universe={})
+        items = connector.collect(CollectionRequest(
             tickers=("VOE",), start_date=date(2026, 8, 1),
             end_date=date(2026, 8, 1), markets={"VOE": "at"},
-        )), [])
-        self.assertEqual(connector.last_collection_status, "stub")
+        ))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(connector.last_collection_status, "success")
 
     def test_yahoo_symbol_and_foreign_skip(self):
         self.assertEqual(at_yahoo_symbol("VOE"), "VOE.VI")

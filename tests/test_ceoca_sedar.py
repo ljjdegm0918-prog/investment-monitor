@@ -56,10 +56,12 @@ class CeocaSedarTests(unittest.TestCase):
         items = connector.collect(request)
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0].source, "ceoca_sedar")
-        self.assertEqual(items[0].source_type, "filings")
+        self.assertEqual(items[0].source_type, "regulatory_filing")
         self.assertEqual(items[0].tickers, ("AGMR",))
-        self.assertEqual(items[0].raw_metadata["source_tier"], "third_party")
+        self.assertEqual(items[0].raw_metadata["source_tier"], 4)
+        self.assertFalse(items[0].raw_metadata["is_official"])
         self.assertEqual(connector.status, "partial")
+        self.assertEqual(connector.last_collection_status, "partial")
 
     def test_connector_fetches_company_channel_not_global_sedar(self) -> None:
         calls = []
@@ -78,8 +80,13 @@ class CeocaSedarTests(unittest.TestCase):
         ))
         self.assertEqual(calls, ["agmr"])
 
-    def test_multi_ticker_pagination_cap_discards_all_partial_results(self) -> None:
-        good = {**VALID, "channel": "good", "spiel_id": "good-1"}
+    def test_multi_ticker_pagination_cap_keeps_verified_partial_results(self) -> None:
+        good = {
+            **VALID,
+            "channel": "good",
+            "spiel_id": "good-1",
+            "spiel": VALID["spiel"].replace("AGMR", "GOOD"),
+        }
 
         def fetch(channel, user_agent, until):
             if channel == "good":
@@ -107,9 +114,10 @@ class CeocaSedarTests(unittest.TestCase):
                 markets={"GOOD": "ca", "BAD": "ca"},
             ))
 
-        self.assertEqual(items, [])
+        self.assertEqual([item.tickers for item in items], [("GOOD",)])
         self.assertEqual(connector.last_errors[0][0], "BAD")
         self.assertIn("pagination cap", connector.last_errors[0][1])
+        self.assertEqual(connector.last_collection_status, "partial")
 
     def test_empty_company_channel_is_successful_exhaustion(self) -> None:
         connector = CeocaSedarConnector(
@@ -123,6 +131,7 @@ class CeocaSedarTests(unittest.TestCase):
         ))
         self.assertEqual(items, [])
         self.assertEqual(connector.last_errors, ())
+        self.assertEqual(connector.last_collection_status, "empty")
 
     def test_full_page_followed_by_empty_page_is_successful_exhaustion(self) -> None:
         calls = {"count": 0}

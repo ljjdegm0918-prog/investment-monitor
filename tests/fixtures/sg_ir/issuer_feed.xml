@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Issuer announcements</title>
+  <item><guid>IR-100</guid><title>Financial Results for the Second Quarter</title><link>https://investor.example.test/releases/results-q2</link><pubDate>Tue, 18 Aug 2026 18:30:00 +0800</pubDate><enclosure url="https://investor.example.test/files/results-q2.pdf" type="application/pdf"/></item>
+  <item><guid>IR-101</guid><title>Company picnic</title><link>https://investor.example.test/releases/picnic</link><pubDate>Tue, 18 Aug 2026 10:00:00 +0800</pubDate></item>
+</channel></rss>

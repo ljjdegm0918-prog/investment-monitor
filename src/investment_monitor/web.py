@@ -29,7 +29,12 @@ from .config import (
 )
 from .connectors.base import ConnectorUnavailableError
 from .au_universe import au_universe_name_map
-from .ca_universe import CaUniverseError, ca_universe_name_map, refresh_ca_universe
+from .ca_universe import (
+    CaUniverseError,
+    ca_universe_name_map,
+    load_ca_universe,
+    refresh_ca_universe,
+)
 from .hk_universe import hk_universe_name_map
 from .kr_universe import kr_universe_name_map
 from .models import (
@@ -75,7 +80,7 @@ from .universe.be_universe import be_universe_name_map, refresh_be_universe
 from .universe.nl_universe import nl_universe_name_map, refresh_nl_universe
 from .universe.it_universe import it_universe_name_map, refresh_it_universe
 from .universe.es_universe import es_universe_name_map
-from .universe.sg_universe import sg_universe_name_map
+from .universe.sg_universe import load_sg_universe, sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
 from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.se_universe import se_universe_name_map
@@ -127,7 +132,7 @@ CollectionRunner = Callable[..., ConfiguredCollectionResult]
 # - 这些是注册 stub，collect() 恒返回空行，回填时跳过避免空转占队列；
 # - xueqiu 仅在有可选 cookie 时才 LIVE，保留但永远排在 community 末尾。
 ADD_COMPANY_BACKFILL_SKIP_SOURCES = frozenset({
-    "newsweb_no", "euronext_lisbon_news", "wiener_boerse_news", "bmv_relevant_events", "maya_announcements", "bse_hu_announcements",
+    "wiener_boerse_news",
     "hotcopper_au",
     "lse_share_chat",
     "yellowbrick",
@@ -626,6 +631,18 @@ class WebApplication:
                     return self._json({
                         "catalog": catalog_summary(),
                         "report": coverage_report(),
+                        "canada": self.repository.canada_coverage_metrics(
+                            load_ca_universe(
+                                self.project_root / ".cache"
+                                / "investment_monitor" / "ca_universe.json"
+                            )
+                        ),
+                        "singapore": self.repository.singapore_coverage_metrics(
+                            load_sg_universe(
+                                self.project_root / ".cache"
+                                / "investment_monitor" / "sg_universe.json"
+                            )
+                        ),
                     })
                 except Exception:  # noqa: BLE001 - 目录损坏要给出 500 而不是空表
                     LOGGER.exception("coverage payload failed")

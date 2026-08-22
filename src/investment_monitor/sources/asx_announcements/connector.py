@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import List, Mapping, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 from ...models import CollectionRequest, InformationItem, MARKET_AU
+from ...provenance import build_raw_provenance
 from ...web_repository import normalize_au_ticker
 from .client import (
     AsxAnnouncementsClient,
@@ -24,6 +25,7 @@ class AsxAnnouncementsConnector:
     name = "asx_announcements"
     provider = "ASX Market Announcements"
     max_lookback_days = MAX_LOOKBACK_DAYS
+    coverage_level = "official_archive_1998_present"
 
     def __init__(
         self,
@@ -31,6 +33,7 @@ class AsxAnnouncementsConnector:
     ) -> None:
         self._client = client or AsxAnnouncementsClient.from_environment()
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self.last_collection_status = "empty"
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
@@ -72,7 +75,12 @@ class AsxAnnouncementsConnector:
                     message,
                 )
         self._last_errors = tuple(failures)
-        if len(request.tickers) == 1 and failures:
+        targets = sum(request.market_for(ticker) == MARKET_AU for ticker in request.tickers)
+        self.last_collection_status = (
+            "partial" if failures and items else "failure" if failures else
+            "success" if items else "empty"
+        )
+        if targets == 1 and failures:
             raise AsxAnnouncementsRequestError(failures[0][1])
         return items
 
@@ -100,18 +108,31 @@ def _map_announcements(
                 url=str(record["url"]),
                 collected_at=collected_at,
                 raw_metadata={
-                    "provider": "asx_markitdigital_research_api",
+                    **build_raw_provenance(
+                        official_source_id=str(record["external_id"]),
+                        official_source_url=str(record["url"]),
+                        retrieval_url=str(record.get("list_url") or ""),
+                        raw_payload=record,
+                        raw_payload_format="html_parsed_record",
+                        classification_code=None,
+                        classification_label=str(record.get("announcement_type") or "announcement"),
+                        published_at_raw=str(record["published"]),
+                        published_timezone="Australia/Sydney",
+                    ),
+                    "provider": "asx_historical_announcements_archive",
                     "stock_code": code,
-                    "api_max_items_per_company": 5,
-                    "document_key": str(record["external_id"]),
+                    "archive_scope": "calendar_year",
+                    "archive_coverage": "complete_for_requested_years",
+                    "announcement_id": str(record["external_id"]),
                     "announcement_type": str(
                         record.get("announcement_type") or ""
                     ),
                     "file_size": str(record.get("file_size") or ""),
+                    "page_count": record.get("page_count"),
                     "is_price_sensitive": bool(
                         record.get("is_price_sensitive")
                     ),
-                    "api_url": str(record["url"]),
+                    "archive_url": str(record.get("list_url") or ""),
                 },
                 market=MARKET_AU,
                 summary=None,

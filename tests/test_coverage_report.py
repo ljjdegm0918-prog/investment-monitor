@@ -42,7 +42,7 @@ class CoverageReportTests(unittest.TestCase):
         gb = self.rows["GB"]
         self.assertEqual(gb["disclosure"], "live")
 
-        for code in ("AT", "MX"):
+        for code in ("AT",):
             row = self.rows[code]
             self.assertEqual(row["universe"], "stub")
             self.assertEqual(row["disclosure"], "stub")
@@ -56,7 +56,7 @@ class CoverageReportTests(unittest.TestCase):
         self.assertIn("research-only", ru["notes"])
 
     def test_boundary_stubs_are_never_live(self):
-        for code in ("AT", "HU", "IL", "MX", "NO", "PT"):
+        for code in ("AT",):
             self.assertEqual(
                 self.rows[code]["disclosure"], "stub", f"{code} disclosure"
             )
@@ -65,15 +65,15 @@ class CoverageReportTests(unittest.TestCase):
 
     def test_all_disclosure_statuses_use_the_canonical_market_key(self):
         expected = {
-            "CA": "partial", "MX": "stub", "US": "live",
+            "CA": "partial", "MX": "live", "US": "live",
             "AT": "stub", "BE": "live", "CH": "partial",
             "DE": "partial", "EE": "live", "ES": "live",
-            "FR": "live", "GB": "live", "HU": "stub",
-            "IL": "stub", "IT": "partial", "LT": "live",
-            "LV": "live", "NL": "partial", "NO": "stub",
-            "PL": "live", "PT": "stub", "RU": "unavailable",
+            "FR": "live", "GB": "live", "HU": "partial",
+            "IL": "live", "IT": "partial", "LT": "live",
+            "LV": "live", "NL": "partial", "NO": "live",
+            "PL": "live", "PT": "live", "RU": "unavailable",
             "SE": "live", "AU": "live", "HK": "live",
-            "IN": "live", "JP": "live", "SG": "unavailable",
+            "IN": "live", "JP": "live", "SG": "partial",
             "TW": "live",
         }
         self.assertEqual(
@@ -102,8 +102,10 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(self.rows["RU"]["news"], "unavailable")
 
     def test_phase5_thin_country_notes_are_locked(self):
-        for code in ("AT", "MX", "IL", "HU"):
-            self.assertIn("stub", self.rows[code]["notes"], code)
+        self.assertIn("stub", self.rows["AT"]["notes"])
+        for code in ("MX", "IL", "PT"):
+            self.assertEqual(self.rows[code]["disclosure"], "live", code)
+        self.assertIn("partial", self.rows["HU"]["notes"])
         self.assertIn("NewsWeb", self.rows["NO"]["notes"])
         self.assertIn("CMVM", self.rows["PT"]["notes"])
 

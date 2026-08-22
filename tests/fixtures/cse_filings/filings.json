@@ -1,0 +1,39 @@
+{
+  "categories": {
+    "INTERIM_FINANCIAL_STATEMENTSREPORT": 1,
+    "MATERIAL_CHANGE_REPORT": 1,
+    "NEWS_RELEASES": 1
+  },
+  "list": [
+    {
+      "url": "https://sedar-filings-backup.thecse.com/000053969/06426910-00000001-000053969-FS-PDF.pdf",
+      "document_description": "INTERIM_FINANCIAL_STATEMENTSREPORT_EN",
+      "document_category": "INTERIM_FINANCIAL_STATEMENTSREPORT",
+      "document_language": "English",
+      "filing_description": "Continuous Disclosure",
+      "public_date": "2026-04-14",
+      "accession_number": "06426910-00000001-000053969-FS-PDF",
+      "status": "available"
+    },
+    {
+      "url": "https://sedar-filings-backup.thecse.com/000053969/06195706-00000001-000053969-MCR-PDF.pdf",
+      "document_description": "MATERIAL_CHANGE_REPORT_EN",
+      "document_category": "MATERIAL_CHANGE_REPORT",
+      "document_language": "English",
+      "filing_description": "Continuous Disclosure",
+      "public_date": "2026-04-14",
+      "accession_number": "06195706-00000001-000053969-MCR-PDF",
+      "status": "removed"
+    },
+    {
+      "url": "https://sedar-filings-backup.thecse.com/000053969/06000000-00000001-000053969-OLD-PDF.pdf",
+      "document_description": "NEWS_RELEASE_EN",
+      "document_category": "NEWS_RELEASES",
+      "document_language": "English",
+      "filing_description": "Continuous Disclosure",
+      "public_date": "2025-01-02",
+      "accession_number": "06000000-00000001-000053969-OLD-PDF",
+      "status": "available"
+    }
+  ]
+}

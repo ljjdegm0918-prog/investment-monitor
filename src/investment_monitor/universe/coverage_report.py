@@ -12,7 +12,7 @@ The report is derived automatically from the repo's existing facts:
                   ETF candidate rows exist, else unavailable);
 * source_tier_summary — official > mixed > third_party > none.
 
-Statuses are honest: boundary stubs (AT/HU/IL/MX/NO/PT disclosures,
+Statuses are honest: remaining boundary stubs (AT disclosure,
 AT/CH/HU/IL/MX/SE/SG universes) are never upgraded to live.
 The report never flows into information_items / the daily feed.
 """
@@ -33,25 +33,25 @@ from .global_equity_reference import etf_candidates_for
 UNIVERSE_BOUNDARY_STUBS = frozenset({"at", "ch", "hu", "il", "mx", "se"})
 # 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
 UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg"})
-DISCLOSURE_BOUNDARY_STUBS = frozenset({"at", "hu", "il", "mx", "no", "pt"})
-DISCLOSURE_PARTIAL = frozenset({"ca", "ch", "de", "it", "nl"})
-DISCLOSURE_UNAVAILABLE = frozenset({"ru", "sg"})
+DISCLOSURE_BOUNDARY_STUBS = frozenset({"at"})
+DISCLOSURE_PARTIAL = frozenset({"ca", "ch", "de", "hu", "it", "nl", "sg"})
+DISCLOSURE_UNAVAILABLE = frozenset({"ru"})
 
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
     "US": "Nasdaq Trader official nasdaqlisted/otherlisted directories provide exchange-listed stock and ETF breadth; SEC company_tickers_exchange adds CIKs only; OTC/Pink completeness remains unproven, so the country universe stays partial",
     "JP": "JPX official Listed Issues page provides the TSE ETF directory; the broader JP stock universe still has no stable key-free directory, while TDnet/EDINET disclosure stays live",
-    "CA": "Official-source boundary: TSX/TSXV universe plus partial CEO.ca SEDAR PDF mirror; CSE/NEO breadth and official SEDAR+ completeness remain unavailable",
-    "SG": "Official-source boundary: StocksSG provides a partial third-party universe; official SGX directory/announcements remain SPA/403",
+    "CA": "Official-source boundary with free multi-source coverage: TMX TSX/TSXV universe, reviewed CSE export/issuer overlays, issuer-owned IR feeds, explicit Canadian cross-listing EDGAR fallback, and partial CEO.ca discovery mirror; no SEDAR+ bulk scraping and no claim of complete regulatory coverage",
+    "SG": "Free partial boundary: reviewed issuer IR feeds, SEC EDGAR for explicit cross-listings, and known public SGX announcement detail links; SGXNET market-wide discovery remains unavailable because its SPA list service has undocumented runtime authorization, and MAS OPERA search requires CAPTCHA",
     "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
     "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
     "AT": "Wiener Börse HTML only (2026-08-16 probe); no stable key-free directory/disclosure export, stays stub",
-    "MX": "BMV listed-companies and relevant-events candidates 404 (2026-08-16 probe); universe/disclosure stay stub",
-    "IL": "TASE/MAYA GET 400, POST 403 WAF (2026-08-16 probe); universe/disclosure stay stub",
-    "HU": "BSE pages HTML only, no structured export (2026-08-16 probe); universe/disclosure stay stub",
-    "NO": "Euronext Oslo live CSV universe; NewsWeb disclosure stub (SPA, no stable key-free API)",
-    "PT": "Euronext Lisbon live CSV universe; Lisbon/CMVM disclosure stub (no stable key-free API)",
+    "MX": "BMV public Eventos Relevantes bulletin is wired; periodic financial/XBRL archives remain a paid product and the official universe is unavailable",
+    "IL": "MAYA official per-company reports API is wired with strict total-count pagination and Hebrew originals; no market-wide issuer directory/feed is claimed",
+    "HU": "BSE official session/CSRF archive pagination is wired with a bounded page limit; older windows may be partial, and the official ticker universe remains unavailable",
+    "NO": "Euronext Oslo live CSV universe; official NewsWeb list, message detail, corrections and attachments are collected with overflow fail-closed semantics",
+    "PT": "Euronext Lisbon official exchange archive is wired; CMVM is not connected without a documented, version-stable public data contract",
 }
 
 _NEWS_PREFIXES = ("yahoo_", "google_news_")
@@ -59,17 +59,17 @@ _NEWS_PREFIXES = ("yahoo_", "google_news_")
 # market -> ETF 发行人披露源（基金文件/份额变更/指数/分红公告）。
 # Phase 5 现状：尚无免 key ETF 公告/文件源接入；绝不能把股权 eqs_*/公司
 # 公告标成 ETF 披露 LIVE。未来接源后往这里登记。
-ETF_DISCLOSURE_SOURCES: Dict[str, tuple] = {}
+ETF_DISCLOSURE_SOURCES: Dict[str, tuple[str, ...]] = {}
 
 # market -> 披露源名称（filing 类）；来自 registry.SOURCE_MARKETS。
-_DISCLOSURE_SOURCES: Dict[str, tuple] = {
+_DISCLOSURE_SOURCES: Dict[str, tuple[str, ...]] = {
     "us": ("sec",),
-    "ca": ("ceoca_sedar",),
+    "ca": ("cse_filings", "ca_ir", "ca_edgar", "ceoca_sedar"),
     "au": ("asx_announcements",),
     "hk": ("hkexnews", "hkex_di"),
-    "tw": ("twse_material", "tpex_material"),
+    "tw": ("twse_material", "tpex_material", "mops_disclosures"),
     "jp": ("tdnet_public_web", "edinet"),
-    "in": ("nse_announcements",),
+    "in": ("nse_announcements", "bse_india_announcements"),
     "at": ("wiener_boerse_news",),
     "be": ("fsma_stori", "be_second_disclosure"),
     "ch": ("eqs_ch", "six_official_notices"),
@@ -87,7 +87,7 @@ _DISCLOSURE_SOURCES: Dict[str, tuple] = {
     "pl": ("gpw_espi",),
     "pt": ("euronext_lisbon_news",),
     "se": ("fi_oam", "nasdaq_se_filings"),
-    "sg": ("sgx_announcements",),
+    "sg": ("sgx_announcements", "sg_ir", "sg_edgar"),
     "uk": ("companies_house", "investegate"),
     "mx": ("bmv_relevant_events",),
     "ru": (),
@@ -242,7 +242,7 @@ def coverage_report(
             "notes": _notes_for(country_code, universe, disclosure, etf_universe, etf_disclosure),
         })
 
-    status_counts: Dict[str, int] = {}
+    status_counts: Dict[str, Dict[str, int]] = {}
     for key in ("universe", "disclosure", "news", "etf_universe", "etf_disclosure"):
         counts: Dict[str, int] = {}
         for row in rows:

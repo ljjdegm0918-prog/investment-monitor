@@ -1,0 +1,26 @@
+{
+  "cik": "0001594805",
+  "name": "Shopify Inc.",
+  "tickers": ["SHOP"],
+  "filings": {
+    "recent": {
+      "accessionNumber": [
+        "0001594805-26-000003",
+        "0001594805-26-000002",
+        "0001594805-26-000001",
+        "0001594805-26-000000"
+      ],
+      "filingDate": ["2026-08-04", "2026-08-03", "2026-08-02", "2026-08-01"],
+      "form": ["40-F", "6-K", "10-K", "8-K/A"],
+      "primaryDocument": ["annual.htm", "report6k.htm", "ignored.htm", "amended8k.htm"],
+      "primaryDocDescription": ["Annual report", "Foreign report", "Domestic annual", "Amended current report"],
+      "acceptanceDateTime": ["2026-08-04T18:01:02.000Z", "2026-08-03T12:15:00.000Z", "2026-08-02T09:00:00.000Z", "2026-08-01T15:30:00.000Z"]
+    },
+    "files": [{
+      "name": "CIK0001594805-submissions-001.json",
+      "filingCount": 1,
+      "filingFrom": "2025-01-01",
+      "filingTo": "2025-12-31"
+    }]
+  }
+}

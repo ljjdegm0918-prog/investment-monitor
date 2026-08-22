@@ -46,6 +46,14 @@ class CoverageApiTests(unittest.TestCase):
         self.assertFalse(report["scope"]["broker_runtime_dependency"])
         self.assertFalse(report["scope"]["broker_account_required"])
         self.assertFalse(report["scope"]["trading_capability_assessed"])
+        self.assertEqual(payload["canada"]["maximum_rating"], "high")
+        self.assertEqual(payload["canada"]["rating"], "unavailable")
+        self.assertEqual(payload["singapore"]["maximum_rating"], "high")
+        self.assertEqual(payload["singapore"]["rating"], "unavailable")
+        self.assertEqual(
+            set(payload["canada"]["exchange_coverage"]),
+            {"TSX", "TSXV", "CSE"},
+        )
         self.assertEqual(rows["DE"]["etf_universe"], "live")
         for required in (
             "universe", "disclosure", "news", "etf_universe",

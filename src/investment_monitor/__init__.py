@@ -33,6 +33,8 @@ from .ca_universe import (
     refresh_ca_universe,
     search_ca_universe,
 )
+from .ca_coverage import calculate_ca_coverage
+from .sg_coverage import calculate_sg_coverage
 from .au_universe import (
     AuUniverseError,
     au_universe_name_map,
@@ -163,6 +165,20 @@ from .sources.tpex_material import (
     TpexMaterialDataError,
     TpexMaterialError,
     TpexMaterialRequestError,
+)
+from .sources.mops_disclosures import (
+    MopsDisclosureClient,
+    MopsDisclosureConnector,
+    MopsDisclosureDataError,
+    MopsDisclosureError,
+    MopsDisclosureRequestError,
+)
+from .sources.bse_india_announcements import (
+    BseIndiaAnnouncementsClient,
+    BseIndiaAnnouncementsConnector,
+    BseIndiaAnnouncementsDataError,
+    BseIndiaAnnouncementsError,
+    BseIndiaAnnouncementsRequestError,
 )
 from .sources.tw_news import (
     GoogleTwNewsClient,
@@ -1161,6 +1177,8 @@ __all__ = [
     "create_default_registry",
     "au_universe_name_map",
     "ca_universe_name_map",
+    "calculate_ca_coverage",
+    "calculate_sg_coverage",
     "be_universe_name_map",
     "de_universe_name_map",
     "fr_universe_name_map",

@@ -8,7 +8,7 @@ and records third-party mirror provenance on every item.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from ...models import MARKET_CA, CollectionRequest, InformationItem
 from ...web_repository import normalize_ca_ticker
+from ..ca_ir.connector import classify_ca_filing
 from .parser import CeocaSedarRow, parse_ceoca_sedar_spiels
 
 API_BASE = "https://new-api.ceo.ca/api/get_spiels"
@@ -35,6 +36,8 @@ class CeocaSedarConnector:
     name = "ceoca_sedar"
     provider = "CEO.ca SEDAR mirror"
     status = "partial"
+    coverage_kind = "feed_snapshot"
+    max_lookback_days = MAX_DATE_RANGE_DAYS
 
     def __init__(
         self,
@@ -47,6 +50,8 @@ class CeocaSedarConnector:
         self._user_agent = user_agent
         self._fetch_json = fetch_json or self._fetch_page
         self._last_errors: Tuple[Tuple[str, str], ...] = ()
+        self.last_collection_status = "partial"
+        self.last_failure_details: Tuple[Mapping[str, str], ...] = ()
 
     @property
     def last_errors(self) -> Tuple[Tuple[str, str], ...]:
@@ -60,6 +65,8 @@ class CeocaSedarConnector:
         }
         if not wanted:
             self._last_errors = ()
+            self.last_collection_status = "empty"
+            self.last_failure_details = ()
             return []
         collected_at = datetime.now(timezone.utc)
         items: List[InformationItem] = []
@@ -77,15 +84,31 @@ class CeocaSedarConnector:
             except Exception as error:
                 failures.append((ticker, str(error) or error.__class__.__name__))
         self._last_errors = tuple(failures)
+        self.last_failure_details = tuple(
+            {
+                "feed": "CEO.ca SEDAR mirror",
+                "url": API_BASE,
+                "message": f"{ticker}: {message}",
+            }
+            for ticker, message in failures
+        )
         if len(wanted) == 1 and failures:
+            self.last_collection_status = "unavailable"
             raise CeocaSedarRequestError(failures[0][1])
         if failures:
-            # A multi-ticker request is one collection unit.  Returning the
-            # successful subset would hide pagination or transport gaps.
-            return []
+            # Preserve verified issuers while making the incomplete scope
+            # explicit to the pipeline. A failed issuer must never turn a
+            # successful subset into a claim of complete Canadian coverage.
+            self.last_collection_status = "partial"
+            return items
+        # CEO.ca is a rolling third-party mirror. Even a clean request cannot
+        # prove SEDAR+ completeness, so it is intentionally never "success".
+        self.last_collection_status = "partial" if items else "empty"
         return items
 
-    def _fetch_range(self, channel, start_date, end_date) -> List[CeocaSedarRow]:
+    def _fetch_range(
+        self, channel: str, start_date: date, end_date: date
+    ) -> List[CeocaSedarRow]:
         if (end_date - start_date).days + 1 > MAX_DATE_RANGE_DAYS:
             raise CeocaSedarRequestError(
                 f"CEO.ca SEDAR range exceeds {MAX_DATE_RANGE_DAYS} days"
@@ -106,7 +129,10 @@ class CeocaSedarConnector:
                 if not isinstance(entry, Mapping):
                     raise CeocaSedarRequestError("CEO.ca SEDAR spiel is not an object")
                 try:
-                    timestamps.append(int(entry.get("timestamp")))
+                    raw_timestamp = entry.get("timestamp")
+                    if raw_timestamp is None:
+                        continue
+                    timestamps.append(int(raw_timestamp))
                 except (TypeError, ValueError):
                     continue
             if not timestamps:
@@ -139,24 +165,32 @@ class CeocaSedarConnector:
 
     def _map_row(self, row: CeocaSedarRow, collected_at: datetime) -> InformationItem:
         ticker = normalize_ca_ticker(row.ticker)
+        filing_type = classify_ca_filing(row.document)
         return InformationItem(
             source=self.name,
-            source_type="filings",
+            source_type="regulatory_filing",
             external_id=f"ceoca-sedar-{row.spiel_id}",
             tickers=(ticker,),
             issuer=row.issuer,
             published_at=row.published_at,
             title=row.document,
-            document_type="sedar_filing",
+            document_type=filing_type,
             url=row.url,
             collected_at=collected_at,
             raw_metadata={
                 "provider": "ceo_ca",
-                "source_tier": "third_party",
+                "source_tier": 4,
+                "source_tier_label": "third_party_mirror",
+                "is_official": False,
+                "official_original_available": False,
+                "cross_verified": False,
+                "attachments_may_be_missing": True,
                 "mirror_of": "SEDAR+",
                 "coverage": "partial_undocumented_feed",
                 "spiel_id": row.spiel_id,
                 "original_ticker": row.ticker,
+                "filing_type": filing_type,
+                "mirror_document_type": "sedar_filing",
             },
             market=MARKET_CA,
             effective_at=row.published_at,

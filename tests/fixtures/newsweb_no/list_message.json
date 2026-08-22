@@ -1,0 +1,20 @@
+{
+  "id": 680459,
+  "messageId": 680459,
+  "newsId": 632988,
+  "title": "NOTIFICATION OF MAJOR HOLDINGS",
+  "category": [{"id": 1006, "category_no": "FLAGGING", "category_en": "MAJOR SHAREHOLDINGS NOTIFICATION"}],
+  "markets": ["XOSL"],
+  "issuerId": 8025,
+  "correctionForMessageId": 670000,
+  "correctedByMessageId": 690000,
+  "issuerSign": "ENH",
+  "issuerName": "SED Energy Holdings Plc",
+  "instrId": 0,
+  "instrumentName": "",
+  "instrumentFullName": "",
+  "publishedTime": "2026-08-21T07:27:25.298Z",
+  "test": false,
+  "numbAttachments": 1,
+  "clientAnnouncementId": "c8de6b88-0c9b-4402-912c-5d8eeb3a67ca"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Sea Limited",
+  "tickers": ["SE"],
+  "filings": {
+    "recent": {
+      "accessionNumber": ["0000001234-26-000001", "0000001234-26-000002"],
+      "filingDate": ["2026-08-05", "2026-08-04"],
+      "form": ["6-K", "10-Q"],
+      "primaryDocument": ["earnings.htm", "quarter.htm"],
+      "primaryDocDescription": ["Financial Results", "Quarterly report"],
+      "acceptanceDateTime": ["2026-08-05T09:30:00.000Z", "2026-08-04T09:30:00.000Z"]
+    },
+    "files": [{"name": "CIK0000001234-submissions-001.json", "filingFrom": "2025-01-01", "filingTo": "2025-12-31"}]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "Table": [
+    {
+      "NEWSID": "548da0e0-e4c7-4cce-8ad7-a2af8d154f56",
+      "SCRIP_CD": 500325,
+      "NEWSSUB": "Reliance Industries Ltd - 500325 - Historical disclosure",
+      "HEADLINE": "Historical disclosure",
+      "CATEGORYNAME": "Company Update",
+      "SUBCATNAME": "General",
+      "ATTACHMENTNAME": "old.pdf",
+      "SLONGNAME": "Reliance Industries Ltd",
+      "DissemDT": "2026-08-14T23:59:00",
+      "Fld_Attachsize": 10,
+      "MORE": "Out of requested date window.",
+      "NSURL": "https://www.bseindia.com/stock-share-price/reliance-industries-ltd/reliance/500325/"
+    }
+  ],
+  "Table1": [{"ROWCNT": 3}]
+}

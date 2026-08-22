@@ -244,23 +244,23 @@ class MarketCAFinnhubSkipTests(unittest.TestCase):
 
 
 class MarketCADisclosureStatusTests(unittest.TestCase):
-    def test_only_partial_mirror_disclosure_connector_is_registered(self) -> None:
-        """Keep official CA sources blocked while allowing a marked mirror.
-
-        SEDAR+ has no official public API and its Radware edge blocks
-        stdlib HTTP clients on the real search endpoints (403), returning
-        only a JavaScript SPA shell elsewhere; CSE fails the TLS handshake
-        and NEO returns origin timeouts from the current network. CA-4
-        re-verified the same breakpoints (2026-08-08): no stable key-free
-        disclosure source exists.  CEO.ca's SEDAR bot is permitted only as
-        a third-party partial mirror; official placeholders remain unwired.
-        """
+    def test_free_ca_chain_is_registered_without_unblocking_sedar(self) -> None:
+        """Wire reviewed IR/EDGAR fallbacks but keep SEDAR+ unwired."""
         registry = create_default_registry()
 
         names = registry.registered_names
         self.assertIn("ceoca_sedar", names)
+        self.assertIn("ca_ir", names)
+        self.assertIn("ca_edgar", names)
+        self.assertIn("cse_filings", names)
         self.assertEqual(registry.factory_for("ceoca_sedar")().status, "partial")
-        for blocked_name in ("sedar_plus", "sedarplus", "cse_filings", "neo_filings"):
+        self.assertIn("CA_IR_CONFIG_PATH", registry.configuration_error_for("ca_ir"))
+        self.assertIn(
+            "CA_EDGAR_IDENTITY_PATH",
+            registry.configuration_error_for("ca_edgar"),
+        )
+        self.assertIsNone(registry.configuration_error_for("cse_filings"))
+        for blocked_name in ("sedar_plus", "sedarplus", "neo_filings"):
             self.assertNotIn(blocked_name, names)
 
         # Settings catalog still lists the unwired CA slots so the UI can

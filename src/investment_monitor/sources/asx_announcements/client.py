@@ -1,37 +1,46 @@
-"""ASX company announcements JSON client.
+"""ASX company-announcement archive client.
 
-Recon (verified live 2026-08-08): ``GET https://asx.api.markitdigital.com/
-asx-research/1.0/companies/{CODE}/announcements`` returns the JSON used by
-the official ASX company announcements page (``data.items`` with
-``documentKey``, ``date``, ``headline``, ``announcementType``,
-``fileSize``, ``isPriceSensitive``). Key-free and no login; the endpoint is
-an undocumented internal API of the ASX site and may change without notice.
-It always returns the latest five announcements per company (no pagination),
-so companies with more than five items in the lookback window may be
-partial. Items do not carry a deep document URL (``url`` is empty), so the
-stable per-company announcement-list URL is used and the ``documentKey`` is
-kept in metadata. Parse failures raise a data error instead of fake success.
+The current ASX quote-site API only exposes the newest five announcements per
+company.  This client deliberately uses ASX's public *Historical market
+announcements* search instead.  The first-party archive accepts a company
+code and a calendar year (1998 onwards), renders the full result set for that
+year, and supplies an ``idsId``-addressable official PDF for every result.
+
+Using one request per calendar year makes a requested date window exact while
+avoiding an undocumented five-record ceiling.  The archive is HTML rather than
+a versioned API, so unexpected pages are surfaced as data errors instead of
+being treated as an empty collection.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import os
+import re
 import threading
 import time
-from datetime import date, datetime, timezone
-from typing import Any, Callable, List, Mapping, Optional
+from datetime import date, datetime
+from html.parser import HTMLParser
+from typing import Any, Callable, List, Mapping, Optional, cast
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = (
-    "https://asx.api.markitdigital.com/asx-research/1.0/companies"
-)
+DEFAULT_BASE_URL = "https://www.asx.com.au/asx/v2/statistics/announcements.do"
+ASX_ORIGIN = "https://www.asx.com.au"
+ASX_TIMEZONE = ZoneInfo("Australia/Sydney")
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+_DATE_TIME_PATTERN = re.compile(
+    r"(?P<date>\d{2}/\d{2}/\d{4})\s+(?P<time>\d{1,2}:\d{2}\s*[ap]m)",
+    re.IGNORECASE,
+)
+_PAGE_COUNT_PATTERN = re.compile(r"\b(\d+)\s+pages?\b", re.IGNORECASE)
+_FILE_SIZE_PATTERN = re.compile(
+    r"\b([\d.]+\s*(?:KB|MB|GB))\b", re.IGNORECASE
+)
 
 
 class AsxAnnouncementsError(Exception):
@@ -47,7 +56,7 @@ class AsxAnnouncementsDataError(AsxAnnouncementsError):
 
 
 class AsxAnnouncementsClient:
-    """Small stdlib JSON client for ASX company announcements."""
+    """Small stdlib client for ASX's first-party historical archive."""
 
     def __init__(
         self,
@@ -113,39 +122,53 @@ class AsxAnnouncementsClient:
         start_date: date,
         end_date: date,
     ) -> List[Mapping[str, Any]]:
-        """Fetch and parse the latest ASX announcements for a company code."""
-        list_url = f"{self._base_url}/{quote(code)}/announcements"
-        payload = self._get_json(list_url)
-        return _parse_payload(
-            payload,
-            list_url=list_url,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        """Fetch the exact ASX archive window, split by calendar year."""
+        if end_date < start_date:
+            raise ValueError("ASX announcement end_date must not precede start_date.")
+        if start_date.year < 1998:
+            raise AsxAnnouncementsDataError(
+                "ASX public historical archive coverage begins in 1998."
+            )
+        records: List[Mapping[str, Any]] = []
+        for year in range(start_date.year, end_date.year + 1):
+            list_url = self._archive_url(code, year)
+            records.extend(
+                _parse_archive_page(
+                    self._get_text(list_url),
+                    list_url=list_url,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            )
+        return records
 
-    def _get_json(self, url: str) -> Any:
+    def _archive_url(self, code: str, year: int) -> str:
+        query = urlencode(
+            {
+                "asxCode": code.upper(),
+                "by": "asxCode",
+                "timeframe": "Y",
+                "year": year,
+            }
+        )
+        return f"{self._base_url}?{query}"
+
+    def _get_text(self, url: str) -> str:
         for attempt in range(self._max_retries + 1):
             self._wait_for_rate_limit()
             request = Request(
                 url,
                 headers={
                     "User-Agent": self._user_agent,
-                    "Accept": "application/json",
+                    "Accept": "text/html,application/xhtml+xml",
                     "Accept-Language": "en-AU,en;q=0.9",
                 },
                 method="GET",
             )
             try:
                 with self._opener(request, timeout=self._timeout) as response:
-                    raw = response.read()
-                try:
-                    return json.loads(raw.decode("utf-8", errors="replace"))
-                except json.JSONDecodeError as error:
-                    raise AsxAnnouncementsDataError(
-                        "ASX announcements response is not valid JSON."
-                    ) from error
-            except AsxAnnouncementsDataError:
-                raise
+                    raw = cast(bytes, response.read())
+                return raw.decode("utf-8", errors="replace")
             except HTTPError as error:
                 if (
                     error.code not in RETRYABLE_STATUS_CODES
@@ -176,8 +199,8 @@ class AsxAnnouncementsClient:
         with self._rate_limit_lock:
             now = self._clock()
             if self._last_request_at is not None:
-                remaining = (
-                    self._minimum_interval - (now - self._last_request_at)
+                remaining = self._minimum_interval - (
+                    now - self._last_request_at
                 )
                 if remaining > 0:
                     self._sleeper(remaining)
@@ -185,57 +208,148 @@ class AsxAnnouncementsClient:
             self._last_request_at = now
 
 
-def _parse_payload(
-    payload: Any,
+class _ArchiveParser(HTMLParser):
+    """Extract only result-table rows from the ASX archive HTML."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.rows: List[List[dict[str, Any]]] = []
+        self._cells: List[dict[str, Any]] = []
+        self._in_row = False
+        self._cell_depth = 0
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: List[tuple[str, Optional[str]]],
+    ) -> None:
+        attributes = dict(attrs)
+        if tag == "tr":
+            self._in_row = True
+            self._cells = []
+        elif self._in_row and tag == "td":
+            self._cell_depth += 1
+            if self._cell_depth == 1:
+                self._cells.append({"text": [], "href": "", "price": False})
+        elif self._in_row and self._cell_depth and tag == "a" and self._cells:
+            href = attributes.get("href")
+            if href:
+                self._cells[-1]["href"] = href
+        elif self._in_row and self._cell_depth and tag == "img" and self._cells:
+            if str(attributes.get("title") or "").lower() == "price sensitive":
+                self._cells[-1]["price"] = True
+        elif self._in_row and self._cell_depth and tag == "br" and self._cells:
+            self._cells[-1]["text"].append(" ")
+        elif self._in_row and self._cell_depth and tag == "span" and self._cells:
+            self._cells[-1]["text"].append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "td" and self._in_row and self._cell_depth:
+            self._cell_depth -= 1
+        elif tag == "span" and self._in_row and self._cell_depth and self._cells:
+            self._cells[-1]["text"].append(" ")
+        elif tag == "tr" and self._in_row:
+            self.rows.append(self._cells)
+            self._cells = []
+            self._cell_depth = 0
+            self._in_row = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_row and self._cell_depth and self._cells:
+            self._cells[-1]["text"].append(data)
+
+
+def _parse_archive_page(
+    html: str,
     *,
     list_url: str,
     start_date: date,
     end_date: date,
 ) -> List[Mapping[str, Any]]:
-    if not isinstance(payload, dict):
-        raise AsxAnnouncementsDataError(
-            "ASX announcements response was not a JSON object."
-        )
-    data = payload.get("data")
-    items = data.get("items") if isinstance(data, dict) else None
-    if not isinstance(items, list):
-        raise AsxAnnouncementsDataError(
-            "ASX announcements response had no items list."
-        )
+    parser = _ArchiveParser()
+    parser.feed(html)
+    parser.close()
     records: List[Mapping[str, Any]] = []
-    for item in items:
-        if not isinstance(item, dict):
+    archive_rows_seen = 0
+    for cells in parser.rows:
+        if len(cells) < 3:
             continue
-        document_key = str(item.get("documentKey") or "").strip()
-        headline = str(item.get("headline") or "").strip()
-        published = _parse_date(str(item.get("date") or ""))
-        if not document_key or not headline or published is None:
+        date_text = _normalise_text(cells[0]["text"])
+        published = _parse_published(date_text)
+        href = str(cells[2]["href"] or "")
+        if published is None and "displayAnnouncement.do" not in href:
             continue
+        archive_rows_seen += 1
+        external_id = _announcement_id(href)
+        title = _archive_title(cells[2]["text"])
+        if (
+            published is None
+            or "displayAnnouncement.do" not in href
+            or not external_id
+            or not title
+        ):
+            raise AsxAnnouncementsDataError(
+                "ASX announcement archive contained an unparseable result row."
+            )
         if not start_date <= published.date() <= end_date:
             continue
+        detail_url = urljoin(ASX_ORIGIN, href)
+        detail_text = _normalise_text(cells[2]["text"])
+        page_count = _first_match(_PAGE_COUNT_PATTERN, detail_text)
+        file_size = _first_match(_FILE_SIZE_PATTERN, detail_text)
         records.append(
             {
-                "external_id": document_key,
-                "title": headline,
+                "external_id": external_id,
+                "title": title,
                 "published": published,
-                "announcement_type": str(
-                    item.get("announcementType") or ""
-                ).strip(),
-                "file_size": str(item.get("fileSize") or "").strip(),
-                "is_price_sensitive": bool(item.get("isPriceSensitive")),
-                "url": list_url,
+                "announcement_type": "announcement",
+                "file_size": file_size or "",
+                "page_count": int(page_count) if page_count else None,
+                "is_price_sensitive": bool(cells[1]["price"]),
+                "url": detail_url,
+                "list_url": list_url,
             }
         )
-    return records
+    if archive_rows_seen or "No announcements were released" in html:
+        return records
+    raise AsxAnnouncementsDataError(
+        "ASX announcements archive did not contain results or an explicit empty state."
+    )
 
 
-def _parse_date(value: str) -> Optional[datetime]:
-    if not value:
+def _normalise_text(parts: List[str]) -> str:
+    return " ".join("".join(parts).split())
+
+
+def _parse_published(value: str) -> Optional[datetime]:
+    match = _DATE_TIME_PATTERN.search(value)
+    if match is None:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        naive = datetime.strptime(
+            f"{match.group('date')} {match.group('time').upper()}",
+            "%d/%m/%Y %I:%M %p",
+        )
     except ValueError:
         return None
+    return naive.replace(tzinfo=ASX_TIMEZONE)
+
+
+def _announcement_id(href: str) -> str:
+    ids = parse_qs(urlparse(href).query).get("idsId", [])
+    return ids[0].strip() if ids else ""
+
+
+def _archive_title(parts: List[str]) -> str:
+    text = _normalise_text(parts)
+    text = _PAGE_COUNT_PATTERN.sub("", text)
+    text = _FILE_SIZE_PATTERN.sub("", text)
+    return " ".join(text.split()).strip()
+
+
+def _first_match(pattern: re.Pattern[str], value: str) -> Optional[str]:
+    match = pattern.search(value)
+    return match.group(1).replace(" ", "") if match else None
 
 
 def _read_float_environment(name: str, default: float) -> float:

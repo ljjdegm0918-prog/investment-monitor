@@ -123,9 +123,10 @@ class IndiaTests(unittest.TestCase):
     def test_news_and_registry(self):
         self.assertEqual(in_yahoo_symbol("RELIANCE"), "RELIANCE.NS")
         self.assertEqual(SOURCE_MARKETS["nse_announcements"], "in")
+        self.assertEqual(SOURCE_MARKETS["bse_india_announcements"], "in")
         self.assertEqual(SOURCE_MARKETS["yahoo_in"], "in")
         registry = create_default_registry()
-        for name in ("nse_announcements", "yahoo_in", "google_news_in"):
+        for name in ("nse_announcements", "bse_india_announcements", "yahoo_in", "google_news_in"):
             self.assertIn(name, registry.registered_names)
 
     def test_dedupe_annotates_nse_and_news(self):
@@ -148,7 +149,10 @@ class IndiaTests(unittest.TestCase):
             "external_id": "nse:106746008",
             "published_at": "2026-08-14T18:29:17+00:00",
         })
-        self.assertEqual(filing_key, "in:filing:nse:nse:106746008")
+        self.assertEqual(
+            filing_key,
+            "in:filing:cross-venue:RELIANCE:2026-08-14:x",
+        )
 
 
 if __name__ == "__main__":

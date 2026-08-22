@@ -6,13 +6,13 @@ plain JSON array of ``{"i": <row>, "c": "00001", "n": "CKH HOLDINGS",
 "s": 3749}`` entries, where ``s`` is the internal stock id used by the
 title-search servlet (e.g. ``00700`` -> ``15157``).
 
-``/search/titleSearchServlet.do`` returns a JSON envelope whose ``result``
-field is a *stringified* JSON array of rows carrying NEWS_ID / TITLE /
-DATE_TIME / FILE_LINK / STOCK_CODE / STOCK_NAME / FILE_TYPE. This is an
-unofficial, undocumented page API and may change without notice. From the
-current network the servlet consistently returns an empty envelope (likely
-geo/session gating), so behaviour is locked with fixtures instead of live
-data.
+The official public Title Search UI calls
+``/search/titleSearchServlet.do``.  Its JSON envelope has a stringified
+``result`` array with NEWS_ID / TITLE / DATE_TIME / FILE_LINK / STOCK_CODE /
+STOCK_NAME / FILE_TYPE, plus ``loadedRecord`` / ``recordCnt`` /
+``hasNextRow`` paging evidence.  The endpoint is a public frontend contract,
+not a separately documented HKEX API, so every response is validated before
+an empty result is accepted.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timezone, timedelta
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
@@ -35,6 +36,8 @@ DEFAULT_BASE_URL = "https://www1.hkexnews.hk"
 TITLE_SEARCH_PATH = "/search/titleSearchServlet.do"
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 HKT = timezone(timedelta(hours=8))
+DEFAULT_SEARCH_ROW_RANGE = 100
+DEFAULT_SEARCH_MAX_PAGES = 100
 
 
 class HkexNewsError(Exception):
@@ -47,6 +50,24 @@ class HkexNewsRequestError(HkexNewsError):
 
 class HkexNewsDataError(HkexNewsError):
     """Raised when HKEXnews returns an unexpected payload."""
+
+
+@dataclass(frozen=True)
+class _SearchPage:
+    """One cumulative Title Search response.
+
+    HKEXnews does not expose a conventional page/offset cursor.  Its own
+    ``LOAD MORE`` control re-issues the same query with a larger ``rowRange``
+    (100, 200, 300, ...), and returns all rows loaded so far.  Keeping the
+    envelope metadata lets the client detect a silently truncated response
+    instead of mistaking it for an empty or complete result.
+    """
+
+    records: List[Mapping[str, Any]]
+    loaded_record: int
+    record_count: int
+    has_next_row: bool
+    row_range: int
 
 
 def normalize_hk_ticker(ticker: str) -> str:
@@ -85,6 +106,8 @@ class HkexNewsClient:
         clock: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
         stock_list_ttl_seconds: float = 3600.0,
+        search_page_size: int = DEFAULT_SEARCH_ROW_RANGE,
+        search_max_pages: int = DEFAULT_SEARCH_MAX_PAGES,
     ) -> None:
         if not base_url.strip():
             raise ValueError("HKEXnews base URL must not be empty.")
@@ -100,6 +123,10 @@ class HkexNewsClient:
             raise ValueError(
                 "HKEXnews stock_list_ttl_seconds must not be negative."
             )
+        if search_page_size <= 0:
+            raise ValueError("HKEXnews search_page_size must be greater than zero.")
+        if search_max_pages <= 0:
+            raise ValueError("HKEXnews search_max_pages must be greater than zero.")
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
@@ -112,6 +139,8 @@ class HkexNewsClient:
         self._rate_limit_lock = threading.Lock()
         self._stock_list_ttl_seconds = stock_list_ttl_seconds
         self._stock_cache: Optional[Tuple[float, List[Mapping[str, Any]]]] = None
+        self._search_page_size = search_page_size
+        self._search_max_pages = search_max_pages
 
     @classmethod
     def from_environment(cls) -> "HkexNewsClient":
@@ -176,19 +205,98 @@ class HkexNewsClient:
         end_date: date,
         lang: str = "E",
     ) -> List[Mapping[str, Any]]:
-        """Search announcements for one stock; returns normalized records."""
+        """Search every announcement in the requested date window.
+
+        The official Title Search frontend initially requests 100 rows then
+        repeats the identical query with ``rowRange`` increased by 100 until
+        ``hasNextRow`` is false.  Do the same here and fail closed if the
+        public envelope cannot prove that all reported rows were received.
+        """
+        if end_date < start_date:
+            raise ValueError("HKEXnews end_date must not be before start_date.")
+        response_lang = _canonical_search_language(lang)
+        loaded: List[Mapping[str, Any]] = []
+        previous_ids: Tuple[str, ...] = ()
+
+        for page_number in range(1, self._search_max_pages + 1):
+            row_range = self._search_page_size * page_number
+            page = self._search_page(
+                stock_id=stock_id,
+                start_date=start_date,
+                end_date=end_date,
+                lang=response_lang,
+                row_range=row_range,
+            )
+            current_ids = tuple(str(record["news_id"]) for record in page.records)
+            if len(set(current_ids)) != len(current_ids):
+                raise HkexNewsDataError(
+                    "HKEXnews title search returned duplicate NEWS_ID values."
+                )
+            if previous_ids and current_ids[: len(previous_ids)] != previous_ids:
+                raise HkexNewsDataError(
+                    "HKEXnews title search changed or dropped earlier rows while loading more."
+                )
+            if page.loaded_record != len(page.records):
+                raise HkexNewsDataError(
+                    "HKEXnews title search loadedRecord did not match returned rows."
+                )
+            if page.record_count < page.loaded_record:
+                raise HkexNewsDataError(
+                    "HKEXnews title search recordCnt was smaller than loadedRecord."
+                )
+            if page.has_next_row != (page.loaded_record < page.record_count):
+                raise HkexNewsDataError(
+                    "HKEXnews title search paging metadata was contradictory."
+                )
+            if page.has_next_row and page.loaded_record <= len(previous_ids):
+                raise HkexNewsDataError(
+                    "HKEXnews title search did not make progress while loading more."
+                )
+
+            loaded = page.records
+            previous_ids = current_ids
+            if not page.has_next_row:
+                return loaded
+
+        raise HkexNewsDataError(
+            "HKEXnews title search reached the configured pagination limit before completion."
+        )
+
+    def _search_page(
+        self,
+        *,
+        stock_id: str,
+        start_date: date,
+        end_date: date,
+        lang: str,
+        row_range: int,
+    ) -> _SearchPage:
+        """Fetch one cumulative Title Search envelope using the official UI contract."""
         params = {
+            # These are the fields sent by ncms/js/titlesearch_research.js.
+            "sortDir": "0",
+            "sortByOptions": "0",
+            "category": "",
             "market": "SEHK",
             "stockId": str(stock_id),
-            "searchType": "1",
+            "documentType": "",
             "fromDate": start_date.strftime("%Y%m%d"),
             "toDate": end_date.strftime("%Y%m%d"),
-            "rowRange": "50",
+            "title": "",
+            "searchType": "1",
+            "t1code": "-2",
+            "t2Gcode": "-2",
+            "t2code": "-2",
+            "rowRange": str(row_range),
             "lang": lang,
         }
         url = f"{self._base_url}{TITLE_SEARCH_PATH}?{urlencode(params)}"
         data = self._get_json(url)
-        return _parse_search_response(data, base_url=self._base_url)
+        return _parse_search_response(
+            data,
+            base_url=self._base_url,
+            expected_lang=lang,
+        )
 
     def _load_stock_list(self) -> List[Mapping[str, Any]]:
         now = self._clock()
@@ -196,7 +304,16 @@ class HkexNewsClient:
             fetched_at, cached = self._stock_cache
             if now - fetched_at < self._stock_list_ttl_seconds:
                 return cached
-        rows = self.fetch_stock_list("active", "e")
+        # Title Search retains historical announcements for delisted issuers.
+        # Looking only at the active list silently turns those valid requests
+        # into an apparent no-result, so preserve active entries preferentially
+        # and append inactive-only securities.
+        active = self.fetch_stock_list("active", "e")
+        inactive = self.fetch_stock_list("inactive", "e")
+        by_code = {str(row["stock_code"]): row for row in active}
+        for row in inactive:
+            by_code.setdefault(str(row["stock_code"]), row)
+        rows = list(by_code.values())
         self._stock_cache = (now, rows)
         return rows
 
@@ -261,12 +378,28 @@ def _parse_search_response(
     data: Any,
     *,
     base_url: str,
-) -> List[Mapping[str, Any]]:
+    expected_lang: str,
+) -> _SearchPage:
     if not isinstance(data, dict):
         raise HkexNewsDataError(
             "HKEXnews title search returned an unexpected payload."
         )
-    raw_result = data.get("result")
+    required_fields = (
+        "result",
+        "hasNextRow",
+        "rowRange",
+        "lang",
+        "loadedRecord",
+        "recordCnt",
+    )
+    missing = tuple(field for field in required_fields if field not in data)
+    if missing:
+        raise HkexNewsDataError(
+            "HKEXnews title search envelope was missing required fields: "
+            + ", ".join(missing)
+            + "."
+        )
+    raw_result = data["result"]
     if isinstance(raw_result, str):
         try:
             rows = json.loads(raw_result)
@@ -276,23 +409,56 @@ def _parse_search_response(
             ) from error
     else:
         rows = raw_result
-    if rows is None:
-        return []
     if not isinstance(rows, list):
         raise HkexNewsDataError(
             "HKEXnews title search result was not a list."
         )
+    has_next_row = data["hasNextRow"]
+    if not isinstance(has_next_row, bool):
+        raise HkexNewsDataError(
+            "HKEXnews title search hasNextRow was not a boolean."
+        )
+    response_lang = str(data["lang"] or "").strip().upper()
+    if response_lang != expected_lang:
+        raise HkexNewsDataError(
+            "HKEXnews title search response language did not match the request."
+        )
+    row_range = _parse_nonnegative_int(data["rowRange"], "rowRange")
+    loaded_record = _parse_nonnegative_int(
+        data["loadedRecord"], "loadedRecord"
+    )
+    record_count = _parse_nonnegative_int(data["recordCnt"], "recordCnt")
+    if row_range == 0:
+        raise HkexNewsDataError(
+            "HKEXnews title search rowRange must be greater than zero."
+        )
     records: List[Mapping[str, Any]] = []
-    for row in rows:
+    for index, row in enumerate(rows):
         if not isinstance(row, dict):
-            continue
+            raise HkexNewsDataError(
+                f"HKEXnews title search row {index} was not an object."
+            )
+        news_id = str(row.get("NEWS_ID") or "").strip()
         title = str(row.get("TITLE") or "").strip()
         file_link = str(row.get("FILE_LINK") or "").strip()
         published_at = _parse_hkt_datetime(
             str(row.get("DATE_TIME") or "").strip()
         )
-        if not title or not file_link or published_at is None:
-            continue
+        stock_code = str(row.get("STOCK_CODE") or "").strip()
+        stock_name = str(row.get("STOCK_NAME") or "").strip()
+        file_type = str(row.get("FILE_TYPE") or "").strip()
+        if (
+            not news_id
+            or not title
+            or not file_link
+            or published_at is None
+            or not stock_code
+            or not stock_name
+            or not file_type
+        ):
+            raise HkexNewsDataError(
+                f"HKEXnews title search row {index} was missing required announcement fields."
+            )
         url = (
             file_link
             if file_link.startswith("http")
@@ -300,17 +466,52 @@ def _parse_search_response(
         )
         records.append(
             {
-                "news_id": str(row.get("NEWS_ID") or "").strip(),
+                "news_id": news_id,
                 "title": title,
                 "published_at": published_at,
                 "url": url,
-                "stock_code": str(row.get("STOCK_CODE") or "").strip(),
-                "stock_name": str(row.get("STOCK_NAME") or "").strip(),
-                "file_type": str(row.get("FILE_TYPE") or "").strip(),
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "file_type": file_type,
                 "file_link": file_link,
             }
         )
-    return records
+    return _SearchPage(
+        records=records,
+        loaded_record=loaded_record,
+        record_count=record_count,
+        has_next_row=has_next_row,
+        row_range=row_range,
+    )
+
+
+def _parse_nonnegative_int(value: Any, field: str) -> int:
+    """Parse a non-negative count without accepting booleans or decimals."""
+    if isinstance(value, bool):
+        raise HkexNewsDataError(
+            f"HKEXnews title search {field} was not a non-negative integer."
+        )
+    try:
+        parsed = int(str(value))
+    except (TypeError, ValueError) as error:
+        raise HkexNewsDataError(
+            f"HKEXnews title search {field} was not a non-negative integer."
+        ) from error
+    if parsed < 0 or str(value).strip() not in {str(parsed), f"+{parsed}"}:
+        raise HkexNewsDataError(
+            f"HKEXnews title search {field} was not a non-negative integer."
+        )
+    return parsed
+
+
+def _canonical_search_language(lang: str) -> str:
+    """Map public caller aliases to the E/C codes sent by the HKEX UI."""
+    normalized = str(lang).strip().lower()
+    if normalized in {"e", "en", "eng", "english"}:
+        return "E"
+    if normalized in {"c", "zh", "zh-hk", "chi", "chinese"}:
+        return "C"
+    raise ValueError("HKEXnews search lang must be English or Chinese.")
 
 
 def _parse_stock_list(data: Any) -> List[Mapping[str, Any]]:

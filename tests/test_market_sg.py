@@ -190,37 +190,23 @@ class MarketSGFinnhubSkipTests(unittest.TestCase):
 
 
 class MarketSGDisclosureLockTests(unittest.TestCase):
-    def test_no_sg_disclosure_connector_is_registered(self) -> None:
-        """Lock the SG-1 A3 spike decision.
-
-        SG-1 spike (2026-08-10): SGX company announcements are served by a
-        JS SPA; ``api.sgx.com`` routes return 403 (undocumented AWS Gateway
-        routes, no stable free list endpoint), the legacy
-        ``infopub.sgx.com`` SGXNet JSON is retired (TLS handshake fails),
-        and ``links.sgx.com/1.0.0/corporate-announcements`` serves only
-        per-announcement deep links/PDFs with no public list/search API.
-        MAS/ACRA have no stable key-free per-issuer announcement feed.
-        Remove this test when a real key-free SGX/regulator disclosure
-        source lands.
-        """
+    def test_bounded_free_sg_disclosure_connectors_are_registered(self) -> None:
         registry = create_default_registry()
-
         names = registry.registered_names
-        for blocked_name in (
-            "sgx_announcements",
-            "sgxnet",
-            "infopub_sgx",
-            "acra_filings",
-        ):
+        for name in ("sgx_announcements", "sg_ir", "sg_edgar"):
+            self.assertIn(name, names)
+        self.assertIsNone(registry.configuration_error_for("sg_ir"))
+        for name in ("sgx_announcements", "sg_edgar"):
+            self.assertIsNotNone(registry.configuration_error_for(name))
+        for blocked_name in ("sgxnet", "infopub_sgx", "acra_filings", "mas_opera"):
             self.assertNotIn(blocked_name, names)
 
 
 class MarketSGDisclosureFollowupTests(unittest.TestCase):
-    def test_sg_first_disclosure_source_still_not_registered(self) -> None:
-        """Lock the SG-1 A3 decision across later slices."""
+    def test_sg_known_link_resolver_is_registered_without_spa_enumerator(self) -> None:
         registry = create_default_registry()
-
-        self.assertNotIn("sgx_announcements", registry.registered_names)
+        self.assertIn("sgx_announcements", registry.registered_names)
+        self.assertNotIn("sgxnet", registry.registered_names)
 
     def test_no_paid_or_fake_sg_disclosure_connector_is_registered(self) -> None:
         """Lock the SG-4 second-source boundary.

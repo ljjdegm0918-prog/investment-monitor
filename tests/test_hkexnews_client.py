@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
 import unittest
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from investment_monitor.sources.hkexnews.client import (
     HkexNewsClient,
@@ -77,9 +77,59 @@ def make_client(opener: FakeOpener) -> HkexNewsClient:
     )
 
 
+def search_envelope(
+    rows,
+    *,
+    loaded_record,
+    record_count,
+    has_next_row,
+    row_range,
+    lang="E",
+) -> bytes:
+    import json
+
+    return json.dumps(
+        {
+            "result": json.dumps(rows),
+            "hasNextRow": has_next_row,
+            "rowRange": row_range,
+            "lang": lang,
+            "loadedRecord": loaded_record,
+            "recordCnt": record_count,
+        }
+    ).encode("utf-8")
+
+
+def raw_row(news_id: str) -> dict:
+    return {
+        "NEWS_ID": news_id,
+        "TITLE": f"Announcement {news_id}",
+        "DATE_TIME": "2026-03-03 16:40:00",
+        "FILE_LINK": f"/listedco/listconews/sehk/2026/0303/{news_id}.htm",
+        "STOCK_CODE": "00700",
+        "STOCK_NAME": "TENCENT",
+        "FILE_TYPE": "Announcements and Notices",
+    }
+
+
+class SequencedSearchOpener:
+    def __init__(self, pages: list[bytes]) -> None:
+        self.pages = list(pages)
+        self.calls: list[str] = []
+
+    def __call__(self, request, timeout=None):
+        url = request.full_url if hasattr(request, "full_url") else str(request)
+        self.calls.append(url)
+        if urlsplit(url).path != "/search/titleSearchServlet.do":
+            raise AssertionError(f"unexpected url: {url}")
+        if not self.pages:
+            raise AssertionError("too many Title Search requests")
+        return FakeResponse(self.pages.pop(0))
+
+
 class HkexNewsClientTests(unittest.TestCase):
     def test_stock_id_for_normalizes_hk_ticker_variants(self) -> None:
-        opener = opener_for("activestock_e")
+        opener = opener_for("activestock_e", "inactivestock_e")
         client = make_client(opener)
 
         self.assertEqual(client.stock_id_for("00700"), "15157")
@@ -88,12 +138,12 @@ class HkexNewsClientTests(unittest.TestCase):
         self.assertEqual(client.stock_id_for("00001"), "3749")
 
     def test_stock_id_for_unknown_code_returns_none(self) -> None:
-        client = make_client(opener_for("activestock_e"))
+        client = make_client(opener_for("activestock_e", "inactivestock_e"))
 
         self.assertIsNone(client.stock_id_for("99999"))
 
     def test_stock_for_returns_name_and_id(self) -> None:
-        client = make_client(opener_for("activestock_e"))
+        client = make_client(opener_for("activestock_e", "inactivestock_e"))
 
         stock = client.stock_for("00700")
 
@@ -126,6 +176,11 @@ class HkexNewsClientTests(unittest.TestCase):
         self.assertEqual(active_zh[1]["stock_name"], "騰訊控股")
         self.assertEqual(inactive[0]["stock_code"], "00010")
         self.assertEqual(inactive_zh[0]["stock_name"], "恒生銀行")
+
+    def test_stock_id_for_inactive_security_is_available_for_history(self) -> None:
+        client = make_client(opener_for("activestock_e", "inactivestock_e"))
+
+        self.assertEqual(client.stock_id_for("00010"), "3756")
 
     def test_fetch_stock_list_rejects_unknown_status_or_lang(self) -> None:
         client = make_client(opener_for("activestock_e"))
@@ -195,6 +250,113 @@ class HkexNewsClientTests(unittest.TestCase):
 
         self.assertEqual(len(records), 2)
         self.assertEqual(records[0]["news_id"], "20260303001234")
+
+    def test_search_disclosures_uses_official_cumulative_load_more_paging(self) -> None:
+        first = raw_row("20260303001234")
+        second = raw_row("20260303001235")
+        opener = SequencedSearchOpener(
+            [
+                search_envelope(
+                    [first],
+                    loaded_record=1,
+                    record_count=2,
+                    has_next_row=True,
+                    row_range=100,
+                ),
+                search_envelope(
+                    [first, second],
+                    loaded_record=2,
+                    record_count=2,
+                    has_next_row=False,
+                    row_range=200,
+                ),
+            ]
+        )
+        client = make_client(opener)
+
+        records = client.search_disclosures(
+            "15157", date(2026, 3, 1), date(2026, 3, 31)
+        )
+
+        self.assertEqual([record["news_id"] for record in records], [
+            "20260303001234",
+            "20260303001235",
+        ])
+        first_query = parse_qs(urlsplit(opener.calls[0]).query)
+        second_query = parse_qs(urlsplit(opener.calls[1]).query)
+        self.assertEqual(first_query["rowRange"], ["100"])
+        self.assertEqual(second_query["rowRange"], ["200"])
+        self.assertEqual(first_query["sortDir"], ["0"])
+        self.assertEqual(first_query["t1code"], ["-2"])
+        self.assertEqual(first_query["fromDate"], ["20260301"])
+        self.assertEqual(first_query["toDate"], ["20260331"])
+
+    def test_search_disclosures_chinese_uses_official_c_language_code(self) -> None:
+        opener = SequencedSearchOpener(
+            [
+                search_envelope(
+                    [],
+                    loaded_record=0,
+                    record_count=0,
+                    has_next_row=False,
+                    row_range=100,
+                    lang="C",
+                )
+            ]
+        )
+        client = make_client(opener)
+
+        self.assertEqual(
+            client.search_disclosures("15157", date(2026, 3, 1), date(2026, 3, 31), lang="zh"),
+            [],
+        )
+        self.assertEqual(parse_qs(urlsplit(opener.calls[0]).query)["lang"], ["C"])
+
+    def test_search_disclosures_rejects_missing_or_contradictory_empty_envelope(self) -> None:
+        import json
+
+        for payload in (
+            json.dumps({"result": "[]"}).encode("utf-8"),
+            search_envelope(
+                [],
+                loaded_record=0,
+                record_count=1,
+                has_next_row=False,
+                row_range=100,
+            ),
+        ):
+            with self.subTest(payload=payload):
+                client = make_client(SequencedSearchOpener([payload]))
+                with self.assertRaises(HkexNewsDataError):
+                    client.search_disclosures(
+                        "15157", date(2026, 3, 1), date(2026, 3, 31)
+                    )
+
+    def test_search_disclosures_rejects_stalled_or_malformed_paging(self) -> None:
+        first = raw_row("20260303001234")
+        stalled = search_envelope(
+            [first],
+            loaded_record=1,
+            record_count=2,
+            has_next_row=True,
+            row_range=100,
+        )
+        missing_title = raw_row("20260303001235")
+        del missing_title["TITLE"]
+        malformed = search_envelope(
+            [missing_title],
+            loaded_record=1,
+            record_count=1,
+            has_next_row=False,
+            row_range=100,
+        )
+        for pages in ([stalled, stalled], [malformed]):
+            with self.subTest(pages=pages):
+                client = make_client(SequencedSearchOpener(pages))
+                with self.assertRaises(HkexNewsDataError):
+                    client.search_disclosures(
+                        "15157", date(2026, 3, 1), date(2026, 3, 31)
+                    )
 
     def test_invalid_response_raises_data_error_without_dumping_html(self) -> None:
         opener = FakeOpener(

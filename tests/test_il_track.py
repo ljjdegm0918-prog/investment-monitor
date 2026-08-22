@@ -1,6 +1,6 @@
 """Israel stub/news/dedupe tests."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 import unittest
 
 from investment_monitor.dedupe import annotate_feed_items, dedupe_key
@@ -34,14 +34,24 @@ class FakeGoogleClient:
         return []
 
 
+class FakeDisclosureClient:
+    timezone = timezone.utc
+    def fetch_for_tickers(self, tickers, start_date, end_date):
+        return [{"external_id": "il:1", "ticker": tickers[0], "issuer": "TEVA",
+                 "published_at": datetime(2026, 8, 1, 9, tzinfo=timezone.utc),
+                 "title": "Report", "document_type": "C002",
+                 "url": "https://mayafiles.tase.co.il/report.pdf", "raw_payload": {"id": 1}}]
+
+
 class IsraelTests(unittest.TestCase):
-    def test_disclosure_connector_is_honest_stub(self):
-        connector = MayaAnnouncementsConnector()
-        self.assertEqual(connector.collect(CollectionRequest(
+    def test_disclosure_connector_maps_official_record(self):
+        connector = MayaAnnouncementsConnector(client=FakeDisclosureClient(), universe={})
+        items = connector.collect(CollectionRequest(
             tickers=("TEVA",), start_date=date(2026, 8, 1),
             end_date=date(2026, 8, 1), markets={"TEVA": "il"},
-        )), [])
-        self.assertEqual(connector.last_collection_status, "stub")
+        ))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(connector.last_collection_status, "success")
 
     def test_yahoo_symbol_and_foreign_skip(self):
         self.assertEqual(il_yahoo_symbol("TEVA"), "TEVA.TA")

@@ -42,14 +42,14 @@ class AsxAnnouncementsConnectorTests(unittest.TestCase):
     def request(self, tickers, markets):
         return CollectionRequest(
             tickers=tickers,
-            start_date=date(2026, 8, 1),
-            end_date=date(2026, 8, 6),
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 31),
             markets=markets,
         )
 
     def make_connector(self):
         opener = FakeOpener(
-            (FIXTURES / "bhp_announcements.json").read_bytes()
+            (FIXTURES / "bhp_2026_archive.html").read_bytes()
         )
         connector = AsxAnnouncementsConnector(
             client=AsxAnnouncementsClient(
@@ -77,24 +77,29 @@ class AsxAnnouncementsConnectorTests(unittest.TestCase):
             self.request(("BHP.AX",), {"BHP.AX": "au"})
         )
 
-        self.assertEqual(len(items), 3)
-        self.assertIn("companies/BHP/announcements", opener.requested[0])
+        self.assertEqual(len(items), 2)
+        self.assertIn("asxCode=BHP", opener.requested[0])
+        self.assertIn("timeframe=Y", opener.requested[0])
         first = items[0]
         self.assertEqual(first.source, "asx_announcements")
         self.assertEqual(first.source_type, "regulatory_filing")
         self.assertEqual(first.tickers, ("BHP",))
         self.assertEqual(first.market, "au")
-        self.assertEqual(first.document_type, "QUARTERLY ACTIVITIES REPORT")
-        self.assertEqual(first.external_id, "2924-03111504-3A697237")
+        self.assertEqual(first.document_type, "announcement")
+        self.assertEqual(first.external_id, "03115448")
         self.assertEqual(
             first.raw_metadata["provider"],
-            "asx_markitdigital_research_api",
+            "asx_historical_announcements_archive",
+        )
+        self.assertEqual(
+            first.raw_metadata["archive_coverage"],
+            "complete_for_requested_years",
         )
         self.assertEqual(first.raw_metadata["is_price_sensitive"], True)
         self.assertEqual(
             first.url,
-            "https://asx.api.markitdigital.com/"
-            "asx-research/1.0/companies/BHP/announcements",
+            "https://www.asx.com.au/asx/v2/statistics/"
+            "displayAnnouncement.do?display=pdf&idsId=03115448",
         )
 
     def test_date_window_filters_old_items(self) -> None:
@@ -104,7 +109,7 @@ class AsxAnnouncementsConnectorTests(unittest.TestCase):
             self.request(("BHP",), {"BHP": "au"})
         )
 
-        self.assertEqual(len(items), 3)
+        self.assertEqual(len(items), 2)
 
     def test_single_ticker_failure_raises_and_records_error(self) -> None:
         from investment_monitor import AsxAnnouncementsClient

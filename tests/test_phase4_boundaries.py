@@ -23,7 +23,7 @@ class Phase4BoundaryTests(unittest.TestCase):
 
     def test_sg_boundary_is_locked_partial(self):
         self.assertEqual(SG_BOUNDARY["universe"], "partial")
-        self.assertEqual(SG_BOUNDARY["disclosure"], "unavailable")
+        self.assertEqual(SG_BOUNDARY["disclosure"], "partial")
         self.assertIn("api.sgx.com", SG_BOUNDARY["evidence"])
 
     def test_se_boundary_keeps_live_filings_but_stub_universe(self):

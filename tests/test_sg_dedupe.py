@@ -100,14 +100,30 @@ class SgDedupeKeyTests(unittest.TestCase):
         self.assertIn("2026-08-06", dedupe_key(late_utc))
         self.assertIn("2026-08-05", dedupe_key(early_utc))
 
-    def test_sg_filing_without_disclosure_source_gets_no_key(self) -> None:
+    def test_sg_official_filing_uses_announcement_reference(self) -> None:
         item = feed_item(
             "sgx_announcements",
             "a-1",
             source_type="regulatory_filing",
+            raw_metadata={"announcement_reference": "SG260805OTHRABCD"},
         )
 
-        self.assertIsNone(dedupe_key(item))
+        self.assertEqual(
+            dedupe_key(item), "sg:filing:sgx:SG260805OTHRABCD"
+        )
+
+    def test_sg_filing_shared_canonical_key_pairs_sources(self) -> None:
+        sgx = feed_item(
+            "sgx_announcements", "a-1", source_type="regulatory_filing",
+            raw_metadata={"canonical_key": "sgx:SG260805OTHRABCD"},
+        )
+        ir = feed_item(
+            "sg_ir", "ir-1", source_type="regulatory_filing",
+            raw_metadata={"canonical_key": "sgx:SG260805OTHRABCD"},
+        )
+        self.assertEqual(dedupe_key(sgx), dedupe_key(ir))
+        annotated = annotate_feed_items([sgx, ir])
+        self.assertEqual(annotated[0]["also_seen_on"], ["sg_ir"])
 
     def test_us_market_still_has_no_key(self) -> None:
         item = feed_item("sec", "sec-1", market="us")

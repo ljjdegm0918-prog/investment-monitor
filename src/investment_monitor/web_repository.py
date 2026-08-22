@@ -28,6 +28,8 @@ from zoneinfo import ZoneInfo
 from .config import SourceConfig, UniverseEntry
 from .daily import local_day_bounds
 from .dedupe import annotate_feed_items
+from .ca_coverage import calculate_ca_coverage
+from .sg_coverage import calculate_sg_coverage
 from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 from .research_repository import ensure_research_schema
@@ -57,13 +59,21 @@ SOURCE_LABELS = {
     "google_news_ca": "Google News (CA)",
     "twse_material": "TWSE OpenAPI (material)",
     "tpex_material": "TPEx OpenAPI (material)",
+    "mops_disclosures": "MOPS historical material disclosures",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
     "asx_announcements": "ASX Market Announcements",
+    "bse_india_announcements": "BSE India corporate announcements",
+    "bse_hu_announcements": "BSE (Budapest) announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
     "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
+    "ca_edgar": "SEC EDGAR (Canadian cross-listing)",
+    "ca_ir": "Canadian issuer IR",
+    "sgx_announcements": "SGX known official announcement details",
+    "sg_ir": "Singapore issuer IR",
+    "sg_edgar": "SEC EDGAR (Singapore cross-listing)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -97,7 +107,7 @@ SOURCE_LABELS = {
     "yahoo_de": "Yahoo Finance DE",
     "google_news_de": "Google News (DE)",
     "sedar_plus": "SEDAR+ (not wired)",
-    "cse_filings": "CSE filings (not wired)",
+    "cse_filings": "CSE official issuer filing mirror",
     "neo_filings": "NEO filings (not wired)",
     "news": "News",
     "community": "Community",
@@ -124,13 +134,22 @@ PROVIDER_LABELS = {
     "google_news_ca": "Google News (CA)",
     "twse_material": "TWSE OpenAPI (material)",
     "tpex_material": "TPEx OpenAPI (material)",
+    "mops_disclosures": "MOPS historical material disclosures",
     "yahoo_tw": "Yahoo Finance TW",
     "google_news_tw": "Google News (TW)",
     "asx_announcements": "ASX Market Announcements",
+    "bse_india_announcements": "BSE India corporate announcements",
+    "bse_hu_announcements": "BSE (Budapest) announcements",
     "yahoo_au": "Yahoo Finance AU",
     "google_news_au": "Google News (AU)",
     "ceoca_ca": "CEO.ca (CA)",
     "ceoca_sedar": "CEO.ca SEDAR 文件镜像 (CA)",
+    "ca_edgar": "SEC EDGAR (Canadian cross-listing)",
+    "ca_ir": "Canadian issuer IR",
+    "cse_filings": "CSE official issuer filing mirror",
+    "sgx_announcements": "SGX known official announcement details",
+    "sg_ir": "Singapore issuer IR",
+    "sg_edgar": "SEC EDGAR (Singapore cross-listing)",
     "hotcopper_au": "HotCopper (AU)",
     "stockhead_au": "Stockhead (AU)",
     "lse_share_chat": "LSE Share Chat (UK)",
@@ -239,14 +258,20 @@ CONNECTOR_REGIONS = {
     "yahoo_hk": ("Hong Kong",),
     "yahoo_ca": ("Canada",),
     "google_news_ca": ("Canada",),
+    "ceoca_sedar": ("Canada",),
+    "ca_edgar": ("Canada",),
+    "ca_ir": ("Canada",),
     "sedar_plus": ("Canada",),
     "cse_filings": ("Canada",),
     "neo_filings": ("Canada",),
     "twse_material": ("Taiwan",),
     "tpex_material": ("Taiwan",),
+    "mops_disclosures": ("Taiwan",),
     "yahoo_tw": ("Taiwan",),
     "google_news_tw": ("Taiwan",),
     "asx_announcements": ("Australia",),
+    "bse_india_announcements": ("India",),
+    "bse_hu_announcements": ("Hungary",),
     "yahoo_au": ("Australia",),
     "google_news_au": ("Australia",),
     "amf_oam": ("France",),
@@ -267,6 +292,8 @@ CONNECTOR_REGIONS = {
     "yahoo_es": ("Spain",),
     "google_news_es": ("Spain",),
     "sgx_announcements": ("Singapore",),
+    "sg_ir": ("Singapore",),
+    "sg_edgar": ("Singapore",),
     "yahoo_sg": ("Singapore",),
     "google_news_sg": ("Singapore",),
     "fsma_stori": ("Belgium",),
@@ -1231,6 +1258,90 @@ class WebRepository:
             page += 1
         return self.set_read(ids, is_read)
 
+    def canada_coverage_metrics(
+        self,
+        universe: Optional[Mapping[str, Any]],
+        *,
+        now: Optional[datetime] = None,
+    ) -> Mapping[str, Any]:
+        """Return live Canadian coverage metrics from persisted evidence."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT i.source, i.market, i.published_at, i.raw_metadata,
+                       t.ticker
+                FROM information_items i
+                JOIN information_item_tickers t ON t.item_id = i.id
+                WHERE i.market = 'ca' AND t.market = 'ca'
+                  AND i.source_type IN (
+                      'regulatory_filing', 'regulatory_disclosure'
+                  )
+                """
+            ).fetchall()
+        items = []
+        for row in rows:
+            try:
+                metadata = json.loads(str(row["raw_metadata"]))
+            except (TypeError, json.JSONDecodeError):
+                metadata = {}
+            items.append({
+                "source": row["source"],
+                "market": row["market"],
+                "ticker": row["ticker"],
+                "published_at": row["published_at"],
+                "raw_metadata": metadata,
+            })
+        ca_statuses = tuple(
+            status for status in self.connector_statuses(now=now)
+            if "Canada" in tuple(status.get("regions") or ())
+            and status.get("type") == "Filings"
+        )
+        return calculate_ca_coverage(
+            universe, items, source_statuses=ca_statuses, now=now
+        )
+
+    def singapore_coverage_metrics(
+        self,
+        universe: Optional[Mapping[str, Any]],
+        *,
+        now: Optional[datetime] = None,
+    ) -> Mapping[str, Any]:
+        """Return SG evidence metrics without implying SGXNET parity."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT i.source, i.market, i.published_at, i.raw_metadata,
+                       t.ticker
+                FROM information_items i
+                JOIN information_item_tickers t ON t.item_id = i.id
+                WHERE i.market = 'sg' AND t.market = 'sg'
+                  AND i.source_type IN (
+                      'regulatory_filing', 'regulatory_disclosure'
+                  )
+                """
+            ).fetchall()
+        items = []
+        for row in rows:
+            try:
+                metadata = json.loads(str(row["raw_metadata"]))
+            except (TypeError, json.JSONDecodeError):
+                metadata = {}
+            items.append({
+                "source": row["source"],
+                "market": row["market"],
+                "ticker": row["ticker"],
+                "published_at": row["published_at"],
+                "raw_metadata": metadata,
+            })
+        sg_statuses = tuple(
+            status for status in self.connector_statuses(now=now)
+            if "Singapore" in tuple(status.get("regions") or ())
+            and status.get("type") == "Filings"
+        )
+        return calculate_sg_coverage(
+            universe, items, source_statuses=sg_statuses, now=now
+        )
+
     def source_statuses(
         self,
         *,
@@ -1275,17 +1386,25 @@ class WebRepository:
         for source in self._connector_catalog:
             if source.name.startswith("mock"):
                 continue
-            run_row, failure_row = self._source_run_status(source.name)
+            run_row, failure_row = self._source_run_status((source.name,))
             with self._connect() as connection:
                 item_row = connection.execute(
                     "SELECT MAX(collected_at) AS latest FROM information_items "
                     "WHERE source = ?", (source.name,),
                 ).fetchone()
             latest_item = item_row["latest"] if item_row else None
+            bounded_incomplete = (
+                source.name in {
+                    "ceoca_sedar", "ca_ir", "ca_edgar", "cse_filings",
+                    "cse_bulletins", "sgx_announcements", "sg_ir", "sg_edgar",
+                }
+                and run_row
+                and run_row["status"] == "partial"
+            )
             latest_success = (
                 (run_row["finished_at"] or run_row["started_at"])
-                if run_row and run_row["status"] in {"success", "partial", "empty"}
-                else latest_item
+                if run_row and run_row["status"] in {"success", "empty"}
+                else (None if bounded_incomplete else latest_item)
             )
             is_stale = bool(
                 latest_success
@@ -1302,6 +1421,8 @@ class WebRepository:
                 status = "not_connected"
             elif run_row and run_row["status"] == "failure":
                 status = "temporarily_unavailable"
+            elif bounded_incomplete:
+                status = "partial"
             elif is_stale:
                 status = "stale"
             elif latest_success:

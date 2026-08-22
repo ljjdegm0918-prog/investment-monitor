@@ -1,0 +1,33 @@
+{
+  "Table": [
+    {
+      "NEWSID": "548da0e0-e4c7-4cce-8ad7-a2af8d154f54",
+      "SCRIP_CD": 500325,
+      "NEWSSUB": "Reliance Industries Ltd - 500325 - Outcome of Board Meeting",
+      "HEADLINE": "Outcome of Board Meeting",
+      "CATEGORYNAME": "Company Update",
+      "SUBCATNAME": "General",
+      "ATTACHMENTNAME": "548da0e0-e4c7-4cce-8ad7-a2af8d154f54.pdf",
+      "SLONGNAME": "Reliance Industries Ltd",
+      "DissemDT": "2026-08-15T23:59:12.827",
+      "Fld_Attachsize": 1455877,
+      "MORE": "Board has approved the proposal.",
+      "NSURL": "https://www.bseindia.com/stock-share-price/reliance-industries-ltd/reliance/500325/"
+    },
+    {
+      "NEWSID": "548da0e0-e4c7-4cce-8ad7-a2af8d154f55",
+      "SCRIP_CD": 500325,
+      "NEWSSUB": "Reliance Industries Ltd - 500325 - Investor Presentation",
+      "HEADLINE": "Investor Presentation",
+      "CATEGORYNAME": "Company Update",
+      "SUBCATNAME": "Investor Presentation",
+      "ATTACHMENTNAME": "",
+      "SLONGNAME": "Reliance Industries Ltd",
+      "DissemDT": "2026-08-15T10:00:00",
+      "Fld_Attachsize": null,
+      "MORE": "Presentation available on issuer page.",
+      "NSURL": "https://www.bseindia.com/stock-share-price/reliance-industries-ltd/reliance/500325/"
+    }
+  ],
+  "Table1": [{"ROWCNT": 3}]
+}

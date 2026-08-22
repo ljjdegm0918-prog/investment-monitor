@@ -140,7 +140,7 @@ UK feed 软去重（仅展示，保留所有行）：filings 在 RNS id（Invest
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| hkexnews | filings | none | Unofficial HKEXnews title-search JSON; may change without notice |
+| hkexnews | filings | none | HKEX official public Title Search frontend JSON contract; undocumented, fully paged and fail-closed |
 | hk_universe | breadth cache | none | HKEXnews active/inactive stock lists; never enters the feed |
 | yahoo_hk | news | none | Yahoo Finance HK public RSS; `.HK` at request time |
 | google_news_hk | news | none | Key-free Google News RSS search (`hl=zh-HK&gl=HK&ceid=HK:zh-Hant`); may be loosely related and break without notice |
@@ -159,20 +159,23 @@ CN 股票以未映射方式添加（无 SEC 映射）；Xueqiu 社区符号为 `
 
 ### 加拿大数据源（CA）
 
-**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe 缓存、CEO.ca SEDAR PDF 镜像、Yahoo/Google CA news 与软去重。**未接入：** SEDAR+ 官方全量、CSE universe/filings、NEO universe/filings（见下方边界说明）。
+**非完整加拿大市场轨道。** 当前已接入：TSX/TSXV universe、CSE 官网公开全证券目录及逐发行人 filing mirror、公司自有 IR feed、加拿大双重上市公司的 SEC EDGAR 补漏、CEO.ca discovery 镜像。**未接入：** SEDAR+ 官方全量和 NEO 全量；加拿大在完成监管全量对账前最高只能评为 `high`。
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| ca_universe | breadth cache | none | TSX + TSXV company directories via key-free official TMX JSON; **CSE** / **NEO** directories are not wired (TLS / origin failures); never enters the feed |
+| ca_universe | breadth cache | optional `CA_CSE_UNIVERSE_EXPORT_PATH`, `CA_UNIVERSE_OVERLAY_PATH` | TSX + TSXV 使用免费官方 TMX JSON；CSE 使用官网自己调用的 `website-data-api-v2.thecse.com/api/companies/all`，严格校验全量规模、ID、状态、退市日期和 recycled symbol，并保留官方离线 export/overlay 兜底；NEO 仍未完成。 |
+| ca_ir | filings | `CA_IR_CONFIG_PATH` | Tier 2 公司官方 IR；严格 allowlist，支持 RSS/Atom、公开 JSON、Sitemap、HTML adapter；仅保存公告元数据/官方链接与附件，滚动 feed 固定为 partial。 |
+| ca_edgar | filings | `SEC_USER_AGENT`, `CA_EDGAR_IDENTITY_PATH` | Tier 1 美国监管补漏；只接受人工审核的 CA ticker/exchange→US ticker/CIK 映射，采集 6-K/40-F/20-F/F-10/8-K 及附件；明确标记 US regulator / non-SEDAR。 |
+| cse_filings | filings | none | **CSE official exchange mirror / CA partial**：由 CSE universe 精确解析官方 security JSON → `sedar_filings/{issuer-id}.json` → CSE 托管 PDF；校验发行人、symbol、category 总数、accession、状态和日期，保留 removed revision，单发行人失败不抹掉其他结果。仅覆盖 CSE，不冒充 SEDAR+ 全国主链。 |
 | yahoo_ca | news | none | Yahoo Finance CA public RSS (`region=CA`, `lang=en-CA`); `.TO` at request time (`.V` for TSXV boards from the universe cache, otherwise `.TO`); may be loosely related and break without notice |
 | google_news_ca | news | none | Key-free Google News RSS search (`hl=en-CA&gl=CA&ceid=CA:en`); may be loosely related and break without notice |
 | ceoca_ca | community | none | CEO.ca channel spiels via key-free JSON API (`new-api.ceo.ca`; spike 2026-08-11). API returns ~50 spiels/page (`limit` ignored); paginate with `until`. Toronto calendar-day filter; channel page URL only — no per-spiel deep link. Undocumented API may change without notice. |
 | ceoca_sedar | filings | none | **partial**：按请求 ticker 读取 CEO.ca 公司频道中的 `#sedar` bot 消息并保留实际 PDF 深链接，不扫描全局 SEDAR 历史；只接受精确 bot 身份、消息格式和 `ceo.ca/content/sedar/*.pdf`，日期最多 31 天且分页上限会失败关闭。这是 SEDAR+ 的第三方镜像，端点未文档化且无法证明无漏页，所以绝不标 official/live。 |
-| sedar_plus / cse_filings / neo_filings | filings | — | 官方 SEDAR+ 仍受 Radware 403；CSE/NEO 目录和 filings 仍缺稳定入口。它们保留为未实现边界，不会被 CEO.ca 镜像冒充。 |
+| sedar_plus / neo_filings | filings | — | SEDAR+ 公共站条款禁止自动批量抓取及据此建立数据库；官方可行路径是 ASC/CSA 许可的 bulk/ad-hoc 数据分发。未取得书面许可、凭据和数据合同前不接入；Cboe Canada/NEO 仍缺本任务允许的免费完整 issuer-filing 主链。 |
 
 `market=ca` 公司使用规范根 ticker（`RY` / `RY.TO` / `RY-TO` 均存为 `RY`）。Board 在 universe 温热时由 `ca_universe_name_map()` 写入 `exchange`，冷启动时从输入后缀推断。公司保持 unmapped。Finnhub **仅 US**，不对 CA 查询。
 
-CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ca` / `google_news_ca` news 跨源按 ticker + Toronto day（`America/Toronto`）+ normalized title 配对。`ceoca_sedar` 以 spiel id 生成稳定 external id；Community 软去重继续使用 `ceoca_ca` spiel id（或同源 scoped 标题回退）。
+CA feed 软去重只做关联、不删除来源行：Filing 优先使用 canonical id、官方 ID/URL、文件哈希，再使用 ticker + Toronto day + normalized title 的相似键；`yahoo_ca` / `google_news_ca` news 继续按 ticker + Toronto day + normalized title 配对。CEO.ca 始终保留 Tier 4 mirror 身份。
 
 ### 台湾数据源（TW）
 
@@ -180,6 +183,7 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 |---|---|---|---|
 | twse_material | filings | none | TWSE OpenAPI material-information for **listed companies only**; key-free; OTC via tpex_material; 興櫃 not wired |
 | tpex_material | filings | none | TPEx OpenAPI material-information for **OTC (上櫃)**; 興櫃 not wired |
+| mops_disclosures | filings | none | Official MOPS company/month history plus detail endpoint; covers the material-disclosure family, not every MOPS file family |
 | tw_universe | breadth cache | none | TWSE listed + TPEx OTC directories; emerging opt-in via env only; never enters the feed |
 | yahoo_tw | news | none | Yahoo Finance TW public RSS (`region=TW`); `.TW`/`.TWO` at request time from board; may break without notice |
 | google_news_tw | news | none | Key-free Google News RSS (`q={ticker}.TW`, zh-TW); may break without notice |
@@ -190,7 +194,7 @@ CA feed 软去重（仅展示，保留所有行；共用 `KR_FEED_SOFT_DEDUPE` �
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| asx_announcements | filings | none | ASX company announcements via key-free research API; undocumented; latest 5 per company; may change without notice |
+| asx_announcements | filings | none | Official ASX historical company-announcement archive, queried by company and calendar year |
 | au_universe | breadth cache | none | ASX company directory; never enters the feed |
 | yahoo_au | news | none | Yahoo Finance AU public RSS (`region=AU`); `.AX` at request time |
 | google_news_au | news | none | Key-free Google News RSS (`hl=en-AU&gl=AU&ceid=AU:en`) |
@@ -268,12 +272,14 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| sgx_announcements | filings | none | **Not wired (SG-1 spike A3; SG-4 re-verified 2026-08-10)**: SGX company announcements are a JS SPA; `api.sgx.com` routes return 403 (undocumented AWS Gateway, no stable free list endpoint), the legacy `infopub.sgx.com` SGXNet JSON is retired (TLS handshake fails), and `links.sgx.com/1.0.0/corporate-announcements/{id}` serves only per-announcement deep links/PDFs with no public list/search API. MAS/ACRA have no stable key-free per-issuer announcement feed. No production connector or second disclosure source is registered; SGX DataLink / LSEG / paid market-data products are deliberately not used (locked by tests). |
+| sgx_announcements | filings | `SGX_KNOWN_ANNOUNCEMENTS_PATH` | **partial**：解析经审核的 `links.sgx.com/1.0.0/corporate-announcements/{id}` 已知官方详情及多附件，保存 SGX reference、SGT 时间、证券身份和发现来源。绝不调用或重放 SPA `authorizationToken`，因此不能枚举完整 SGXNET。 |
+| sg_ir | filings | optional `SG_IR_CONFIG_PATH` | **partial**：默认内置已审计的 Singtel Stock Exchange Announcements（公开 JSON datamodel，约 1,975 条 live 历史记录）和 OCBC Major Regulatory Announcements（2001 起公开日期/PDF档案）；另支持配置驱动的 RSS/Atom、公开 JSON、Sitemap、HTML、ListedCompany/ShareInvestor。所有 URL 走 HTTPS host/path allowlist，发行人官网为 Tier 2。UOB ListedCompany 现场为 WAF challenge，未绕过。 |
+| sg_edgar | filings | `SEC_USER_AGENT`, `SG_EDGAR_IDENTITY_PATH` | **partial supplement**：仅对人工审核的 SG/US 双重上市映射读取 SEC 6-K、20-F、F-1、F-3、8-K 及附件；明确标记为美国监管文件，不冒充 SGX 公告。 |
 | sg_universe | breadth cache | none | **partial**：从正规新加坡第三方 StocksSG 的公开 `/api/v1/companies` 目录读取 ticker、公司名、UEN、board、ISIN、LEI；校验响应总数、重复 ticker 和最小规模后原子写缓存。现场接口仅约 183 行，明显不能证明 SGX 全量，因此不标 official/live；缓存永不进入信息 feed。 |
 | yahoo_sg | news | none | Yahoo Finance SG public RSS (`region=SG`, `lang=en-SG` + `en-US` merged; identical titles stay single-language); `.SI` at request time; may be loosely related and break without notice |
 | google_news_sg | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=en-SG&gl=SG&ceid=SG:en`); may be loosely related and break without notice |
 
-`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）。目录缓存温热时可回填名称、board 与 ISIN；冷启动仍保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`。官方 SGX 披露仍未接入，不能用 StocksSG 的有限 announcements 页面代替监管 filings。
+`market=sg` 公司使用规范根 ticker（`D05` / `D05.SI` / `D05-SG` 均存为 `D05`；交易所后缀 `.SI` / `.SG` 在添加时剥离，新加坡 ISIN 原样保留；SGX 代码长度不一，不假设固定位宽）。目录缓存温热时可回填名称、board 与 ISIN；冷启动仍保持 unmapped。Finnhub **仅 US**，不对 SG 查询。News 来自 `yahoo_sg` / `google_news_sg`，不会进入 Filing。MAS OPERA 检索需要图形 CAPTCHA，因此只作人工核对，不自动化。SG 覆盖最高为 `high`；没有可枚举的 SGXNET 主链时绝不标 `complete`。
 
 ### 瑞士数据源（CH）
 
@@ -428,12 +434,12 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - 市场代码：`no`（挪威 / Oslo Børs）、`pt`（葡萄牙 / Euronext Lisbon），
   2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；`TICKER@NO|PT` 与
   Yahoo 后缀 `.OL` / `.LS` 均可导入。
-- **披露主链（诚实 stub）**：`newsweb_no`（NewsWeb，挪威法定 OAM）与
-  `euronext_lisbon_news`（Euronext Lisbon 公司新闻）。ENP-1 live 侦察
-  （2026-08-15）：NewsWeb 消息列表为混淆 JS SPA，`/api/*` 全部返回 SPA
-  外壳，无稳定免 key 数据端点；Euronext Lisbon 公司页 200，但公告由前端
-  组件渲染，探测的 press-release ajax 端点 404。两个连接器 `collect()`
-  诚实返回空并标注 stub，不伪造数据。付费聚合商不接。
+- **披露主链**：`newsweb_no` 使用 NewsWeb 官方 `api3.oslo.oslobors.no`
+  list/detail JSON（覆盖 XOSL/XOAX/XOAM/MERK，overflow 自动拆窗），并保存正文、
+  修正关系及官方附件；单日仍 overflow 时失败关闭。
+  `euronext_lisbon_news` 使用 Euronext Lisbon 当前 canonical company press-release
+  archive，严格验证日期参数未被重定向丢弃并分页到明确空页。CMVM 法定披露系统
+  尚无公开、稳定、可版本化的数据合同，因此没有接入。
 - **可交易宇宙**：复用 Euronext live CSV
   （`live.euronext.com/en/pd_es/data/stocks/download?mics=dm_all_stock`，
   同 NL/FR 家族），按 `market` 列的 **live 锁定写法**过滤：
@@ -446,11 +452,8 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   （免 key RSS）。Yahoo 请求后缀 `.OL`/`.LS`，本地语言 `nb-NO`/`pt-PT` 与
   `en-US` 双查合并；Google 参数 `hl=no&gl=NO&ceid=NO:no` 与
   `hl=pt&gl=PT&ceid=PT:pt`。可能松散相关。**Finnhub 永不查 no/pt。**
-- **第二源（ENP-4 锁死）**：NO 主源 NewsWeb 尚无可用实现，Euronext Oslo
-  公司新闻未找到稳定免 key 端点，第二源同样锁死；PT 的 CMVM 公开通道与
-  Euronext 公司新闻均未发现稳定免 key JSON（`cmvm.pt` 英文路径 404，
-  EQS News API 对 EQNR/EDP 返回空记录），披露侧保持 stub 诚实边界。
-- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；NO/PT 新闻在
+- **第二源（ENP-4 锁死）**：当前未接额外付费/聚合披露源；主链均为官方源。
+- **软去重**：披露 filing 行永不跨源标注；NO/PT 新闻在
   Yahoo↔Google 间按 ticker + Oslo/Lisbon 日 + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
@@ -458,12 +461,9 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 
 - 市场代码：`at`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@AT` 与 Yahoo 后缀 `.VI` 均可导入。
-- **披露主链（诚实 stub）**：`wiener_boerse_news`。AT-1 live 侦察
-  （2026-08-15）：wienerborse.at 为 TYPO3 站点，发行人公告目录由前端
-  渲染，`/en/listed-companies/`、`/en/market-data/*` 下未发现稳定免 key
-  的 CSV/XLSX/JSON 端点；EQS Austria 对抽样 AT ISIN（如 OMV
-  AT0000743059）返回空记录。连接器 `collect()` 诚实返回空并标注 stub。
-  若未来用 EQS Austria，必须标注「非 Wiener Börse 官方、覆盖可能部分」。
+- **披露主链**：`wiener_boerse_news` 分页读取 Wiener Börse 官方
+  `/en/news-1/`，解析 Ad-hoc/Corporate News，保存官方页面与原始 HTML
+  证据；这是交易所新闻档案覆盖，不宣称等同完整 OAM 文件库。
 - **可交易宇宙（边界 stub）**：官方无稳定免 key 目录端点，`refresh` 抛
   `AtUniverseError`；只读取手工放置的
   `.cache/investment_monitor/at_universe.json`（若存在）。**无 ATX 或任何
@@ -471,13 +471,12 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - **新闻**：`yahoo_at`（`.VI` 后缀，`de-AT` + `en-US` 双查）与
   `google_news_at`（`hl=de&gl=AT&ceid=AT:de`），免 key RSS，可能松散相关。
   **Finnhub 永不查 at。**
-- **第二源（AT-4 锁死）**：官方主源尚未有可用实现，EQS Austria 样本
-  空记录，无第二官方源；不接付费终端/数据商。
-- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；AT 新闻在
+- **第二源（AT-4 锁死）**：EQS Austria 样本空记录，暂不接第二披露源。
+- **软去重**：披露 filing 行永不跨源标注；AT 新闻在
   Yahoo↔Google 间按 ticker + Vienna 日 + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
-### 印度（IN）— NSE（主）/ BSE（第二源边界）
+### 印度（IN）— NSE（主）/ BSE India（第二交易所）
 
 - 市场代码：`in`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@IN` 与 Yahoo 后缀 `.NS`（BSE 报价 `.BO`）均可导入。
@@ -494,22 +493,22 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - **新闻**：`yahoo_in`（`.NS` 后缀，`en-IN` + `en-US` 双查）与
   `google_news_in`（`hl=en&gl=IN&ceid=IN:en`），免 key RSS，可能松散相关。
   **Finnhub 永不查 in。**
-- **第二披露源（IN-4 锁死）**：BSE 公告 API
-  （`api.bseindia.com/.../AnnSubCategoryGetData`）探测返回空 `{}`，
-  站点为 Angular SPA 且参数无公开文档；不接付费终端。NSE 官方 API 为
-  唯一披露源，BSE 边界写死。
-- **软去重**：NSE 披露按稳定 `seq_id` 配对（无 id → source-scoped +
-  Kolkata 日 + 标题）；IN 新闻 Yahoo↔Google 按 ticker + Kolkata 日 +
-  归一化标题配对。只标注 `Also seen on`，保留所有行、不缩页。
+- **第二披露源 `bse_india_announcements`**：调用 BSE India 官方公开网站的
+  active-equity directory 与 `AnnSubCategoryGetData/w`，按 BSE scrip code、
+  日期和 `ROWCNT` 完整分页；保存 `NEWSID`、ISIN、IST 时间及官方附件。BSE
+  目录只用于身份解析，不并入 NSE universe；无映射或分页不完整时失败关闭。
+- **软去重**：NSE/BSE 仅在 ticker、Kolkata 日与归一化标题完全相同的情况下
+  标记 `Also seen on`，两个交易所原始记录全部保留；IN 新闻同样只做展示标注。
 
 ### 墨西哥（MX）— BMV（主）/ BIVA（第二源边界）
 
 - 市场代码：`mx`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@MX` 与 Yahoo 后缀 `.MX` 均可导入。
-- **披露主链（诚实 stub）**：`bmv_relevant_events`。MX-1 live 侦察
-  （2026-08-15）：bmv.com.mx 为旧式 Liferay 站点，eventos-relevantes 与
-  上市公司深层路径 404，未发现稳定免 key JSON；`collect()` 诚实空并标注
-  stub。
+- **披露主链**：`bmv_relevant_events` 分页读取 BMV 官方 Sala de
+  Prensa 的滚动 Eventos Relevantes，直接保存 PRINCIPAL/ANEXO、原生文档 ID、
+  Mexico City 时间和实际采集 URL；重复页、排序倒退、结构变化或分页触顶均失败
+  关闭。市场操作通知和评级机构事件不混入发行人 Filing，未匹配身份保留为 pending。
+  BMV 完整定期财务/XBRL 档案属于登录付费产品，目前不接入该产品。
 - **可交易宇宙（边界 stub）**：BMV 无稳定免 key 目录端点，`refresh` 抛
   `MxUniverseError`；只读手工放置的
   `.cache/investment_monitor/mx_universe.json`。**无 IPC 手写种子**；缓存
@@ -520,7 +519,7 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 - **第二源（MX-4 锁死）**：BIVA 门户为 React SPA，事件页无服务端数据；
   `rss.biva.com.mx` TLS 握手失败，无稳定 RSS。不接 EODHD/OpenFIGI 等
   third_party 冒充官方；不接付费终端。
-- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；MX 新闻
+- **软去重**：披露 filing 行永不跨源标注；MX 新闻
   Yahoo↔Google 按 ticker + **Mexico City 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
@@ -528,9 +527,11 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 
 - 市场代码：`il`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@IL` 与 Yahoo 后缀 `.TA` 均可导入。
-- **披露主链（诚实 stub）**：`maya_announcements`。live 侦察
-  （2026-08-15）：MAYA/TASE 公告通道未发现稳定免 key JSON/RSS 端点
-  （证据见回执），连接器 `collect()` 诚实空并标注 stub。
+- **披露主链**：`maya_announcements` 使用 MAYA 官方公司自动完成接口
+  取得 `companyId`，再调用 `/api/v1/reports/companies` 按公司和日期分页；以
+  `x-total-count` 严格核验完整性，保留希伯来语标题、report/form ID、correctives
+  及 `mayafiles.tase.co.il` 官方原文附件。单一 ticker 解析失败会进入 source error，
+  不拖垮其他 ticker。
 - **可交易宇宙（边界 stub）**：TASE 无稳定免 key 目录端点，`refresh`
   抛 `IlUniverseError`；只读手工缓存
   `.cache/investment_monitor/il_universe.json`。**无 TA-35 手写种子**；
@@ -540,7 +541,7 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   条故采用 en），免 key RSS，可能松散相关。**Finnhub 永不查 il。**
 - **第二源（IL-4 锁死）**：ISA 公开披露无稳定免 key 通道；TASE Data
   Hub 需注册/付费，不接。README 写死边界。
-- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；IL 新闻
+- **软去重**：披露 filing 行永不跨源标注；IL 新闻
   Yahoo↔Google 按 ticker + **Jerusalem 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
@@ -551,9 +552,10 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 
 - 市场代码：`hu`，2026-08-15 接入。公司以未映射方式添加（无 SEC 映射）；
   `TICKER@HU` 与 Yahoo 后缀 `.BU` 均可导入。
-- **披露主链（诚实 stub）**：`bse_hu_announcements`。live 侦察
-  （2026-08-15）：bse.hu/bet.hu 公告通道未发现稳定免 key JSON/RSS 端点
-  （证据见回执），连接器 `collect()` 诚实空并标注 stub。
+- **披露主链（有界历史覆盖）**：`bse_hu_announcements` 先建立 BSE/BET 官方
+  `issuers_news` 会话，提取 CSRF 和分页 URL，再按页读取档案。默认最多 200 页；
+  尚未越过请求起始日便触顶时明确标记 `partial`，覆盖级别为
+  `official_bounded_archive`，不冒充完整历史。
 - **可交易宇宙（边界 stub）**：无稳定免 key BSE/BET 目录端点，`refresh`
   抛 `HuUniverseError`；只读手工缓存
   `.cache/investment_monitor/hu_universe.json`。**无 BUX 手写种子**；缓存
@@ -565,7 +567,7 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   **Finnhub 永不查 hu。**
 - **第二源（HU-4 锁死）**：MNB 公开通道无稳定免 key 披露端点；不接
   EODHD/OpenFIGI 等 third_party；不接付费终端。
-- **软去重**：披露 stub 不产数据，filing 行永不跨源标注；HU 新闻
+- **软去重**：披露 filing 行永不跨源标注；HU 新闻
   Yahoo↔Google 按 ticker + **Budapest 日** + 归一化标题配对。只标注
   `Also seen on`，保留所有行、不缩页。
 
@@ -632,13 +634,14 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 
 计划书 Phase 4 的四国主链在 2026-08-16 重新 live 侦察后按实际可达性锁边：
 
-- **CA**：universe 保持 `partial`（官方 TMX TSX/TSXV 目录 live；CSE
-  `api.thecse.com` TLS EOF、NEO/Cboe Canada 目录超时）。披露保持
-  `unavailable`（SEDAR+ 403 WAF，无稳定免 key API，README 锁死，不假 LIVE）。
-- **SG**：universe 保持 `stub`。`api.sgx.com/securities/v1.1` 200 JSON
-  但只返回 prices 结构、筛选参数未公开；announcements 403；SGX 网页 SPA。
-  filings 保持 unavailable；EODHD/OpenFIGI 候选行进入
-  `global_equity_reference` 后 coverage 才会转 partial。
+- **CA**：universe 保持 `partial`（官方 TMX TSX/TSXV + CSE 官网公开全证券
+  JSON 已接；NEO/Cboe Canada 仍缺免费完整目录）。CSE 官方逐发行人 filing mirror、
+  issuer IR、EDGAR 双重上市补漏和 CEO.ca discovery 已接；因 SEDAR+ 全国主链不可
+  自动批量使用，披露总体仍是 `partial`，不假称 complete。
+- **SG**：universe 保持第三方 `partial`。Singtel 与 OCBC 官方 IR 档案已内置并
+  完成 live smoke；此外支持审核配置的 issuer IR、已知 SGX 官方详情链接和显式
+  SG/US EDGAR 映射。SGX 公告 SPA 仍受内部 token 合同限制、MAS OPERA 有 CAPTCHA、
+  UOB ListedCompany 返回 WAF challenge；均不绕过，因此不声称 SGXNET 全量。
 - **SE**：universe 保持 `stub`（Nasdaq screener 对 Stockholm/OMX 代码
   totalrecords=0，官方目录 SPA）；披露 `nasdaq_se_filings` 保持 live。
   候选目录同样只走 third_party 标注。

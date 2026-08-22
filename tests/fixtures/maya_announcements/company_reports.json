@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1764653,
+    "title": "FORM 4-STATEMENT OF CHANGES",
+    "publishDate": "2026-08-19T23:10:24.36",
+    "formId": "C002",
+    "companies": [
+      {"companyId": 629, "name": "TEVA", "mainSecurityId": 629014}
+    ],
+    "attachments": [
+      {"reportId": 1764653, "fileType": "htm", "url": "rhtm/1764001-1765000/H1764653.htm"},
+      {"reportId": 1764653, "fileType": "pdf1", "url": "rpdf/1764001-1765000/P1764653-00.pdf"}
+    ],
+    "correctives": null
+  },
+  {
+    "id": 1762457,
+    "title": "FORM 4-SECOND",
+    "publishDate": "2026-08-10T13:21:06.16",
+    "formId": "C002",
+    "companies": [
+      {"companyId": 629, "name": "TEVA", "mainSecurityId": 629014}
+    ],
+    "attachments": [],
+    "correctives": 1760000
+  }
+]

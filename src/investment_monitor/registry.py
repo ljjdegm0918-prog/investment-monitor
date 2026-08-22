@@ -32,6 +32,7 @@ from .sources.ca_news import (
 )
 from .sources.twse_material import TwseMaterialConnector
 from .sources.tpex_material import TpexMaterialConnector
+from .sources.mops_disclosures import MopsDisclosureConnector
 from .sources.tw_news import (
     GoogleTwNewsConnector,
     YahooTwNewsConnector,
@@ -43,6 +44,9 @@ from .sources.au_news import (
 )
 from .sources.ceoca_ca import CeocaCaConnector
 from .sources.ceoca_sedar import CeocaSedarConnector
+from .sources.ca_edgar import CaEdgarConnector
+from .sources.ca_ir import CaIrConnector
+from .sources.cse_filings import CseFilingsConnector
 from .sources.hotcopper_au import HotCopperAuConnector
 from .sources.stockhead_au import StockheadAuConnector
 from .sources.lse_share_chat import LseShareChatConnector
@@ -97,6 +101,9 @@ from .sources.sg_news import (
     GoogleSgNewsConnector,
     YahooSgNewsConnector,
 )
+from .sources.sg_ir import SgIrConnector
+from .sources.sg_edgar import SgEdgarConnector
+from .sources.sgx_announcements import SgxAnnouncementConnector
 from .sources.be_news import (
     GoogleBeNewsConnector,
     YahooBeNewsConnector,
@@ -123,6 +130,7 @@ from .sources.no_news import (
     YahooNoNewsConnector,
 )
 from .sources.nse_announcements import NseAnnouncementsConnector
+from .sources.bse_india_announcements import BseIndiaAnnouncementsConnector
 from .sources.bmv_relevant_events import BmvRelevantEventsConnector
 from .sources.maya_announcements import MayaAnnouncementsConnector
 from .sources.bse_hu_announcements import BseHuAnnouncementsConnector
@@ -188,9 +196,9 @@ SOURCE_MARKETS = {
     "hkexnews": "hk", "hkex_di": "hk", "yahoo_hk": "hk",
     "google_news_hk": "hk", "xueqiu": frozenset({"cn", "hk"}),
     "yahoo_ca": "ca", "google_news_ca": "ca", "ceoca_ca": "ca",
-    "ceoca_sedar": "ca",
+    "ceoca_sedar": "ca", "ca_edgar": "ca", "ca_ir": "ca",
     "sedar_plus": "ca", "cse_filings": "ca", "neo_filings": "ca",
-    "twse_material": "tw", "tpex_material": "tw", "yahoo_tw": "tw",
+    "twse_material": "tw", "tpex_material": "tw", "mops_disclosures": "tw", "yahoo_tw": "tw",
     "google_news_tw": "tw",
     "asx_announcements": "au", "yahoo_au": "au", "google_news_au": "au",
     "hotcopper_au": "au", "stockhead_au": "au",
@@ -205,7 +213,8 @@ SOURCE_MARKETS = {
     "eqs_it": "it", "yahoo_it": "it", "google_news_it": "it",
     "cnmv_hr": "es", "bme_relevant_facts": "es", "yahoo_es": "es",
     "google_news_es": "es",
-    "sgx_announcements": "sg", "yahoo_sg": "sg", "google_news_sg": "sg",
+    "sgx_announcements": "sg", "sg_ir": "sg", "sg_edgar": "sg",
+    "yahoo_sg": "sg", "google_news_sg": "sg",
     "fsma_stori": "be", "be_second_disclosure": "be", "yahoo_be": "be",
     "google_news_be": "be",
     "eqs_ch": "ch", "six_official_notices": "ch", "yahoo_ch": "ch",
@@ -219,7 +228,7 @@ SOURCE_MARKETS = {
     "yahoo_no": "no", "google_news_no": "no",
     "yahoo_pt": "pt", "google_news_pt": "pt",
     "wiener_boerse_news": "at", "yahoo_at": "at", "google_news_at": "at",
-    "nse_announcements": "in", "yahoo_in": "in", "google_news_in": "in",
+    "nse_announcements": "in", "bse_india_announcements": "in", "yahoo_in": "in", "google_news_in": "in",
     "bmv_relevant_events": "mx", "yahoo_mx": "mx", "google_news_mx": "mx",
     "maya_announcements": "il", "yahoo_il": "il", "google_news_il": "il",
     "bse_hu_announcements": "hu", "yahoo_hu": "hu", "google_news_hu": "hu",
@@ -375,6 +384,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleCaNewsConnector.name, GoogleCaNewsConnector)
     registry.register(TwseMaterialConnector.name, TwseMaterialConnector)
     registry.register(TpexMaterialConnector.name, TpexMaterialConnector)
+    registry.register(MopsDisclosureConnector.name, MopsDisclosureConnector)
     registry.register(YahooTwNewsConnector.name, YahooTwNewsConnector)
     registry.register(GoogleTwNewsConnector.name, GoogleTwNewsConnector)
     registry.register(AsxAnnouncementsConnector.name, AsxAnnouncementsConnector)
@@ -382,6 +392,21 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleAuNewsConnector.name, GoogleAuNewsConnector)
     registry.register(CeocaCaConnector.name, CeocaCaConnector)
     registry.register(CeocaSedarConnector.name, CeocaSedarConnector)
+    registry.register(
+        CaEdgarConnector.name,
+        CaEdgarConnector.from_environment,
+        configuration_error=CaEdgarConnector.configuration_error,
+    )
+    registry.register(
+        CaIrConnector.name,
+        CaIrConnector.from_environment,
+        configuration_error=CaIrConnector.configuration_error,
+    )
+    registry.register(
+        CseFilingsConnector.name,
+        CseFilingsConnector.from_environment,
+        configuration_error=CseFilingsConnector.configuration_error,
+    )
     registry.register(HotCopperAuConnector.name, HotCopperAuConnector)
     registry.register(StockheadAuConnector.name, StockheadAuConnector)
     registry.register(LseShareChatConnector.name, LseShareChatConnector)
@@ -420,6 +445,21 @@ def create_default_registry() -> SourceRegistry:
     registry.register(GoogleEsNewsConnector.name, GoogleEsNewsConnector)
     registry.register(YahooSgNewsConnector.name, YahooSgNewsConnector)
     registry.register(GoogleSgNewsConnector.name, GoogleSgNewsConnector)
+    registry.register(
+        SgxAnnouncementConnector.name,
+        SgxAnnouncementConnector.from_environment,
+        configuration_error=SgxAnnouncementConnector.configuration_error,
+    )
+    registry.register(
+        SgIrConnector.name,
+        SgIrConnector.from_environment,
+        configuration_error=SgIrConnector.configuration_error,
+    )
+    registry.register(
+        SgEdgarConnector.name,
+        SgEdgarConnector.from_environment,
+        configuration_error=SgEdgarConnector.configuration_error,
+    )
     registry.register(YahooBeNewsConnector.name, YahooBeNewsConnector)
     registry.register(GoogleBeNewsConnector.name, GoogleBeNewsConnector)
     registry.register(EqsChConnector.name, EqsChConnector)
@@ -440,6 +480,7 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooAtNewsConnector.name, YahooAtNewsConnector)
     registry.register(GoogleAtNewsConnector.name, GoogleAtNewsConnector)
     registry.register(NseAnnouncementsConnector.name, NseAnnouncementsConnector)
+    registry.register(BseIndiaAnnouncementsConnector.name, BseIndiaAnnouncementsConnector)
     registry.register(YahooInNewsConnector.name, YahooInNewsConnector)
     registry.register(GoogleInNewsConnector.name, GoogleInNewsConnector)
     registry.register(BmvRelevantEventsConnector.name, BmvRelevantEventsConnector)

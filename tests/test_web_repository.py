@@ -214,6 +214,33 @@ class WebRepositoryTests(unittest.TestCase):
             with self.subTest(source=name):
                 self.assertEqual(statuses[name]["regions"], [region])
 
+    def test_canada_partial_run_is_not_reported_as_connected_success(self) -> None:
+        source = SourceConfig(
+            name="ceoca_sedar",
+            label="CEO.ca SEDAR mirror",
+            source_type="filings",
+            enabled=True,
+        )
+        repository = WebRepository(
+            self.database_path,
+            allowed_sources=("ceoca_sedar",),
+            known_sources=(source,),
+            implemented_sources=("ceoca_sedar",),
+        )
+        repository.record_collection_events((make_sync_event(
+            "ceoca_sedar", "RY", "ca", "partial",
+            initial_backfill=False,
+            error="rolling mirror cannot prove complete coverage",
+            coverage_kind="feed_snapshot",
+        ),))
+
+        status = repository.connector_statuses(
+            now=datetime(2026, 8, 1, 13, tzinfo=timezone.utc)
+        )[0]
+        self.assertEqual(status["status"], "partial")
+        self.assertIsNone(status["latest_success"])
+        self.assertIn("rolling mirror", status["last_failure"])
+
     def test_sync_state_is_independent_per_source_ticker_and_market(self) -> None:
         repository = WebRepository(
             self.database_path,
