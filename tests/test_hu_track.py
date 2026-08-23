@@ -45,6 +45,29 @@ class FakeDisclosureClient:
                  "url": "https://www.bse.hu/site/newkib/en/1", "raw_payload": {"id": 1}}]
 
 
+class FakeUnmatchedDisclosureClient(FakeDisclosureClient):
+    def fetch(self, start_date, end_date):
+        return [{"external_id": "hu:pending", "issuer": "Unknown Hungarian Plc.",
+                 "published_at": datetime(2026, 8, 1, 9, tzinfo=timezone.utc),
+                 "title": "Issuer announcement", "document_type": "announcement",
+                 "url": "https://www.bse.hu/site/newkib/en/pending",
+                 "raw_payload": {"id": "pending"}}]
+
+
+class FakeTwoKnownIssuersClient(FakeDisclosureClient):
+    def fetch(self, start_date, end_date):
+        return [
+            {"external_id": "hu:otp", "issuer": "OTP Bank Plc.",
+             "published_at": datetime(2026, 8, 1, 9, tzinfo=timezone.utc),
+             "title": "OTP results", "document_type": "announcement",
+             "url": "https://www.bse.hu/site/newkib/en/otp", "raw_payload": {"id": "otp"}},
+            {"external_id": "hu:mol", "issuer": "MOL Plc.",
+             "published_at": datetime(2026, 8, 1, 10, tzinfo=timezone.utc),
+             "title": "MOL results", "document_type": "announcement",
+             "url": "https://www.bse.hu/site/newkib/en/mol", "raw_payload": {"id": "mol"}},
+        ]
+
+
 class HungaryTests(unittest.TestCase):
     def test_disclosure_connector_maps_official_record(self):
         connector = BseHuAnnouncementsConnector(client=FakeDisclosureClient(), universe={})
@@ -67,6 +90,42 @@ class HungaryTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(connector.last_collection_status, "partial")
         self.assertIn("200 page limit", connector.last_errors[0][1])
+
+    def test_market_wide_connector_preserves_unmatched_official_record(self):
+        connector = BseHuAnnouncementsConnector(
+            client=FakeUnmatchedDisclosureClient(),
+            universe={"OTP": {"name": "OTP Bank Plc."}},
+        )
+        items = connector.collect(CollectionRequest(
+            tickers=("OTP",), start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 1), markets={"OTP": "hu"},
+        ))
+
+        self.assertTrue(connector.source_wide_collection)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].tickers, ())
+        self.assertEqual(items[0].raw_metadata["match_status"], "pending")
+        self.assertEqual(connector.last_collection_status, "partial")
+        self.assertIn("pending issuer matching", connector.last_errors[0][1])
+
+    def test_market_wide_connector_resolves_known_issuer_outside_request(self):
+        connector = BseHuAnnouncementsConnector(
+            client=FakeTwoKnownIssuersClient(),
+            universe={
+                "OTP": {"name": "OTP Bank Plc.", "isin": "HU0000061726"},
+                "HU0000061726": {"name": "OTP Bank Plc.", "isin": "HU0000061726"},
+                "MOL": {"name": "MOL Plc.", "isin": "HU0000153937"},
+                "HU0000153937": {"name": "MOL Plc.", "isin": "HU0000153937"},
+            },
+        )
+        items = connector.collect(CollectionRequest(
+            tickers=("OTP",), start_date=date(2026, 8, 1),
+            end_date=date(2026, 8, 1), markets={"OTP": "hu"},
+        ))
+
+        self.assertEqual({item.tickers for item in items}, {("OTP",), ("MOL",)})
+        self.assertEqual(connector.last_unmatched_records, 0)
+        self.assertEqual(connector.last_collection_status, "success")
 
     def test_yahoo_symbol_and_foreign_skip(self):
         self.assertEqual(hu_yahoo_symbol("OTP"), "OTP.BU")

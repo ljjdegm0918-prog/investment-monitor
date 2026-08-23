@@ -12,7 +12,7 @@ The report is derived automatically from the repo's existing facts:
                   ETF candidate rows exist, else unavailable);
 * source_tier_summary — official > mixed > third_party > none.
 
-Statuses are honest: remaining boundary stubs (CH/HU/IL/MX/SE/SG universes)
+Statuses are honest: remaining boundary stubs (CH/IL/MX universes)
 are never upgraded to live.
 The report never flows into information_items / the daily feed.
 """
@@ -30,9 +30,9 @@ from .exchange_catalog import (
 from .global_equity_reference import etf_candidates_for
 
 # 显式边界 stub（对应各轨 spike 结论；禁止标 live）。
-UNIVERSE_BOUNDARY_STUBS = frozenset({"ch", "hu", "il", "mx", "se"})
+UNIVERSE_BOUNDARY_STUBS = frozenset({"ch", "il", "mx"})
 # 官方目录存在但覆盖不完整（SEC 注册边界 / 缺次要板块 / 无 ticker 等）。
-UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg"})
+UNIVERSE_PARTIAL = frozenset({"ca", "hk", "tw", "uk", "us", "sg", "se", "hu"})
 DISCLOSURE_BOUNDARY_STUBS = frozenset()
 DISCLOSURE_PARTIAL = frozenset({"at", "ca", "ch", "de", "hu", "it", "nl", "sg"})
 DISCLOSURE_UNAVAILABLE = frozenset({"ru"})
@@ -43,13 +43,13 @@ MARKET_NOTES = {
     "JP": "JPX official Listed Issues page provides the TSE ETF directory; the broader JP stock universe still has no stable key-free directory, while TDnet/EDINET disclosure stays live",
     "CA": "Official-source boundary with free multi-source coverage: TMX TSX/TSXV universe, reviewed CSE export/issuer overlays, issuer-owned IR feeds, explicit Canadian cross-listing EDGAR fallback, and partial CEO.ca discovery mirror; no SEDAR+ bulk scraping and no claim of complete regulatory coverage",
     "SG": "Free partial boundary: reviewed issuer IR feeds, SEC EDGAR for explicit cross-listings, and known public SGX announcement detail links; SGXNET market-wide discovery remains unavailable because its SPA list service has undocumented runtime authorization, and MAS OPERA search requires CAPTCHA",
-    "SE": "Nasdaq Stockholm official directory unavailable (SPA boundary); Nasdaq SE filings live; third_party candidates may raise universe to partial",
+    "SE": "Nasdaq Nordic official public Shares screener is wired for the verified Stockholm market filter across Main Market and First North; the coverage boundary excludes NGM, Spotlight and delisted history, so the universe stays partial",
     "CH": "SIX official directory unavailable (SPA/paid boundary); EQS CH disclosure stays partial; third_party candidates may raise universe to partial",
     "RU": "MOEX ISS official directory currently covers TQBR as a research-only universe; pricing and trading are outside this product",
     "AT": "Wiener Börse official server-rendered Austrian equity directory and rolling Ad-hoc News archive are wired; ticker-less rows use ISIN unless a reviewed overlay supplies a symbol, and disclosure stays partial because the rolling archive is not the complete Austrian OAM history",
     "MX": "BMV public Eventos Relevantes bulletin is wired; periodic financial/XBRL archives remain a paid product and the official universe is unavailable",
     "IL": "MAYA official per-company reports API is wired with strict total-count pagination and Hebrew originals; no market-wide issuer directory/feed is claimed",
-    "HU": "BSE official session/CSRF archive pagination is wired with a bounded page limit; older windows may be partial, and the official ticker universe remains unavailable",
+    "HU": "BSE official issuer directory and issuer profiles provide Hungarian Prime, Standard and Xtend equity ticker/ISIN mappings; unresolved profiles are audited and the universe remains partial, while disclosure history keeps its bounded page limit",
     "NO": "Euronext Oslo live CSV universe; official NewsWeb list, message detail, corrections and attachments are collected with overflow fail-closed semantics",
     "PT": "Euronext Lisbon official exchange archive is wired; CMVM is not connected without a documented, version-stable public data contract",
     "NL": "Euronext Amsterdam official stock CSV and the AFM MAR Article 17 public register are wired with strict total/page reconciliation; EQS is supplementary, while annual reports, prospectuses and other OAM document classes are not yet complete",

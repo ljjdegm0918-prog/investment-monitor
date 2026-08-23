@@ -77,6 +77,13 @@ from .se_universe import (
     search_se_universe,
     se_universe_name_map,
 )
+from .hu_universe import (
+    HuUniverseError,
+    hu_universe_name_map,
+    load_hu_universe,
+    refresh_hu_universe,
+    search_hu_universe,
+)
 from .global_equity_reference import (
     GlobalEquityReferenceError,
     build_official_name_maps,
@@ -129,6 +136,7 @@ __all__ = [
     "ChUniverseError",
     "PlUniverseError",
     "SeUniverseError",
+    "HuUniverseError",
     "GlobalEquityReferenceError",
     "EodhdClientError",
     "OpenFigiClientError",
@@ -170,6 +178,7 @@ __all__ = [
     "ch_universe_name_map",
     "pl_universe_name_map",
     "se_universe_name_map",
+    "hu_universe_name_map",
     "load_be_universe",
     "load_de_universe",
     "load_jp_etf_universe",
@@ -204,4 +213,7 @@ __all__ = [
     "refresh_se_universe",
     "load_se_universe",
     "search_se_universe",
+    "refresh_hu_universe",
+    "load_hu_universe",
+    "search_hu_universe",
 ]

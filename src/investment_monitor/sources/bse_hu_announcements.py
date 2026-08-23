@@ -205,16 +205,53 @@ class BseHuAnnouncementsConnector(PublicDisclosureConnector):
     name = "bse_hu_announcements"
     provider = "Budapest Stock Exchange"
     coverage_level = "official_bounded_archive"
+    # The archive is market-wide.  Fetch it once for the whole request instead
+    # of replaying the same CSRF/session pagination for every requested ticker.
+    source_wide_collection = True
+    # Preserve official records whose issuer cannot yet be resolved to a
+    # reviewed universe identity.  Silent drops would hide a real coverage gap.
+    preserve_unmatched_records = True
 
     def __init__(self, client: Optional[Any] = None, universe: Optional[Mapping[str, Mapping[str, str]]] = None) -> None:
-        super().__init__(client=client or BseHuClient.from_environment(), universe=universe if universe is not None else hu_universe_name_map(), normalizer=normalize_hu_ticker, market=MARKET_HU)
+        identities = dict(universe if universe is not None else hu_universe_name_map())
+        super().__init__(client=client or BseHuClient.from_environment(), universe=identities, normalizer=normalize_hu_ticker, market=MARKET_HU)
+        # hu_universe_name_map also indexes each identity by ISIN.  Expand a
+        # source-wide collection only with canonical ticker keys so an
+        # off-watchlist but known BSE issuer is resolved instead of becoming
+        # a false pending record (and ISIN aliases do not duplicate matches).
+        self._canonical_universe_tickers = tuple(sorted({
+            normalize_hu_ticker(key)
+            for key, identity in identities.items()
+            if key.strip().upper() != str(identity.get("isin") or "").strip().upper()
+            and normalize_hu_ticker(key)
+        }))
 
     def collect(self, request: CollectionRequest) -> list[InformationItem]:
-        items = super().collect(request)
+        requested_hu = tuple(
+            ticker for ticker in request.tickers if request.market_for(ticker) == MARKET_HU
+        )
+        if not requested_hu:
+            return super().collect(request)
+        expanded_tickers = tuple(dict.fromkeys((*requested_hu, *self._canonical_universe_tickers)))
+        expanded_request = CollectionRequest(
+            tickers=expanded_tickers,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            markets={ticker: MARKET_HU for ticker in expanded_tickers},
+        )
+        items = super().collect(expanded_request)
+        errors = list(self._last_errors)
+        if self.last_unmatched_records:
+            errors.append((
+                "*",
+                f"{self.last_unmatched_records} official BSE record(s) pending issuer matching",
+            ))
+            self.last_collection_status = "partial"
         if getattr(self._client, "last_fetch_truncated", False):
             message = f"official archive stopped at configured {getattr(self._client, 'last_pages_read', '?')} page limit"
-            self._last_errors = (("*", message),)
+            errors.append(("*", message))
             self.last_collection_status = "partial"
+        self._last_errors = tuple(errors)
         return items
 
 

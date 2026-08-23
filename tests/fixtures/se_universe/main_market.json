@@ -1,0 +1,12 @@
+{
+  "status": {"rCode": 200},
+  "data": {
+    "pagination": {"total": 2, "size": 1000, "page": 1, "totalPages": 1},
+    "instrumentListing": {
+      "rows": [
+        {"symbol": "ERIC B", "fullName": "Telefonaktiebolaget LM Ericsson", "isin": "SE0000108656", "currency": "SEK", "assetClass": "SHARES", "orderbookId": "16094"},
+        {"symbol": "VOLV B", "fullName": "AB Volvo", "isin": "SE0000115446", "currency": "SEK", "assetClass": "SHARES", "orderbookId": "16113"}
+      ]
+    }
+  }
+}

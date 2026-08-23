@@ -4,6 +4,8 @@ import io
 import json
 import unittest
 from datetime import date
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from investment_monitor.models import CollectionRequest
 from investment_monitor.sources.nasdaq_se import (
@@ -11,6 +13,9 @@ from investment_monitor.sources.nasdaq_se import (
     NasdaqSeDataError,
     NasdaqSeFilingsConnector,
 )
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "se_universe"
 
 
 class _Response(io.BytesIO):
@@ -24,19 +29,153 @@ class _Response(io.BytesIO):
 class NasdaqSeClientTests(unittest.TestCase):
     def test_share_directory_combines_main_and_first_north(self) -> None:
         payloads = [
-            {"data": {"instrumentListing": {"rows": [{"symbol": "ERIC B"}]}}},
-            {"data": {"instrumentListing": {"rows": [{"symbol": "AAA"}]}}},
+            json.loads((FIXTURES / "main_market.json").read_text()),
+            json.loads((FIXTURES / "first_north.json").read_text()),
         ]
+        requests = []
+
+        def opener(request, timeout):
+            requests.append(request.full_url)
+            return _Response(json.dumps(payloads.pop(0)).encode())
+
+        rows = NasdaqSeClient(opener=opener, requests_per_second=1000000).fetch_share_directory()
+        self.assertEqual([row["symbol"] for row in rows], ["ERIC B", "VOLV B", "AAC", "EMIL B"])
+        self.assertEqual(
+            [row["listing_category"] for row in rows],
+            ["MAIN_MARKET", "MAIN_MARKET", "FIRST_NORTH", "FIRST_NORTH"],
+        )
+        first = parse_qs(urlsplit(requests[0]).query)
+        self.assertEqual(first["market"], ["STO"])
+        self.assertEqual(first["category"], ["MAIN_MARKET"])
+        self.assertNotIn("assetClass", first)
+        self.assertEqual(first["size"], ["1000"])
+        self.assertEqual(first["page"], ["1"])
+        self.assertEqual(rows[0]["listing_market"], "STO")
+
+    def test_share_directory_rejects_incomplete_pagination(self) -> None:
+        payload = json.loads((FIXTURES / "main_market.json").read_text())
+        payload["data"]["pagination"]["total"] = 3
+
+        def opener(request, timeout):
+            return _Response(json.dumps(payload).encode())
+
+        with self.assertRaisesRegex(NasdaqSeDataError, "row count"):
+            NasdaqSeClient(opener=opener, requests_per_second=1000000).fetch_share_directory()
+
+    def test_share_directory_rejects_cross_page_identity_overlap(self) -> None:
+        first = json.loads((FIXTURES / "main_market.json").read_text())
+        first["data"]["instrumentListing"]["rows"] = first["data"][
+            "instrumentListing"
+        ]["rows"][:1]
+        first["data"]["pagination"] = {
+            "total": 2,
+            "size": 1,
+            "page": 1,
+            "totalPages": 2,
+        }
+        second = json.loads(json.dumps(first))
+        second["data"]["pagination"]["page"] = 2
+        payloads = [first, second]
 
         def opener(request, timeout):
             return _Response(json.dumps(payloads.pop(0)).encode())
 
-        rows = NasdaqSeClient(opener=opener, requests_per_second=1000000).fetch_share_directory()
-        self.assertEqual([row["symbol"] for row in rows], ["ERIC B", "AAA"])
-        self.assertEqual(
-            [row["listing_category"] for row in rows],
-            ["MAIN_MARKET", "FIRST_NORTH"],
-        )
+        with self.assertRaisesRegex(NasdaqSeDataError, "overlapped identities"):
+            NasdaqSeClient(
+                opener=opener,
+                requests_per_second=1000000,
+            ).fetch_share_directory(page_size=1)
+
+    def test_share_directory_rejects_status_and_page_cap(self) -> None:
+        bad_status = json.loads((FIXTURES / "main_market.json").read_text())
+        bad_status["status"]["rCode"] = 503
+
+        def status_opener(request, timeout):
+            return _Response(json.dumps(bad_status).encode())
+
+        with self.assertRaisesRegex(NasdaqSeDataError, "status was 503"):
+            NasdaqSeClient(
+                opener=status_opener,
+                requests_per_second=1000000,
+            ).fetch_share_directory()
+
+        first = json.loads((FIXTURES / "main_market.json").read_text())
+        first["data"]["instrumentListing"]["rows"] = first["data"][
+            "instrumentListing"
+        ]["rows"][:1]
+        first["data"]["pagination"] = {
+            "total": 2,
+            "size": 1,
+            "page": 1,
+            "totalPages": 2,
+        }
+
+        def capped_opener(request, timeout):
+            return _Response(json.dumps(first).encode())
+
+        with self.assertRaisesRegex(NasdaqSeDataError, "exceeded max_pages=1"):
+            NasdaqSeClient(
+                opener=capped_opener,
+                requests_per_second=1000000,
+            ).fetch_share_directory(page_size=1, max_pages=1)
+
+    def test_share_directory_rejects_pagination_drift(self) -> None:
+        first = json.loads((FIXTURES / "main_market.json").read_text())
+        rows = first["data"]["instrumentListing"]["rows"]
+        first["data"]["instrumentListing"]["rows"] = rows[:1]
+        first["data"]["pagination"] = {
+            "total": 2,
+            "size": 1,
+            "page": 1,
+            "totalPages": 2,
+        }
+        second = json.loads(json.dumps(first))
+        second["data"]["instrumentListing"]["rows"] = rows[1:2]
+        second["data"]["pagination"] = {
+            "total": 3,
+            "size": 1,
+            "page": 2,
+            "totalPages": 3,
+        }
+        payloads = [first, second]
+
+        def opener(request, timeout):
+            return _Response(json.dumps(payloads.pop(0)).encode())
+
+        with self.assertRaisesRegex(NasdaqSeDataError, "drifted between pages"):
+            NasdaqSeClient(
+                opener=opener,
+                requests_per_second=1000000,
+            ).fetch_share_directory(page_size=1)
+
+    def test_share_directory_completes_two_pages_for_both_categories(self) -> None:
+        payloads = []
+        for filename in ("main_market.json", "first_north.json"):
+            source = json.loads((FIXTURES / filename).read_text())
+            rows = source["data"]["instrumentListing"]["rows"]
+            for page, row in enumerate(rows, start=1):
+                payload = json.loads(json.dumps(source))
+                payload["data"]["instrumentListing"]["rows"] = [row]
+                payload["data"]["pagination"] = {
+                    "total": 2,
+                    "size": 1,
+                    "page": page,
+                    "totalPages": 2,
+                }
+                payloads.append(payload)
+        requests = []
+
+        def opener(request, timeout):
+            requests.append(request.full_url)
+            return _Response(json.dumps(payloads.pop(0)).encode())
+
+        rows = NasdaqSeClient(
+            opener=opener,
+            requests_per_second=1000000,
+        ).fetch_share_directory(page_size=1)
+
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(sum("page=2" in url for url in requests), 2)
 
     def test_paginates_to_declared_count(self) -> None:
         payloads = [
@@ -88,7 +227,9 @@ class NasdaqSeConnectorTests(unittest.TestCase):
                 return [{
                     "symbol": "ERIC B",
                     "fullName": "Ericsson B",
-                    "currency": "SEK",
+                    # Stockholm also contains valid shares quoted in EUR;
+                    # currency is an audit field, never a venue filter.
+                    "currency": "EUR",
                     "listing_category": "MAIN_MARKET",
                 }]
 

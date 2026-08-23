@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import time
+from math import ceil
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from typing import Any, Callable, Dict, List, Mapping, Sequence
 from urllib.error import HTTPError, URLError
@@ -64,20 +65,147 @@ class NasdaqSeClient:
             ),
         )
 
-    def fetch_share_directory(self) -> List[Mapping[str, Any]]:
+    def fetch_share_directory(
+        self,
+        *,
+        market: str = "STO",
+        page_size: int = 1000,
+        max_pages: int = 100,
+    ) -> List[Mapping[str, Any]]:
+        """Return the official Stockholm share directory across both boards.
+
+        The public Nasdaq Nordic screener exposes Main Market and First North
+        separately.  It is tempting to request the default screen and filter
+        a single page locally; that can silently mix Nordic venues or truncate
+        a category.  This method instead sends Nasdaq's market/category and
+        pagination parameters on every request, validates the response
+        pagination contract, and requires every returned row to identify as a
+        share before returning anything.
+        """
+        if not market.strip() or page_size <= 0 or max_pages <= 0:
+            raise ValueError("market, page_size and max_pages must be valid")
         combined: List[Mapping[str, Any]] = []
         for category in ("MAIN_MARKET", "FIRST_NORTH"):
-            payload = self._get_json(
-                SHARES_URL + "?" + urlencode({"category": category, "tableonly": "false"})
+            combined.extend(
+                self._fetch_share_category(
+                    category=category,
+                    market=market,
+                    page_size=page_size,
+                    max_pages=max_pages,
+                )
             )
-            try:
-                rows = payload["data"]["instrumentListing"]["rows"]
-            except (KeyError, TypeError) as error:
-                raise NasdaqSeDataError("Nasdaq share directory rows are missing") from error
-            if not isinstance(rows, list):
-                raise NasdaqSeDataError("Nasdaq share directory rows are not a list")
-            combined.extend({**row, "listing_category": category} for row in rows)
         return combined
+
+    def _fetch_share_category(
+        self,
+        *,
+        category: str,
+        market: str,
+        page_size: int,
+        max_pages: int,
+    ) -> List[Mapping[str, Any]]:
+        records: List[Mapping[str, Any]] = []
+        declared_total: int | None = None
+        declared_total_pages: int | None = None
+        seen_page_signatures: set[tuple[str, ...]] = set()
+        seen_row_ids: set[str] = set()
+        for page in range(1, max_pages + 1):
+            params = {
+                "market": market,
+                "category": category,
+                # The official component serializes its nested pagination
+                # object as the flat ``page``/``size`` query parameters.
+                # ``assetClass`` is a response field, not an accepted filter
+                # on this endpoint (sending it currently yields HTTP 400).
+                "size": str(page_size),
+                "page": str(page),
+                "tableonly": "false",
+            }
+            url = SHARES_URL + "?" + urlencode(params)
+            payload = self._get_json(url)
+            _validate_directory_status(payload)
+            try:
+                listing = payload["data"]["instrumentListing"]
+                rows = listing["rows"]
+                pagination = payload["data"]["pagination"]
+            except (KeyError, TypeError) as error:
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory rows or pagination are missing"
+                ) from error
+            if not isinstance(rows, list) or not isinstance(pagination, Mapping):
+                raise NasdaqSeDataError("Nasdaq share directory shape changed")
+            try:
+                total = int(pagination["total"])
+                size = int(pagination["size"])
+                returned_page = int(pagination["page"])
+                total_pages = int(pagination["totalPages"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory pagination fields are invalid"
+                ) from error
+            if total < 0 or size <= 0 or returned_page != page or total_pages < 0:
+                raise NasdaqSeDataError("Nasdaq share directory pagination is invalid")
+            expected_pages = ceil(total / size) if total else 0
+            if total_pages != expected_pages:
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory totalPages does not match total/size"
+                )
+            if declared_total is None:
+                declared_total, declared_total_pages = total, total_pages
+            elif (total, total_pages) != (declared_total, declared_total_pages):
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory pagination drifted between pages"
+                )
+            expected_rows = max(0, min(size, total - ((page - 1) * size)))
+            if len(rows) != expected_rows:
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory page row count does not match pagination"
+                )
+            signature = tuple(
+                str(row.get("isin") or row.get("symbol") or "")
+                for row in rows
+                if isinstance(row, Mapping)
+            )
+            if len(signature) != len(rows) or len(set(signature)) != len(signature):
+                raise NasdaqSeDataError("Nasdaq share directory page identity is invalid")
+            if set(signature) & seen_row_ids:
+                raise NasdaqSeDataError(
+                    "Nasdaq share directory overlapped identities across pages"
+                )
+            if signature and signature in seen_page_signatures:
+                raise NasdaqSeDataError("Nasdaq share directory repeated a page")
+            seen_page_signatures.add(signature)
+            seen_row_ids.update(signature)
+            for row in rows:
+                if not isinstance(row, Mapping):
+                    raise NasdaqSeDataError("Nasdaq share directory row is not an object")
+                asset_class = str(row.get("assetClass") or "").upper()
+                if asset_class != "SHARES":
+                    raise NasdaqSeDataError(
+                        "Nasdaq share directory returned a non-SHARES row; "
+                        "expected response assetClass=SHARES"
+                    )
+                records.append(
+                    {
+                        **row,
+                        "listing_category": category,
+                        "listing_market": market,
+                        "retrieval_url": url,
+                    }
+                )
+            if page == total_pages:
+                break
+            if page > total_pages:
+                raise NasdaqSeDataError("Nasdaq share directory exceeded totalPages")
+        else:
+            raise NasdaqSeDataError(
+                f"Nasdaq share directory exceeded max_pages={max_pages} for {category}"
+            )
+        if declared_total is None or len(records) != declared_total:
+            raise NasdaqSeDataError(
+                f"Nasdaq returned {len(records)} directory rows but declared {declared_total}"
+            )
+        return records
 
     def fetch_company_names(self, global_name: str, market: str) -> List[str]:
         params = _base_params(global_name, market)
@@ -203,6 +331,23 @@ def _base_params(global_name: str, market: str) -> Dict[str, str]:
         "fromDate": "",
         "toDate": "",
     }
+
+
+def _validate_directory_status(payload: Mapping[str, Any]) -> None:
+    """Reject a Nasdaq screener payload whose API status is not successful."""
+    status = payload.get("status")
+    if isinstance(status, int):
+        code = status
+    elif isinstance(status, Mapping):
+        value = status.get("rCode", status.get("code"))
+        try:
+            code = int(value)
+        except (TypeError, ValueError) as error:
+            raise NasdaqSeDataError("Nasdaq share directory status is invalid") from error
+    else:
+        raise NasdaqSeDataError("Nasdaq share directory status is missing")
+    if code != 200:
+        raise NasdaqSeDataError(f"Nasdaq share directory status was {code}")
 
 
 def _end_of_day_ms(value: date) -> int:

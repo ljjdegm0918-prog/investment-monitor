@@ -26,10 +26,10 @@ class Phase4BoundaryTests(unittest.TestCase):
         self.assertEqual(SG_BOUNDARY["disclosure"], "partial")
         self.assertIn("api.sgx.com", SG_BOUNDARY["evidence"])
 
-    def test_se_boundary_keeps_live_filings_but_stub_universe(self):
-        self.assertEqual(SE_BOUNDARY["universe"], "stub")
+    def test_se_boundary_keeps_live_filings_and_partial_official_universe(self):
+        self.assertEqual(SE_BOUNDARY["universe"], "partial")
         self.assertEqual(SE_BOUNDARY["disclosure"], "live")
-        self.assertIn("zero rows", SE_BOUNDARY["evidence"])
+        self.assertIn("nordic/screener/shares", SE_BOUNDARY["evidence"])
 
     def test_ch_boundary_keeps_partial_disclosure(self):
         self.assertEqual(CH_BOUNDARY["universe"], "stub")

@@ -13,10 +13,10 @@ Investment Monitor 是一个以列表为中心的本地金融信息监控工作�
 | 地区 | 国家 / 参考场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
 |---|---:|---|---|---|
 | 美洲 | 3 / 31 | 2 partial、1 stub | 2 live、1 partial | 加拿大 SEDAR+ 完整性/NEO；墨西哥官方证券目录；美国 OTC/Pink |
-| 欧洲 | 19 / 44 | 13 live、2 partial、4 stub | 12 live、6 partial、1 unavailable | CH/HU/IL/MX/SE 的证券主数据；AT/NL 等法定披露仍非全文件；RU 仅只读 |
+| 欧洲 | 19 / 44 | 13 live、4 partial、2 stub | 12 live、6 partial、1 unavailable | CH/IL/MX 的证券主数据；SE/HU 已接官方边界目录但不含其他场所/退市历史；AT/NL 等法定披露仍非全文件；RU 仅只读 |
 | 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 partial | 日本股票全目录/PTS；SGXNET 全市场发现；香港/台湾完整证券目录 |
 
-全局自动报告当前为：证券目录 **15 live、7 partial、5 stub、1 unavailable**；公司披露 **19 live、8 partial、1 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、14 unknown、11 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
+全局自动报告当前为：证券目录 **15 live、9 partial、3 stub、1 unavailable**；公司披露 **19 live、8 partial、1 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、14 unknown、11 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
 
 本 PR 已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
 
@@ -310,12 +310,12 @@ PL feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| `fi_oam` | filings | none | **Not wired (SE-1 spike A3, re-verified in SE-4)**: FI's public publication client (`marknadssok.fi.se/publiceringsklient`) only searches insider transactions (Insyn), not issuer announcements; Nasdaq Nordic company news is a Drupal SPA without a public JSON route (`webproxy/DataSubsidiesNews/GetNews.aspx` returns the SPA shell, `api.nasdaq.com` returns 404 for `.ST` symbols); the legacy `newsclient.omxgroup.com` disclosure search returns HTTP 500; EQS News returns empty records for every sampled Swedish ISIN (ERIC-B / VOLV-B / SEB-A / Investor-B / H&M-B / Boliden / Getinge-B / Volvo Car-B, verified 2026-08-10). SE-4 re-check (2026-08-10) found no second free disclosure source: EQS still empty, the legacy Hugin host (`cws.huginonline.com`) exposes no stable public announcement API, and Nasdaq paid data products are not used. |
-| `se_universe` | Universe | None | **Boundary stub (SE-2 spike B2)**: Nasdaq Stockholm / First North Sweden directories are Drupal SPAs whose screener data route is not publicly reachable (`api.nasdaq.com/api/screener/shares` 404; `api.nasdaq.com/api/screener/stocks` returns zero rows for Stockholm exchange codes; `nasdaqomxnordic.com/screener/shares` returns the SPA shell). FI publishes no securities directory. `refresh_se_universe()` raises `SeUniverseError`; `load_se_universe()` / `se_universe_name_map()` / `search_se_universe()` read a manually placed cache if one ever exists. No OMXS30 hand-written seed and no Nasdaq paid data product. |
+| `nasdaq_se_filings` | filings | none | Nasdaq Nordic 官方 Company News：使用官方公司目录身份匹配 Main Market Stockholm / First North Sweden，再按公司和日期读取公告；保存 disclosure ID、语言、Stockholm 时间、分类、官方消息与附件。分页必须达到官方 count，目录或公告身份无法唯一匹配时失败关闭；单次查询最多回看 365 天。FI Insyn 不是发行人公告，EQS/Hugin 也未作为第二源。 |
+| `se_universe` | Universe | none | Nasdaq Nordic 官方公开 Shares Screener，分别请求 `category=MAIN_MARKET/FIRST_NORTH`、`market=STO`，以 `data.pagination` 的 total/size/page/totalPages 对账，并验证每行 `assetClass=SHARES`。2026-08-24 live smoke：Main Market 412、First North 332，共 744 条；保存 ticker、ISIN、名称、currency、orderbook ID、板块和实际请求 URL。currency 只作审计字段，不排除 Stockholm 的 EUR 股票。NGM、Spotlight、其他场所和退市历史未覆盖，因此为 official partial；失败时原子保护旧缓存。 |
 | `yahoo_se` | News | None (key-free) | Yahoo Finance SE public RSS (`feeds.finance.yahoo.com/rss/2.0/headline?s={ROOT}.ST&region=SE&lang=sv-SE`, plus `lang=en-US`; identical titles are merged as a single language, never fake bilingual). Live verified 2026-08-10 with `ERIC-B.ST`; loosely related results possible; public RSS may break without notice. Stored ticker is always the canonical root (`ERIC-B`), `.ST` is request-time only; share-class mnemonics like `ERIC-B` / `VOLV-B` are kept intact. |
 | `google_news_se` | News | None (key-free) | Google News SE RSS (`news.google.com/rss/search?q={ROOT}.ST&hl=sv&gl=SE&ceid=SE:sv`). Live verified 2026-08-10; results can be loosely related (an `ERIC-B.ST` query can include football items about a player named Eric Smith); public RSS may break without notice. |
 
-`market=se` 公司使用规范根 ticker（`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` 均存为 `ERIC-B`；交易所后缀 `.ST` / `.STO` / `.OMX` / `-ST` 等在添加时剥离，股份类别后缀如 `-B` / `-A` 保留，瑞典 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 SE 查询。
+`market=se` 公司使用规范根 ticker（`ERIC-B` / `ERIC-B.ST` / `eric-b.sto` 均存为 `ERIC-B`；交易所后缀 `.ST` / `.STO` / `.OMX` / `-ST` 等在添加时剥离，股份类别后缀如 `-B` / `-A` 保留，瑞典 ISIN 原样保留）。Web 冷缓存首次添加会安全刷新官方目录并回填 name/board/ISIN；刷新失败保留 unmapped，不影响添加。Finnhub **仅 US**，不对 SE 查询。
 
 SE feed 软去重仅用于展示（"Also seen on"；保留所有行，总数/分页永不缩减；共用开关 `KR_FEED_SOFT_DEDUPE`）。Filings 永不标注，因无 SE 披露连接器（SE-1 A3 / SE-4 D2）。News：`yahoo_se` ↔ `google_news_se` 跨源按 ticker + Stockholm day + normalized title 配对。
 
@@ -561,10 +561,17 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   `issuers_news` 会话，提取 CSRF 和分页 URL，再按页读取档案。默认最多 200 页；
   尚未越过请求起始日便触顶时明确标记 `partial`，覆盖级别为
   `official_bounded_archive`，不冒充完整历史。
-- **可交易宇宙（边界 stub）**：无稳定免 key BSE/BET 目录端点，`refresh`
-  抛 `HuUniverseError`；只读手工缓存
-  `.cache/investment_monitor/hu_universe.json`。**无 BUX 手写种子**；缓存
-  不进 feed。
+- **可交易宇宙（official partial）**：`refresh_hu_universe()` 匿名读取 BSE
+  官方 issuer 页内嵌的 `IssuerDataSource`，按官方 `country=HU` 和
+  Prime/Standard/Xtend 股票组筛选候选，再逐 issuer/security profile 验证
+  ticker、ISIN 与 `Equity class`；`Market` 优先取 security profile，当前 Xtend
+  页面缺字段时只允许由唯一官方 `W_SME` 目录组回填，混合组保持失败。2026-08-23 live：目录 154 个发行人，
+  其中 66 个 HU equity-group 候选；4iG profile 的普通股 `4IG / HU0000167788`
+  被纳入，同页债券被排除。单 profile 失败有审计记录，部分刷新不覆盖既有好
+  缓存；全部失败、结构变化或身份冲突失败关闭。范围不含其他匈牙利场所与退市
+  历史，故保持 partial；缓存只服务 Web name/ISIN 回填和公告匹配，不进入 feed。
+  因完整刷新需要逐 issuer/security 限速验证，Web 添加公司不会同步执行数分钟的
+  全量刷新；应在启动/定时维护阶段预热缓存，冷缓存时添加公司快速降级为 unmapped。
 - **新闻**：`yahoo_hu`（`.BU` 后缀、`hu-HU` + `en-US` 双查；live 实测 Yahoo
   `.BU` RSS 返回 200 但 **0 items**，保留连接器并如实标注空 feed）与
   `google_news_hu`（`hl=hu&gl=HU&ceid=HU:hu`；live 实测 69 条，`hl=en`
@@ -647,9 +654,10 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   完成 live smoke；此外支持审核配置的 issuer IR、已知 SGX 官方详情链接和显式
   SG/US EDGAR 映射。SGX 公告 SPA 仍受内部 token 合同限制、MAS OPERA 有 CAPTCHA、
   UOB ListedCompany 返回 WAF challenge；均不绕过，因此不声称 SGXNET 全量。
-- **SE**：universe 保持 `stub`（Nasdaq screener 对 Stockholm/OMX 代码
-  totalrecords=0，官方目录 SPA）；披露 `nasdaq_se_filings` 保持 live。
-  候选目录同样只走 third_party 标注。
+- **SE**：后续重新定位到当前 Nasdaq Nordic 官方公开 Shares Screener；
+  `market=STO` 下 Main Market 412、First North 332 条，分页对账和官方股票字段
+  校验均已接。universe 从历史 stub 提升为 official partial；NGM、Spotlight、
+  其他场所和退市历史仍不在范围内。披露 `nasdaq_se_filings` 保持 live。
 - **CH**：universe 保持 `stub`（SIX 页面与 `api.six-group.com` 均 404）；
   披露 `eqs_ch` 保持 partial。EODHD/OpenFIGI 候选可转 partial，但永远
   `source_tier=third_party`，不得覆盖官方字段。

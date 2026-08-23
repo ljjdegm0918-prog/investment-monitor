@@ -1,0 +1,12 @@
+{
+  "status": {"rCode": 200},
+  "data": {
+    "pagination": {"total": 2, "size": 1000, "page": 1, "totalPages": 1},
+    "instrumentListing": {
+      "rows": [
+        {"symbol": "AAC", "fullName": "AAC Clyde Space AB", "isin": "SE0021020716", "currency": "SEK", "assetClass": "SHARES", "orderbookId": "16107"},
+        {"symbol": "EMIL B", "fullName": "Emilshus AB", "isin": "SE0018742855", "currency": "SEK", "assetClass": "SHARES", "orderbookId": "16785"}
+      ]
+    }
+  }
+}

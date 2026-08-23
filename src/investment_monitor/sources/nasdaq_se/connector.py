@@ -84,8 +84,7 @@ def _share_identity_for_ticker(
     matches = [
         row
         for row in rows
-        if str(row.get("currency") or "").upper() == "SEK"
-        and _normalize_symbol(str(row.get("symbol") or "")) == wanted
+        if _normalize_symbol(str(row.get("symbol") or "")) == wanted
     ]
     if len(matches) != 1:
         return None

@@ -791,6 +791,7 @@ class WebApplicationTests(unittest.TestCase):
             ("be", "ABI", "Anheuser-Busch InBev SA/NV", "Euronext Brussels", "be"),
             ("pl", "PKO", "PKO Bank Polski SA", "GPW Main Market", "pl"),
             ("at", "VOE", "voestalpine AG", "Wiener Börse", "at"),
+            ("se", "ERIC-B", "Ericsson B", "Nasdaq Stockholm Main Market", "se"),
         )
         for market, ticker, name, exchange, module_name in cases:
             with self.subTest(market=market):
@@ -835,6 +836,7 @@ class WebApplicationTests(unittest.TestCase):
             ("be", "ABI"),
             ("pl", "PKO"),
             ("at", "VOE"),
+            ("se", "ERIC-B"),
         )
         for market, ticker in cases:
             with self.subTest(market=market):
@@ -871,40 +873,37 @@ class WebApplicationTests(unittest.TestCase):
                     "\n".join(captured_logs.output),
                 )
 
-    def test_es_add_skips_slow_synchronous_universe_refresh(self) -> None:
-        with patch(
-            "investment_monitor.web.es_universe_name_map",
-            return_value={},
-        ), patch(
-            "investment_monitor.universe.es_universe.refresh_es_universe"
-        ) as refresh_mock:
-            with self.assertLogs(
-                "investment_monitor.web", level="WARNING"
-            ) as captured_logs:
-                response = self.application.handle(
-                    "POST",
-                    "/api/companies/batch",
-                    json.dumps(
-                        {
-                            "tickers": "SAN",
-                            "lists": ["holdings"],
-                            "market": "es",
-                        }
-                    ).encode(),
-                )
+    def test_slow_universe_adds_skip_synchronous_refresh(self) -> None:
+        for market, ticker in (("es", "SAN"), ("hu", "OTP")):
+            with self.subTest(market=market), patch(
+                f"investment_monitor.web.{market}_universe_name_map",
+                return_value={},
+            ):
+                with self.assertLogs(
+                    "investment_monitor.web", level="WARNING"
+                ) as captured_logs:
+                    response = self.application.handle(
+                        "POST",
+                        "/api/companies/batch",
+                        json.dumps(
+                            {
+                                "tickers": ticker,
+                                "lists": ["holdings"],
+                                "market": market,
+                            }
+                        ).encode(),
+                    )
 
-        self.assertEqual(response.status, 201)
-        refresh_mock.assert_not_called()
-        self.assertIn(
-            "synchronous refresh skipped",
-            "\n".join(captured_logs.output),
-        )
+            self.assertEqual(response.status, 201)
+            self.assertIn(
+                "synchronous refresh skipped",
+                "\n".join(captured_logs.output),
+            )
 
     def test_boundary_stub_markets_never_attempt_universe_refresh_on_add(self) -> None:
         cases = (
             ("sg", "D05"),
             ("ch", "NESN"),
-            ("se", "ERIC-B"),
         )
         for market, ticker in cases:
             with self.subTest(market=market):

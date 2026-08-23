@@ -55,8 +55,10 @@ class CoverageReportTests(unittest.TestCase):
         self.assertIn("research-only", ru["notes"])
 
     def test_boundary_stubs_are_never_live(self):
-        for code in ("CH", "HU", "IL", "MX", "SE", "SG"):
+        for code in ("CH", "IL", "MX", "SG"):
             self.assertNotEqual(self.rows[code]["universe"], "live", code)
+        for code in ("HU", "SE"):
+            self.assertEqual(self.rows[code]["universe"], "partial", code)
 
     def test_all_disclosure_statuses_use_the_canonical_market_key(self):
         expected = {

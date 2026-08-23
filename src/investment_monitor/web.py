@@ -84,7 +84,8 @@ from .universe.sg_universe import load_sg_universe, sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
 from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.at_universe import at_universe_name_map, refresh_at_universe
-from .universe.se_universe import se_universe_name_map
+from .universe.se_universe import se_universe_name_map, refresh_se_universe
+from .universe.hu_universe import hu_universe_name_map
 from .universe.aq_universe import aq_universe_name_map
 from .universe.cxe_universe import cxe_universe_name_map
 from .universe.emf_universe import emf_universe_name_map
@@ -1283,7 +1284,11 @@ class WebApplication:
                 refresh_pl_universe,
             )
         if market == MARKET_SE:
-            return se_universe_name_map()
+            return _warm_universe_on_first_add(
+                market,
+                se_universe_name_map,
+                refresh_se_universe,
+            )
         if market == MARKET_AQ:
             return aq_universe_name_map()
         if market == MARKET_CXE:
@@ -1319,8 +1324,14 @@ class WebApplication:
             from .universe.il_universe import il_universe_name_map
             return il_universe_name_map()
         if market == MARKET_HU:
-            from .universe.hu_universe import hu_universe_name_map
-            return hu_universe_name_map()
+            name_fallback = hu_universe_name_map()
+            if not name_fallback:
+                LOGGER.warning(
+                    "hu_universe cache is cold on add-company; synchronous "
+                    "refresh skipped because issuer/security profile validation "
+                    "can take several minutes"
+                )
+            return name_fallback
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:

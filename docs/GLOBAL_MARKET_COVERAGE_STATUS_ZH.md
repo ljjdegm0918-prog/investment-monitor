@@ -1,4 +1,4 @@
-# 独立全球市场信息覆盖现状与缺口（2026-08-23）
+# 独立全球市场信息覆盖现状与缺口（2026-08-24）
 
 ## 1. 结论
 
@@ -8,7 +8,7 @@
 
 当前自动报告结果：
 
-- 股票/证券目录：15 live、7 partial、5 stub、1 unavailable。
+- 股票/证券目录：15 live、9 partial、3 stub、1 unavailable。
 - 公司披露：19 live、8 partial、1 unavailable。
 - 新闻：27 live、1 unavailable；这里表示已配置 Yahoo/Google News 查询链，不保证新闻穷尽性。
 - ETF 目录：3 live（美国、德国、日本）、14 unknown、11 unavailable。
@@ -41,7 +41,7 @@
 | ES 西班牙 | BATEES, BM, CHIXES | live | live | live | unknown | unavailable | BME 股票接口、CNMV/BME 披露已接；ETF 未单独验证。 |
 | FR 法国 | BATEEN, CHIXEN, SBF, TRQXEN | live | live | live | unknown | unavailable | Euronext Paris 股票 CSV + AMF；ETF 官方动态列表尚未落成稳定解析器。 |
 | GB 英国 | BATEUK, CHIXUK, LSE, LSEIOB1 | partial | live | live | unavailable | unavailable | Companies House/Investegate 已接；FIRDS 只有 ISIN、缺零售 ticker，LSE/IOB 全目录不能证明完整。 |
-| HU 匈牙利 | BUX | stub | partial | live | unavailable | unavailable | BSE/BET 官方会话和 CSRF 分页档案已接；有界历史触顶明确 partial，证券目录仍不可用。 |
+| HU 匈牙利 | BUX | partial | partial | live | unavailable | unavailable | BSE/BET 官方 issuer 目录与 profile 已接：154 个目录发行人、66 个 HU 股票组候选；逐证券验证 ticker/ISIN/Equity class，Market 优先取 security profile，Xtend 缺字段时仅由唯一 W_SME 组回填，并排除债券。公告会话和 CSRF 分页档案仍是有界历史。 |
 | IL 以色列 | TASE | stub | live | live | unavailable | unavailable | MAYA 官方 per-company API 已接，保留希伯来语原文并严格核验总数。 |
 | IT 意大利 | BVME | live | partial | live | unknown | unavailable | Euronext Milan 股票 CSV 已接；EQS 披露只是补充源；ETF 未单独验证。 |
 | LT 立陶宛 | N.VILNIUS | live | live | live | unknown | unavailable | Nasdaq Baltic 官方证券表与公告已接；ETF 分类仍未单独验证。 |
@@ -51,7 +51,7 @@
 | PL 波兰 | WSE | live | live | live | unknown | unavailable | GPW 目录和 ESPI 披露已接；ETF 分类仍未单独验证。 |
 | PT 葡萄牙 | BVL | live | live | live | unknown | unavailable | Euronext Lisbon canonical 官方档案已接并限定 Filing 类别；CMVM 未接入。 |
 | RU 俄罗斯 | MOEX | partial | unavailable | unavailable | unavailable | unavailable | MOEX ISS 仅用于只读研究；项目不提供交易、定价或规避监管限制的能力。 |
-| SE 瑞典 | SFB | stub | live | live | unavailable | unavailable | Nasdaq Stockholm 目录存在 SPA 边界；FI OAM/Nasdaq 披露可用。 |
+| SE 瑞典 | SFB | partial | live | live | unavailable | unavailable | Nasdaq Nordic 官方 Shares Screener 已接：2026-08-24 live 为 Main Market 412 + First North 332；NGM、Spotlight、其他场所和退市历史未覆盖。Nasdaq 官方公司公告保持 live。 |
 | AU 澳大利亚 | ASX, ASXCEN, CHIXAU | live | live | live | unknown | unavailable | ASX 目录和公告已接；Centre Point/Cboe 是交易场所映射，ETF 分类待验证。 |
 | HK 香港 | SEHK, SEHKSZSE, SEHKSTAR | partial | live | live | unavailable | unavailable | HKEX 主板目录/披露可用；沪港通与 STAR Connect 是路由范围，不等于 SEHK 全目录，故保持 partial。 |
 | IN 印度 | NSE | live | live | live | unknown | unavailable | NSE 官方 equity CSV 与公告已接；不混入 BSE-only 股票，ETF 分类待验证。 |
@@ -83,6 +83,8 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 - 新加坡证券目录从 stub 升为 partial：接入 StocksSG 公司 API，保存 ticker、名称、board、UEN、ISIN、LEI，并以总数、最小规模、重复代码检查失败关闭。
 - 加拿大 CSE universe 改用 CSE 官网公开调用的 `api/companies/all`，保留 current/halted/suspended/delisted 和 ticker 重用别名；`cse_filings` 沿官方 issuer JSON 读取 accession、分类、状态和 CSE 托管 PDF，真实 CARM smoke 取得 20 条窗口内文件。
 - 新加坡 `sg_ir` 新增免配置的 Singtel 与 OCBC 官方 IR 适配：前者解析公开 datamodel，后者解析 2001 起日期/PDF档案；2026-08-01～08-22 live smoke 分别取得 4 条和 2 条。UOB 的 ListedCompany 请求返回 AWS WAF challenge，保持未接入且不绕过。
+- 瑞典 `se_universe` 改接 Nasdaq Nordic 官方 Shares Screener：严格使用 `market=STO` 和两个 category，对 `data.pagination` 完整对账，并把响应 `assetClass=SHARES` 作为行级约束；live smoke 共 744 条。currency 只记录，不误删 Stockholm 的 EUR 股票。
+- 匈牙利 `hu_universe` 改接 BSE 官方 issuer/security profile：目录筛选只使用官方 country/group ID，逐证券确认股票类型、市场、ticker 和 ISIN；部分 profile 失败不覆盖已有好缓存，未匹配官方公告保留 pending。
 - 本轮采用临时多代理编排完成来源侦察、架构审查、实现和独立 Gate B 复核；当前运行环境没有可调用的 DeepSeek 模型，因此没有伪称使用。最终来源裁决、代码整合与回归由 GPT 强模型完成。
 
 ## 7. 下一轮最值得做的接口（按质量收益排序）
@@ -90,7 +92,7 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 1. **Euronext ETF 官方列表。** 官方页面覆盖 Amsterdam、Brussels、Milan、Oslo、Paris 等地点，但当前为动态列表；应先找到稳定官方数据端点或可验证导出，再接入 FR/BE/NL/IT/NO/PT，不能直接依赖脆弱 DOM。
 2. **JPX 股票全目录。** 继续寻找 JPX 官方日更列表或授权下载；若只能获得 PDF/网页分片，需要建立分页完整性和退市处理，不能以 ETF 页代替股票页。
 3. **加拿大缺口。** CSE 官方目录与 filing mirror 已接；下一步是扩大 TSX/TSXV issuer IR 审核配置、寻找 NEO/ATS 免费官方参考数据，并继续用人工 SEDAR+ 抽样量化缺口。没有许可时不构建 SEDAR+ 自动主链。
-4. **SG/IL/CH/SE/HU/MX。** SG 已有受审 IR/known-link/EDGAR 补充；其他市场若只能依赖聚合目录，仍需保持 partial，或购买/申请 SIX、交易所及授权供应商数据。AT 已改用 Wiener Börse 官方目录，不再列为 stub。
+4. **SG/IL/CH/MX 与 SE/HU 边界。** SG 已有受审 IR/known-link/EDGAR 补充；SE/HU 已接官方目录但仍需其他交易场所与退市历史；IL/CH/MX 若只能依赖不完整或商业目录，必须保持现有边界。AT 已改用 Wiener Börse 官方目录，不再列为 stub。
 5. **ETF 发行人披露。** 按高持仓市场逐个接入交易所/基金管理人正式文件；这是独立项目，不宜用公司披露源自动推断。
 
 ## 8. 仍然无法完成的部分与所需条件
@@ -99,7 +101,7 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 |---|---|---|
 | WAF、SPA、需要浏览器令牌 | CA SEDAR+、SGX 全市场枚举、UOB ListedCompany、部分 SE 等 | CSE/Singtel/OCBC 等免费可达源已补 partial；要升为全国/全市场完整仍需公开 API/授权或供应商，不能靠 token 重放、挑战绕过或无限重试 |
 | 商业参考数据许可 | CH/SIX、部分 venue 级证券主数据 | 购买许可，或寻找允许再利用的正规第三方目录；不接经纪商账号 |
-| 没有完整机器合同或全历史 | HU、MX、PT，以及 AT 完整 OAM 历史 | 与交易所/监管机构确认 API/文件；当前可用公开源只按已验证边界运行，禁止假全量 |
+| 没有完整机器合同或全历史 | HU 公告历史、MX、PT，以及 AT 完整 OAM 历史 | 与交易所/监管机构确认 API/文件；HU 股票目录虽已接，但公告仍为有界档案；当前可用公开源只按已验证边界运行，禁止假全量 |
 | ETF 法律文件分散在发行人 | 28 国 | 按发行人/监管体系建设专门 connector，接受需要授权或付费源 |
 | 信息取得与使用受制裁/许可影响 | RU 等 | 只接许可允许的官方研究数据；不实现交易，也不通过技术规避法律或来源限制 |
 
