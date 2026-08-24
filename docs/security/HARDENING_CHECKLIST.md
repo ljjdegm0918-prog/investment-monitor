@@ -39,17 +39,18 @@ server {
 }
 ```
 
-6. **用户登录（生产推荐）**：**nginx Basic Auth 是唯一用户门禁**。浏览器打开站点时输入一次系统登录框
-   （用户名/密码），之后即可直接使用全部功能；无需任何额外的 token 页面或 localStorage 操作。
-   `WEB_AUTH_TOKEN` 在生产保持**留空**。
+6. **用户登录（生产推荐）**：**应用 Session 登录是唯一用户门禁**。浏览器打开站点后使用页面上的
+   用户名/密码登录（测试账号见 README「测试登录账号」）。**不要**再开 nginx Basic Auth
+   （不要弹出系统自带的 `im` 账号对话框）。`WEB_AUTH_TOKEN` 在生产保持**留空**。
+   反代示例见 `deploy/nginx-investment-monitor.conf`。
 
 7. **可选高级模式**：仅在「没有反代、需要应用层 Bearer」的场景才设置 `WEB_AUTH_TOKEN`。
    此时前端不再显示专门的 ACCESS 引导页；401 只显示简洁错误。高级用户可在浏览器控制台
    `localStorage.setItem("im_web_auth_token", "<token>")`，`api()` 会自动带上 Bearer。
 
 8. **静态资源不鉴权**：`/static/*`（app.css/app.js）与 HTML 页面**不得**要求 Bearer 或 Web token；
-   浏览器加载样式表不会携带 `Authorization` 头。应用侧只对 `/api/*` 校验 Bearer，nginx 侧也不要在
-   `/static/` 单独加鉴权（basic auth 可与 HTML 同一 realm，浏览器会自动带 Basic）。
+   浏览器加载样式表不会携带 `Authorization` 头。应用侧只对 `/api/*` 校验 Bearer，nginx 也不要对
+   `/static/` 单独加鉴权。
 
 ## 部署后自检
 
