@@ -416,19 +416,22 @@ class SessionGate:
         Runs only while the database has no loginable account at all; the
         legacy row never receives these credentials and legacy holdings are
         not attached.  Returns ``"exists"``, ``"created"``, or
-        ``"missing-credentials"`` (with a clear log so startup never silently
-        serves business pages without any possible login).
+        ``"missing-credentials"``; the last keeps the legacy local mode
+        (no login wall) and logs a clear warning so operators know login
+        is not yet active.
         """
         if self.has_login_accounts():
             return "exists"
         username = os.environ.get("INITIAL_ADMIN_USERNAME", "").strip()
         password = os.environ.get("INITIAL_ADMIN_PASSWORD", "")
         if not username or not password:
-            LOGGER.error(
+            LOGGER.warning(
                 "No login accounts exist and INITIAL_ADMIN_USERNAME / "
-                "INITIAL_ADMIN_PASSWORD are not both set. Every page now "
-                "requires login and nobody can sign in until an administrator "
-                "account is provisioned."
+                "INITIAL_ADMIN_PASSWORD are not both set. The app keeps "
+                "running in legacy local mode without a login wall (same "
+                "convention as an unset WEB_AUTH_TOKEN). Set both variables "
+                "and restart to provision the first administrator and "
+                "activate session login."
             )
             return "missing-credentials"
         try:

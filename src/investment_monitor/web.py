@@ -541,6 +541,14 @@ class WebApplication:
         # headerless internal call keeps the shared instance-level repository
         # for schedulers and tests. Unauthenticated real requests are
         # login/static traffic and never touch business data.
+        context_state = self._request_context.__dict__
+        # Nested internal ``handle`` calls (e.g. CSV import fanning out to
+        # /api/companies/batch per group) must not wipe the outer request's
+        # principal; restore whatever scope was active before this route.
+        previous_scope = (
+            context_state.get("user_id"),
+            context_state.get("repository"),
+        )
         if principal is not None:
             user_id = int(principal["user_id"])
             self._request_context.user_id = user_id
@@ -986,11 +994,17 @@ class WebApplication:
                 {"error": "The request could not be completed. Please retry."}, 500
             )
         finally:
-            # Thread-local scope must never leak into the next request on a
-            # reused thread (or into headerless internal calls from tests).
-            context_state = self._request_context.__dict__
-            context_state.pop("user_id", None)
-            context_state.pop("repository", None)
+            # Restore the caller's scope: a nested internal request must not
+            # leak its (absent) principal into the enclosing logged-in route,
+            # and a top-level request leaves a clean thread behind.
+            if previous_scope[0] is None:
+                context_state.pop("user_id", None)
+            else:
+                context_state["user_id"] = previous_scope[0]
+            if previous_scope[1] is None:
+                context_state.pop("repository", None)
+            else:
+                context_state["repository"] = previous_scope[1]
 
     def _add_companies_csv(self, raw_csv: str) -> Mapping[str, Any]:
         """Import mixed-market rows through the same path as manual adds."""
@@ -2510,122 +2524,6 @@ def _principal_payload(principal: Mapping[str, Any]) -> Mapping[str, Any]:
         "role": str(principal["role"]),
         "is_admin": principal.get("role") == ROLE_ADMIN,
     }
-_MARKET_ALIASES = {
-    "usa": "us", "united states": "us",
-    "japan": "jp",
-    "hong kong": "hk",
-    "china": "cn",
-    "korea": "kr", "south korea": "kr",
-    "gb": "uk", "united kingdom": "uk",
-    "taiwan": "tw",
-    "canada": "ca",
-    "australia": "au",
-    "belgium": "be",
-    "france": "fr",
-    "germany": "de",
-    "netherlands": "nl",
-    "italy": "it",
-    "spain": "es",
-    "singapore": "sg",
-    "switzerland": "ch",
-    "poland": "pl",
-    "sweden": "se",
-    "aqse": "aq", "aquis": "aq",
-    "cboe europe": "cxe",
-    "european mutual funds": "emf",
-    "turquoise": "trq",
-    "eurex": "eux",
-}
-
-
-def _parse_company_csv(
-    raw_csv: str,
-    lists: Sequence[Mapping[str, Any]],
-) -> Tuple[List[Mapping[str, Any]], List[Mapping[str, Any]]]:
-    """Parse ticker/market/list CSV or spreadsheet rows with partial errors."""
-    text = raw_csv.lstrip("\ufeff").strip()
-    if not text:
-        raise ValueError("Paste CSV data or choose a CSV file")
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",\t;")
-    except csv.Error:
-        dialect = csv.excel
-    rows = list(csv.reader(io.StringIO(text), dialect))
-    if not rows:
-        raise ValueError("CSV must include a header row")
-    if len(rows) > 501:
-        raise ValueError("CSV can contain at most 500 data rows")
-
-    header_aliases = {
-        "ticker": "ticker", "symbol": "ticker", "code": "ticker",
-        "market": "market", "region": "market",
-        "list": "list", "list_type": "list", "list name": "list",
-    }
-    header = [
-        header_aliases.get(cell.strip().lower(), cell.strip().lower())
-        for cell in rows[0]
-    ]
-    missing = [name for name in ("ticker", "market", "list") if name not in header]
-    if missing:
-        raise ValueError(
-            "CSV header must contain ticker, market, list; missing: "
-            + ", ".join(missing)
-        )
-    indexes = {name: header.index(name) for name in ("ticker", "market", "list")}
-    max_index = max(indexes.values())
-    list_aliases: Dict[str, str] = {}
-    for record in lists:
-        slug = str(record["slug"])
-        list_aliases[slug.casefold()] = slug
-        list_aliases[str(record["name"]).casefold()] = slug
-
-    aggregated: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    failures: List[Mapping[str, Any]] = []
-    for row_number, row in enumerate(rows[1:], start=2):
-        if not any(cell.strip() for cell in row):
-            continue
-        padded = row + [""] * max(0, max_index + 1 - len(row))
-        ticker = padded[indexes["ticker"]].strip().upper()
-        raw_market = padded[indexes["market"]].strip().casefold()
-        market = _MARKET_ALIASES.get(raw_market, raw_market)
-        raw_list = padded[indexes["list"]].strip()
-        list_slug = list_aliases.get(raw_list.casefold(), "")
-        error = ""
-        if not ticker:
-            error = "Ticker is required."
-        elif not all(character.isalnum() or character in ".-_" for character in ticker):
-            error = "Ticker may contain only letters, numbers, dot, hyphen, or underscore."
-        elif len(ticker) > 32:
-            error = "Ticker must be 32 characters or fewer."
-        elif not raw_market:
-            error = "Market is required."
-        elif market not in ALLOWED_MARKETS:
-            error = "Market must be one of: " + ", ".join(sorted(ALLOWED_MARKETS)) + "."
-        elif not raw_list:
-            error = "List is required."
-        elif not list_slug:
-            error = "List was not found. Use an existing list slug or name."
-        if error:
-            failures.append({
-                "row": row_number,
-                "ticker": ticker or "—",
-                "error": error,
-            })
-            continue
-
-        key = (ticker, market)
-        entry = aggregated.setdefault(key, {
-            "row": row_number,
-            "ticker": ticker,
-            "market": market,
-            "lists": [],
-        })
-        if list_slug not in entry["lists"]:
-            entry["lists"].append(list_slug)
-
-    if not aggregated and not failures:
-        raise ValueError("CSV must include at least one data row")
-    return list(aggregated.values()), failures
 
 
 def _first(query: Mapping[str, Sequence[str]], key: str) -> Optional[str]:

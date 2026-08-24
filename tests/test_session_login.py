@@ -528,6 +528,48 @@ class SessionLoginTests(unittest.TestCase):
         self.assertNotIn("MSFT", [c["ticker"] for c in alice_companies])
         self.assertIn("MSFT", [c["ticker"] for c in bob_companies])
 
+    # --- CSV import must not cross user boundaries -----------------------
+
+    def test_csv_import_groups_all_belong_to_the_importing_user(self):
+        self.provision_admin()
+        self.create_member("alice", "alice-pass-123")
+        headers = self.auth_headers("alice", "alice-pass-123")
+        legacy_before = sorted(
+            (company["ticker"], tuple(sorted(company["list_slugs"])))
+            for company in self.application._shared_repository.companies()
+        )
+
+        # Two (market, list) groups force the fan-out through more than one
+        # internal batch call; both must land on the importing user.
+        csv_text = "ticker,market,list\nMSFT,us,holdings\nAAPL,us,watchlist\n"
+        response = self.application.handle(
+            "POST", "/api/companies/csv",
+            json.dumps({"csv": csv_text}).encode(),
+            headers={**headers, "Content-Type": "application/json",
+                     "Origin": "http://127.0.0.1:8765"},
+        )
+        self.assertEqual(response.status, 201, self.payload(response))
+        payload = self.payload(response)
+        self.assertEqual(payload["failed"], [])
+        self.assertEqual(len(payload["added"]), 2)
+
+        alice_companies = {
+            company["ticker"]: sorted(company["list_slugs"])
+            for company in self.payload(self.application.handle(
+                "GET", "/api/companies", headers=headers
+            ))["companies"]
+        }
+        self.assertEqual(alice_companies.get("MSFT"), ["holdings"])
+        self.assertEqual(alice_companies.get("AAPL"), ["watchlist"])
+
+        # Nothing leaked into the legacy/shared scope: still only the
+        # universe import in its original lists.
+        legacy_after = sorted(
+            (company["ticker"], tuple(sorted(company["list_slugs"])))
+            for company in self.application._shared_repository.companies()
+        )
+        self.assertEqual(legacy_after, legacy_before)
+
     # --- items 9/10: collection union -------------------------------------
 
     def test_collection_union_spans_users_and_collects_once(self):
