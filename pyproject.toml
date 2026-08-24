@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A modular foundation for collecting investment information."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["xlrd>=2.0,<3"]
+dependencies = ["xlrd>=2.0,<3", "argon2-cffi>=23.1"]
 
 [project.scripts]
 investment-monitor = "investment_monitor.cli:main"

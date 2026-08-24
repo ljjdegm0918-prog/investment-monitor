@@ -21,6 +21,17 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 from .application import ConfiguredCollectionResult, run_ticker_collection
+from .auth import (
+    ROLE_ADMIN,
+    ROLE_USER,
+    ROLES,
+    SESSION_COOKIE_NAME,
+    SESSION_TTL,
+    AccountError,
+    LoginError,
+    LoginRateLimited,
+    SessionGate,
+)
 from .config import (
     SourceConfig,
     load_environment_file,
@@ -198,9 +209,14 @@ class WebResponse:
     status: int
     body: bytes
     content_type: str = "application/json; charset=utf-8"
+    headers: Tuple[Tuple[str, str], ...] = ()
 
 
 _WEB_AUTH_REQUIRED_CODE = "web_auth_required"
+_SESSION_REQUIRED_CODE = "session_required"
+_ADMIN_REQUIRED_CODE = "admin_required"
+_LOGIN_FAILED_CODE = "login_failed"
+_LOGIN_RATE_LIMITED_CODE = "login_rate_limited"
 
 # Backfill task resource bounds: keep at most this many terminal tasks in
 # memory (LRU by finished_at) and run at most two backfills at once; extra
@@ -303,10 +319,19 @@ class WebApplication:
             implemented_sources=self.implemented_sources,
             allowed_secret_keys=self.writable_env_keys,
         )
+        # The shared repository/service pair carries the legacy principal and
+        # every instance-level concern (collection union, credentials). Per
+        # request, a verified session swaps in a user-scoped view through the
+        # ``repository`` / ``research`` properties below.
+        self._database_path = settings.database_path
+        self._research_settings = ResearchSettings.from_environment()
+        self._research_lock = threading.Lock()
+        self._research_services: Dict[int, ResearchService] = {}
+        self._request_context = threading.local()
         self.research = ResearchService(
             self.repository,
             settings.database_path,
-            ResearchSettings.from_environment(),
+            self._research_settings,
         )
         # DB/UI-stored secrets take priority over .env for this process.
         self._load_credentials_to_environment()
@@ -361,6 +386,59 @@ class WebApplication:
         self._backfill_semaphore = threading.BoundedSemaphore(
             MAX_CONCURRENT_BACKFILLS
         )
+        # Session store for username/password login. ``ensure_initial_admin``
+        # only acts while the database has no loginable account at all.
+        self._sessions = SessionGate(settings.database_path, clock=self._clock)
+        self._sessions.ensure_initial_admin()
+
+    @property
+    def repository(self) -> WebRepository:
+        """User-scoped repository for the current request, else the shared one.
+
+        The scope comes from a verified session resolved in ``handle`` and is
+        kept in thread-local storage; scheduler and backfill threads therefore
+        always see the shared repository (global collection union).
+        """
+        context_repository = getattr(self._request_context, "repository", None)
+        if context_repository is not None:
+            return context_repository
+        return self._shared_repository
+
+    @repository.setter
+    def repository(self, value: WebRepository) -> None:
+        self._shared_repository = value
+
+    @property
+    def research(self) -> ResearchService:
+        """Research service bound to the current request principal."""
+        user_id = getattr(self._request_context, "user_id", None)
+        if user_id is None:
+            return self._shared_research
+        return self._research_for_user(int(user_id))
+
+    @research.setter
+    def research(self, value: ResearchService) -> None:
+        self._shared_research = value
+
+    def _research_for_user(self, user_id: int) -> ResearchService:
+        with self._research_lock:
+            service = self._research_services.get(user_id)
+            if service is None:
+                service = ResearchService(
+                    self._shared_repository.for_user(user_id),
+                    self._database_path,
+                    self._research_settings,
+                )
+                self._research_services[user_id] = service
+            return service
+
+    def shutdown_user_research(self) -> None:
+        """Stop every per-user generation executor (shared one excluded)."""
+        with self._research_lock:
+            services = list(self._research_services.values())
+            self._research_services.clear()
+        for service in services:
+            service.shutdown()
 
     def handle(
         self,
@@ -368,6 +446,8 @@ class WebApplication:
         target: str,
         body: bytes = b"",
         headers: Optional[Mapping[str, str]] = None,
+        *,
+        client_ip: Optional[str] = None,
     ) -> WebResponse:
         parsed = urlparse(target)
         query = parse_qs(parsed.query)
@@ -376,20 +456,225 @@ class WebApplication:
             if rejection is not None:
                 return rejection
             if method == "POST" and headers is not None:
-                rejection = _same_origin_json_write_rejection(headers)
+                if parsed.path == "/api/login":
+                    rejection = _same_origin_login_rejection(headers)
+                else:
+                    rejection = _same_origin_json_write_rejection(headers)
                 if rejection is not None:
                     return rejection
+            principal = None
+            if headers is not None:
+                rejection, principal = self._session_gate(method, parsed.path, headers)
+                if rejection is not None:
+                    return rejection
+            return self._route(method, parsed, query, body, principal, client_ip, headers)
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            return self._json({"error": str(error)}, 400)
+        except Exception:
+            LOGGER.exception("Web request failed: %s %s", method, target)
+            return self._json(
+                {"error": "The request could not be completed. Please retry."}, 500
+            )
+
+    def _session_gate(
+        self,
+        method: str,
+        path: str,
+        headers: Mapping[str, str],
+    ) -> Tuple[Optional[WebResponse], Optional[Mapping[str, Any]]]:
+        """Resolve the session cookie into a principal, or reject the request.
+
+        Static assets, the login page, and the login endpoint stay reachable
+        without a session. Everything else needs a live session: HTML pages
+        redirect to /login and APIs answer 401 ``session_required``.
+        """
+        if path.startswith("/static/") or path == "/favicon.ico":
+            return None, None
+        if method == "POST" and path == "/api/login":
+            return None, None
+        # A database without any loginable account is still a legacy local
+        # instance: the session wall only activates once an account exists
+        # (initial admin or attach-legacy-login), mirroring the opt-in
+        # WEB_AUTH_TOKEN behavior.
+        token = _cookie_value(headers, SESSION_COOKIE_NAME)
+        principal = self._sessions.resolve_token(token) if token else None
+        if principal is None and not token and not self._sessions.has_login_accounts():
+            return None, None
+        if method == "GET" and path == "/login":
+            # Already-authenticated visitors get bounced to the app by the
+            # route below; the principal is passed along for that redirect.
+            return None, principal
+        if principal is not None:
+            return None, principal
+        if path.startswith("/api/"):
+            return (
+                WebResponse(
+                    401,
+                    json.dumps({
+                        "error": "Login required",
+                        "code": _SESSION_REQUIRED_CODE,
+                    }).encode("utf-8"),
+                ),
+                None,
+            )
+        return (
+            WebResponse(
+                302,
+                b"",
+                "text/html; charset=utf-8",
+                headers=(("Location", "/login"),),
+            ),
+            None,
+        )
+
+    def _route(
+        self,
+        method: str,
+        parsed: Any,
+        query: Mapping[str, Sequence[str]],
+        body: bytes,
+        principal: Optional[Mapping[str, Any]],
+        client_ip: Optional[str],
+        headers: Optional[Mapping[str, str]] = None,
+    ) -> WebResponse:
+        # Only a verified session swaps in a user-scoped repository; every
+        # headerless internal call keeps the shared instance-level repository
+        # for schedulers and tests. Unauthenticated real requests are
+        # login/static traffic and never touch business data.
+        if principal is not None:
+            user_id = int(principal["user_id"])
+            self._request_context.user_id = user_id
+            self._request_context.repository = self._shared_repository.for_user(
+                user_id
+            )
+        try:
             if method == "GET" and parsed.path == "/favicon.ico":
                 return WebResponse(204, b"", "image/x-icon")
             if method == "GET" and parsed.path.startswith("/static/"):
                 return self._static(parsed.path)
+            if method == "GET" and parsed.path == "/login":
+                if principal is not None:
+                    return WebResponse(
+                        302,
+                        b"",
+                        "text/html; charset=utf-8",
+                        headers=(("Location", "/today"),),
+                    )
+                return self._html("/login")
             if method == "GET" and (parsed.path in {
                 "/", "/today", "/information", "/search", "/activity",
                 "/sources", "/settings", "/manage", "/research",
             } or parsed.path.startswith("/lists/")):
                 return self._html(parsed.path)
             if method == "GET" and parsed.path == "/api/bootstrap":
-                return self._json(self._bootstrap(query))
+                return self._json(self._bootstrap(query, principal))
+            if method == "POST" and parsed.path == "/api/login":
+                credentials = _login_credentials(
+                    body, _header_value(headers or {}, "Content-Type")
+                )
+                try:
+                    principal, token = self._sessions.login(
+                        credentials["username"],
+                        credentials["password"],
+                        remote_ip=client_ip or "unknown",
+                    )
+                except LoginRateLimited:
+                    return self._json(
+                        {
+                            "error": "Too many failed login attempts",
+                            "code": _LOGIN_RATE_LIMITED_CODE,
+                        },
+                        429,
+                    )
+                except LoginError:
+                    return self._json(
+                        {
+                            "error": "Invalid username or password",
+                            "code": _LOGIN_FAILED_CODE,
+                        },
+                        401,
+                    )
+                return self._json(
+                    {"user": _principal_payload(principal)},
+                    headers=(("Set-Cookie", _session_cookie(token)),),
+                )
+            if method == "POST" and parsed.path == "/api/logout":
+                token = _cookie_value(headers or {}, SESSION_COOKIE_NAME)
+                if token:
+                    self._sessions.logout(token)
+                return self._json(
+                    {"logged_out": True},
+                    headers=(("Set-Cookie", _expired_session_cookie()),),
+                )
+            if method == "GET" and parsed.path == "/api/account":
+                if principal is None:
+                    return self._json(
+                        {"error": "Login required", "code": _SESSION_REQUIRED_CODE},
+                        401,
+                    )
+                return self._json({"user": _principal_payload(principal)})
+            if method == "POST" and parsed.path == "/api/account/password":
+                if principal is None:
+                    return self._json(
+                        {"error": "Login required", "code": _SESSION_REQUIRED_CODE},
+                        401,
+                    )
+                payload = _decode_json(body)
+                try:
+                    self._sessions.change_password(
+                        int(principal["user_id"]),
+                        str(payload.get("current_password") or ""),
+                        str(payload.get("new_password") or ""),
+                    )
+                except AccountError as error:
+                    return self._json({"error": str(error)}, 400)
+                # Every session of this user was revoked; the cookie is dead.
+                return self._json(
+                    {"updated": True},
+                    headers=(("Set-Cookie", _expired_session_cookie()),),
+                )
+            if parsed.path == "/api/admin/users":
+                if principal is None or principal.get("role") != ROLE_ADMIN:
+                    return self._json(
+                        {
+                            "error": "Administrator access required",
+                            "code": _ADMIN_REQUIRED_CODE,
+                        },
+                        403,
+                    )
+                if method == "GET":
+                    return self._json({"users": self._sessions.accounts()})
+                if method == "POST":
+                    payload = _decode_json(body)
+                    try:
+                        account = self._sessions.create_account(
+                            str(payload.get("username") or ""),
+                            str(payload.get("password") or ""),
+                            str(payload.get("display_name") or ""),
+                            str(payload.get("role") or ROLE_USER),
+                        )
+                    except AccountError as error:
+                        return self._json({"error": str(error)}, 400)
+                    return self._json({"user": account}, 201)
+            if method == "POST" and parsed.path == "/api/admin/users/status":
+                if principal is None or principal.get("role") != ROLE_ADMIN:
+                    return self._json(
+                        {
+                            "error": "Administrator access required",
+                            "code": _ADMIN_REQUIRED_CODE,
+                        },
+                        403,
+                    )
+                payload = _decode_json(body)
+                try:
+                    updated = self._sessions.set_account_status(
+                        int(principal["user_id"]),
+                        str(payload.get("username") or ""),
+                        str(payload.get("status") or ""),
+                    )
+                except AccountError as error:
+                    return self._json({"error": str(error)}, 400)
+                return self._json({"user": updated})
             if method == "GET" and parsed.path == "/api/feed":
                 return self._json(self._feed(query))
             if method == "GET" and parsed.path == "/api/daily":
@@ -649,8 +934,24 @@ class WebApplication:
                         {"error": "Coverage data is unavailable"}, 500
                     )
             if method == "GET" and parsed.path == "/api/settings":
+                if principal is not None and principal.get("role") != ROLE_ADMIN:
+                    return self._json(
+                        {
+                            "error": "Administrator access required",
+                            "code": _ADMIN_REQUIRED_CODE,
+                        },
+                        403,
+                    )
                 return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
+                if principal is not None and principal.get("role") != ROLE_ADMIN:
+                    return self._json(
+                        {
+                            "error": "Administrator access required",
+                            "code": _ADMIN_REQUIRED_CODE,
+                        },
+                        403,
+                    )
                 payload = _decode_json(body)
                 key = str(payload["key"])
                 value = str(payload.get("value") or "")
@@ -680,10 +981,16 @@ class WebApplication:
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             return self._json({"error": str(error)}, 400)
         except Exception:
-            LOGGER.exception("Web request failed: %s %s", method, target)
+            LOGGER.exception("Web request failed: %s %s", method, parsed.path)
             return self._json(
                 {"error": "The request could not be completed. Please retry."}, 500
             )
+        finally:
+            # Thread-local scope must never leak into the next request on a
+            # reused thread (or into headerless internal calls from tests).
+            context_state = self._request_context.__dict__
+            context_state.pop("user_id", None)
+            context_state.pop("repository", None)
 
     def _add_companies_csv(self, raw_csv: str) -> Mapping[str, Any]:
         """Import mixed-market rows through the same path as manual adds."""
@@ -1533,7 +1840,11 @@ class WebApplication:
             "extra_env": extra_env,
         }
 
-    def _bootstrap(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
+    def _bootstrap(
+        self,
+        query: Mapping[str, Sequence[str]],
+        principal: Optional[Mapping[str, Any]] = None,
+    ) -> Mapping[str, Any]:
         selected_text = _first(query, "date")
         selected_date = date.fromisoformat(selected_text) if selected_text else datetime.now(EASTERN).date()
         lists = [dict(record) for record in self.repository.fixed_lists()]
@@ -1554,6 +1865,7 @@ class WebApplication:
             "counts": counts,
             "sources": self.repository.source_statuses(),
             "settings": {"page_size": int(self.repository.setting("page_size", "25"))},
+            "user": _principal_payload(principal) if principal else None,
         }
 
     def _feed(self, query: Mapping[str, Sequence[str]]) -> Mapping[str, Any]:
@@ -1733,8 +2045,12 @@ class WebApplication:
         return WebResponse(200, asset.read_bytes(), f"{content_type}; charset=utf-8")
 
     @staticmethod
-    def _json(payload: Mapping[str, Any], status: int = 200) -> WebResponse:
-        return WebResponse(status, json.dumps(payload).encode("utf-8"))
+    def _json(
+        payload: Mapping[str, Any],
+        status: int = 200,
+        headers: Tuple[Tuple[str, str], ...] = (),
+    ) -> WebResponse:
+        return WebResponse(status, json.dumps(payload).encode("utf-8"), headers=headers)
 
 
 class DailyCollectionScheduler:
@@ -1833,12 +2149,18 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         body = self.rfile.read(length) if length else b""
         response = self.application.handle(
-            self.command, self.path, body, headers=self.headers
+            self.command,
+            self.path,
+            body,
+            headers=self.headers,
+            client_ip=self.client_address[0],
         )
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))
         for name, value in SECURITY_HEADERS:
+            self.send_header(name, value)
+        for name, value in response.headers:
             self.send_header(name, value)
         self.send_header("Cache-Control", "no-store" if self.path.startswith("/api/") else "max-age=60")
         self.end_headers()
@@ -1886,6 +2208,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> None:
         # so a card is not left stuck in "generating" and no model request keeps
         # running after the server has gone away.
         application.research.shutdown()
+        application.shutdown_user_research()
         server.server_close()
 
 
@@ -2059,7 +2382,29 @@ def _same_origin_json_write_rejection(
     content_type = _header_value(headers, "Content-Type").split(";", 1)[0].strip().lower()
     if content_type != "application/json":
         return _csrf_rejection("Content-Type must be application/json")
+    return _same_origin_header_rejection(headers)
 
+
+def _same_origin_login_rejection(
+    headers: Mapping[str, Any],
+) -> Optional[WebResponse]:
+    """Same-origin check for the login endpoint, which also accepts forms."""
+    content_type = _header_value(headers, "Content-Type").split(";", 1)[0].strip().lower()
+    if content_type not in {
+        "application/json",
+        "application/x-www-form-urlencoded",
+    }:
+        return _csrf_rejection(
+            "Content-Type must be application/json or "
+            "application/x-www-form-urlencoded"
+        )
+    return _same_origin_header_rejection(headers)
+
+
+def _same_origin_header_rejection(
+    headers: Mapping[str, Any],
+) -> Optional[WebResponse]:
+    """Shared Host/Origin/Referer same-origin verification for POST requests."""
     host = _header_value(headers, "Host")
     parsed_host = urlparse("//" + host) if host else urlparse("//")
     host_hostname = (parsed_host.hostname or "").lower()
@@ -2103,6 +2448,68 @@ def _csrf_rejection(message: str) -> WebResponse:
         403,
         json.dumps({"error": message, "code": _CSRF_REJECTED}).encode("utf-8"),
     )
+
+
+def _cookie_value(headers: Mapping[str, Any], name: str) -> str:
+    """Extract one cookie value from a Cookie header, else empty string."""
+    cookie_header = _header_value(headers, "Cookie")
+    if not cookie_header:
+        return ""
+    for part in cookie_header.split(";"):
+        key, _, value = part.strip().partition("=")
+        if key == name:
+            return value.strip()
+    return ""
+
+
+def _session_cookie(token: str) -> str:
+    """Build the session cookie: HttpOnly, SameSite=Lax, 7-day Max-Age.
+
+    ``Secure`` is attached only when the external entry point is https; the
+    token itself is never exposed to JavaScript or URL parameters.
+    """
+    cookie = (
+        f"{SESSION_COOKIE_NAME}={token}; HttpOnly; SameSite=Lax; Path=/; "
+        f"Max-Age={int(SESSION_TTL.total_seconds())}"
+    )
+    if _expected_scheme() == "https":
+        cookie += "; Secure"
+    return cookie
+
+
+def _expired_session_cookie() -> str:
+    """Overwrite the session cookie so the browser drops it immediately."""
+    cookie = f"{SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"
+    if _expected_scheme() == "https":
+        cookie += "; Secure"
+    return cookie
+
+
+def _login_credentials(body: bytes, content_type: str) -> Mapping[str, str]:
+    """Parse login credentials from a JSON object or an HTML form post."""
+    normalized_type = content_type.split(";", 1)[0].strip().lower()
+    if normalized_type == "application/x-www-form-urlencoded":
+        fields = parse_qs(body.decode("utf-8", errors="replace"))
+        return {
+            "username": _first(fields, "username") or "",
+            "password": _first(fields, "password") or "",
+        }
+    payload = _decode_json(body)
+    return {
+        "username": str(payload.get("username") or ""),
+        "password": str(payload.get("password") or ""),
+    }
+
+
+def _principal_payload(principal: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The user description a page may see; never includes secrets."""
+    return {
+        "id": int(principal["user_id"]),
+        "username": str(principal["username"]),
+        "display_name": str(principal["display_name"]),
+        "role": str(principal["role"]),
+        "is_admin": principal.get("role") == ROLE_ADMIN,
+    }
 _MARKET_ALIASES = {
     "usa": "us", "united states": "us",
     "japan": "jp",
@@ -2314,6 +2721,8 @@ def _filter_dict(filters: FeedFilters) -> Mapping[str, Any]:
 
 
 def _view_for_path(path: str) -> str:
+    if path == "/login":
+        return "login"
     if path in {"/", "/today", "/information", "/search"}:
         return "today"
     if path == "/research":

@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta, timezone
+from contextlib import closing
 from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
+import time
 from types import SimpleNamespace
 from typing import Optional
 import unittest
@@ -111,6 +113,14 @@ class WebRepositoryTests(unittest.TestCase):
         self.resolver = FakeResolver()
 
     def tearDown(self) -> None:
+        # On Windows the WAL checkpoint can hold the sqlite file for a
+        # moment after the last connection closes; retry briefly.
+        for _ in range(10):
+            try:
+                self.temporary_directory.cleanup()
+                return
+            except PermissionError:
+                time.sleep(0.1)
         self.temporary_directory.cleanup()
 
     def add_company(self, ticker: str, *lists: str) -> None:
@@ -148,7 +158,7 @@ class WebRepositoryTests(unittest.TestCase):
         legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
         legacy_items = SQLiteInformationRepository(legacy_path)
         legacy_items.save((make_item("legacy-item"),))
-        with sqlite3.connect(str(legacy_path)) as connection:
+        with closing(sqlite3.connect(str(legacy_path))) as connection, connection:
             item_id = int(connection.execute(
                 "SELECT id FROM information_items WHERE external_id = 'legacy-item'"
             ).fetchone()[0])
@@ -187,7 +197,7 @@ class WebRepositoryTests(unittest.TestCase):
         migrated = WebRepository(legacy_path)
         self.assertEqual(migrated.companies()[0]["list_slugs"], ["holdings"])
         self.assertTrue(migrated.query_feed(FeedFilters()).items[0]["is_read"])
-        with sqlite3.connect(str(legacy_path)) as connection:
+        with closing(sqlite3.connect(str(legacy_path))) as connection:
             owner = connection.execute(
                 "SELECT subject FROM users WHERE id = ?", (migrated.user_id,)
             ).fetchone()

@@ -247,6 +247,14 @@ const MESSAGES = {
     "status.generating": "Generating",
     "status.cached": "Cached",
     "status.stale": "Stale",
+    "login.heading": "Sign in",
+    "login.subtitle": "Use the account created for you by an administrator.",
+    "login.username": "Username",
+    "login.password": "Password",
+    "login.submit": "Sign in",
+    "login.failed": "Invalid username or password",
+    "login.rate_limited": "Too many failed attempts. Try again later.",
+    "common.logout": "Sign out",
   },
   "zh-CN": {
     "nav.daily_info": "每日信息",
@@ -491,6 +499,14 @@ const MESSAGES = {
     "status.generating": "生成中",
     "status.cached": "已缓存",
     "status.stale": "有更新",
+    "login.heading": "登录",
+    "login.subtitle": "请使用管理员为你创建的账号。",
+    "login.username": "用户名",
+    "login.password": "密码",
+    "login.submit": "登录",
+    "login.failed": "用户名或密码错误",
+    "login.rate_limited": "失败次数过多，请稍后再试。",
+    "common.logout": "退出登录",
   },
 };
 
@@ -574,16 +590,69 @@ if (typeof window !== "undefined") {
 
 async function init() {
   applyStaticLabels();
+  if (document.body.dataset.view === "login") { renderLogin(); return; }
   const view = document.body.dataset.view === "manage" ? "manage"
     : document.body.dataset.view === "research" ? "research" : "today";
   document.querySelector(`[data-nav="${view}"]`)?.classList.add("active");
   try {
     state.bootstrap = await api(`/api/bootstrap${location.search}`);
+    renderUserChip(state.bootstrap.user);
     state.selectedList = new URLSearchParams(location.search).get("list") || state.bootstrap.lists[0]?.slug || "";
     if (view === "manage") await renderManage();
     else if (view === "research") await renderResearch();
     else await renderDaily();
   } catch (error) { renderFatal(error); }
+}
+
+function renderLogin() {
+  // The login page never loads business data and hides the business nav.
+  document.querySelectorAll('.site-header nav a[data-nav]').forEach(link => link.hidden = true);
+  document.getElementById("page").innerHTML = `
+    <section class="page-heading"><h1>${t("login.heading")}</h1><p>${t("login.subtitle")}</p></section>
+    <form id="login-form" class="login-form">
+      <label>${t("login.username")}<input id="login-username" autocomplete="username" required></label>
+      <label>${t("login.password")}<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <button class="button primary" type="submit">${t("login.submit")}</button>
+      <p id="login-error" class="form-error" role="alert"></p>
+    </form>`;
+  document.getElementById("login-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const errorBox = document.getElementById("login-error");
+    errorBox.textContent = "";
+    try {
+      await api("/api/login", {method:"POST", body:JSON.stringify({
+        username: document.getElementById("login-username").value,
+        password: document.getElementById("login-password").value,
+      })});
+      location.href = "/today";
+    } catch (error) {
+      errorBox.textContent = error.code === "login_rate_limited"
+        ? t("login.rate_limited")
+        : (error.message || t("login.failed"));
+    }
+  });
+}
+
+function renderUserChip(user) {
+  if (!user) return;
+  const nav = document.querySelector(".site-header nav");
+  if (!nav) return;
+  const chip = document.createElement("span");
+  chip.className = "user-chip";
+  const name = document.createElement("span");
+  name.className = "user-chip-name";
+  name.textContent = user.display_name || user.username;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "text-button";
+  button.textContent = t("common.logout");
+  button.addEventListener("click", async () => {
+    try { await api("/api/logout", {method:"POST", body:"{}"}); }
+    catch (_) { /* the session is already gone */ }
+    location.href = "/login";
+  });
+  chip.append(name, button);
+  nav.appendChild(chip);
 }
 
 async function renderDaily() {
@@ -1310,7 +1379,7 @@ function formatRange(start, end) { return start === end ? formatDay(start) : `${
 function formatTime(value) { return new Intl.DateTimeFormat(localeFor(), {hour:"numeric", minute:"2-digit", timeZone:"Asia/Shanghai", timeZoneName:"short"}).format(new Date(value)); }
 function formatDateTime(value) { return new Intl.DateTimeFormat(localeFor(), {dateStyle:"medium", timeStyle:"short", timeZone:"America/New_York"}).format(new Date(value)) + " ET"; }
 function errorState(title, message) { return `<div class="empty error"><h2>${esc(title)}</h2><p>${esc(message)}</p></div>`; }
-async function api(url, options={}) { const headers = {"Content-Type":"application/json", ...(options.headers||{})}; let token=""; try { token = localStorage.getItem("im_web_auth_token") || ""; } catch (_) { /* localStorage unavailable */ } if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(url, {...options, headers}); const payload = await response.json(); if (!response.ok) { const error = new Error(payload.error || t("common.request_failed_status", {status: response.status})); error.status = response.status; error.code = payload.code || ""; throw error; } return payload; }
+async function api(url, options={}) { const headers = {"Content-Type":"application/json", ...(options.headers||{})}; let token=""; try { token = localStorage.getItem("im_web_auth_token") || ""; } catch (_) { /* localStorage unavailable */ } if (token) headers.Authorization = `Bearer ${token}`; const response = await fetch(url, {...options, headers}); const payload = await response.json(); if (!response.ok) { if (response.status === 401 && payload.code === "session_required" && document.body.dataset.view !== "login") { location.href = "/login"; } const error = new Error(payload.error || t("common.request_failed_status", {status: response.status})); error.status = response.status; error.code = payload.code || ""; throw error; } return payload; }
 function toast(message, error=false) { const node=document.createElement("div"); node.className=`toast ${error?"error":""}`; node.textContent=message; document.getElementById("toast-region").appendChild(node); setTimeout(()=>node.remove(),4000); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char])); }
 function escAttr(value) { return esc(value); }
