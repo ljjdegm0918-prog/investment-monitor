@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "fqs.json#17x",
+  "delayMinutes": 15,
+  "delayedMillis": 1787548024724,
+  "delayedDateTime": "20260824T07:07:04.724",
+  "pageNumber": 1,
+  "pageSize": 2,
+  "totalRows": 2,
+  "colNames": ["ShortName", "ValorId", "ISIN", "ValorSymbol", "ValorNumber", "SecTypeCode", "SecTypeDesc", "ListingSegmentCode", "ListingSegmentDesc", "TitleSegment", "PortalSegment"],
+  "rowData": [
+    ["ABB LTD N", "CH0012221716CHF4", "CH0012221716", "ABBN", 1222171, "RS", "Registered Share", "IR", "International Reporting Standard", "SA", "EQ"],
+    ["ABB LTD N 2. LINIE", "CH0357679619CHF4", "CH0357679619", "ABBNE", 35767961, "RS", "Registered Share", "IR", "International Reporting Standard", "SA", "EQ"]
+  ]
+}

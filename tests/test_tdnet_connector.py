@@ -746,11 +746,16 @@ class TDnetConnectorTests(unittest.TestCase):
         self.assertIsInstance(connector, TDnetConnector)
 
     def test_supported_ticker_suffixes_match_official_company_code(self):
-        for ticker in ("1111", "1111.T", "1111:JP"):
+        for ticker, company_code in (
+            ("1111", "1111"),
+            ("1111.T", "1111"),
+            ("1111:JP", "1111"),
+            ("25935", "25935"),
+        ):
             with self.subTest(ticker=ticker):
                 connector, _ = connector_for(
-                    page(1, row()),
-                    crosscheck(crosscheck_record()),
+                    page(1, row(company_code)),
+                    crosscheck(crosscheck_record(company_code)),
                 )
                 items = connector.collect(request(ticker))
                 self.assertEqual(items[0].tickers, (ticker,))

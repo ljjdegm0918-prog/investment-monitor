@@ -501,6 +501,13 @@ from .universe.ch_universe import (
     refresh_ch_universe,
     search_ch_universe,
 )
+from .universe.jp_universe import (
+    JpUniverseError,
+    jp_universe_name_map,
+    load_jp_universe,
+    refresh_jp_universe,
+    search_jp_universe,
+)
 from .universe.pl_universe import (
     PlUniverseError,
     load_pl_universe,
@@ -858,6 +865,7 @@ __all__ = [
     "EsUniverseError",
     "SgUniverseError",
     "ChUniverseError",
+    "JpUniverseError",
     "PlUniverseError",
     "SeUniverseError",
     "GlobalEquityReferenceError",

@@ -45,6 +45,7 @@ from .models import (
     MARKET_BE,
     MARKET_DE,
     MARKET_HK,
+    MARKET_JP,
     MARKET_KR,
     MARKET_ES,
     MARKET_SG,
@@ -82,6 +83,8 @@ from .universe.it_universe import it_universe_name_map, refresh_it_universe
 from .universe.es_universe import es_universe_name_map
 from .universe.sg_universe import load_sg_universe, sg_universe_name_map
 from .universe.ch_universe import ch_universe_name_map
+from .universe.jp_universe import jp_universe_name_map
+from .universe.jp_etf_universe import jp_etf_universe_name_map
 from .universe.pl_universe import pl_universe_name_map, refresh_pl_universe
 from .universe.at_universe import at_universe_name_map, refresh_at_universe
 from .universe.se_universe import se_universe_name_map, refresh_se_universe
@@ -1151,6 +1154,10 @@ class WebApplication:
             # CH stays unmapped via SEC; disclosure matches by ISIN/name
             # from the universe, never by pretending an SEC CIK exists.
             return None
+        if market == MARKET_JP:
+            # JPX/TDnet/EDINET use local security identities; never map a
+            # Japanese code to a same-named SEC registrant.
+            return None
         if market == MARKET_PL:
             # PL stays unmapped via SEC; disclosure matches by ISIN/name
             # from the universe, never by pretending an SEC CIK exists.
@@ -1276,7 +1283,27 @@ class WebApplication:
         if market == MARKET_SG:
             return sg_universe_name_map()
         if market == MARKET_CH:
-            return ch_universe_name_map()
+            name_fallback = ch_universe_name_map()
+            if not name_fallback:
+                LOGGER.warning(
+                    "ch_universe cache is cold on add-company; synchronous "
+                    "refresh skipped because complete SIX share/ETF paging "
+                    "can block the request. Run the daily universe refresher."
+                )
+            return name_fallback
+        if market == MARKET_JP:
+            monthly = jp_universe_name_map()
+            if not monthly:
+                LOGGER.warning(
+                    "jp_universe cache is cold on add-company; synchronous "
+                    "XLS download skipped. Run the daily universe refresher."
+                )
+            # The monthly JPX workbook already contains ETF/ETN rows.  A warm
+            # ETF-specific JPX cache may add fresher ETF names without ever
+            # being mistaken for a stock or disclosure source.
+            combined = dict(monthly)
+            combined.update(jp_etf_universe_name_map())
+            return combined or None
         if market == MARKET_PL:
             return _warm_universe_on_first_add(
                 market,

@@ -81,6 +81,42 @@ class WebApplicationTests(unittest.TestCase):
             stored_count=0,
         )
 
+    def test_ch_and_jp_name_fallbacks_use_new_official_universes(self) -> None:
+        ch_identity = {
+            "NESN": {"name": "Nestle", "exchange": "SIX", "board": "SR"}
+        }
+        with patch(
+            "investment_monitor.web.ch_universe_name_map",
+            return_value=ch_identity,
+        ):
+            self.assertEqual(self.application._name_fallback_for("ch"), ch_identity)
+
+        jp_stock = {
+            "7203": {"name": "Toyota", "exchange": "TSE", "board": "Prime"}
+        }
+        jp_etf = {
+            "1308": {"name": "TOPIX ETF", "exchange": "TSE", "board": "ETF"}
+        }
+        with patch(
+            "investment_monitor.web.jp_universe_name_map", return_value=jp_stock
+        ), patch(
+            "investment_monitor.web.jp_etf_universe_name_map", return_value=jp_etf
+        ):
+            self.assertEqual(
+                self.application._name_fallback_for("jp"),
+                {**jp_etf, **jp_stock},
+            )
+
+        with patch(
+            "investment_monitor.web.ch_universe_name_map", return_value={}
+        ), patch(
+            "investment_monitor.web.jp_universe_name_map", return_value={}
+        ), patch(
+            "investment_monitor.web.jp_etf_universe_name_map", return_value={}
+        ):
+            self.assertEqual(self.application._name_fallback_for("ch"), {})
+            self.assertIsNone(self.application._name_fallback_for("jp"))
+
     def test_core_pages_and_static_assets_are_served(self) -> None:
         page = self.application.handle("GET", "/today")
         legacy_information = self.application.handle("GET", "/information")

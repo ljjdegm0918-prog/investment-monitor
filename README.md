@@ -13,12 +13,12 @@ Investment Monitor 是一个以列表为中心的本地金融信息监控工作�
 | 地区 | 国家 / 参考场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
 |---|---:|---|---|---|
 | 美洲 | 3 / 31 | 2 partial、1 stub | 2 live、1 partial | 加拿大 SEDAR+ 完整性/NEO；墨西哥官方证券目录；美国 OTC/Pink |
-| 欧洲 | 19 / 44 | 13 live、4 partial、2 stub | 12 live、6 partial、1 unavailable | CH/IL/MX 的证券主数据；SE/HU 已接官方边界目录但不含其他场所/退市历史；AT/NL 等法定披露仍非全文件；RU 仅只读 |
-| 亚洲 | 6 / 12 | 2 live、3 partial、1 unavailable | 5 live、1 partial | 日本股票全目录/PTS；SGXNET 全市场发现；香港/台湾完整证券目录 |
+| 欧洲 | 19 / 44 | 13 live、5 partial、1 stub | 12 live、6 partial、1 unavailable | IL 官方证券主数据；CH/SE/HU 已接官方边界目录但不含其他场所/退市历史；AT/NL 等法定披露仍非全文件；RU 仅只读 |
+| 亚洲 | 6 / 12 | 2 live、4 partial、0 unavailable | 5 live、1 partial | 日本 TSE 月末目录仍缺当月变更/PTS；SGXNET 全市场发现；香港/台湾完整证券目录 |
 
-全局自动报告当前为：证券目录 **15 live、9 partial、3 stub、1 unavailable**；公司披露 **19 live、8 partial、1 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **3 live、14 unknown、11 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
+全局自动报告当前为：证券目录 **15 live、11 partial、2 stub、0 unavailable**；公司披露 **19 live、8 partial、1 unavailable**；新闻 **27 live、1 unavailable**；ETF 目录 **4 live、14 unknown、10 unavailable**；ETF 专属披露仍为 **28 unavailable**。详细到每个国家和场所的表见 [全球市场覆盖报告](docs/GLOBAL_MARKET_COVERAGE_STATUS_ZH.md)。
 
-本 PR 已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
+本分支已补：美国 Nasdaq Trader 官方股票/ETF 目录健壮性、日本 JPX 官方 ETF 目录及月末全证券 XLS、瑞士 SIX 股票/ETF 公共目录、加拿大 CEO.ca SEDAR PDF 镜像（第三方 partial）、新加坡 StocksSG 公司目录（第三方 partial），并修正英国覆盖统计。仍未完成的项目及其授权/WAF/完整性原因在覆盖报告第 7–8 节列出。
 
 Web 界面为英文，包含三个固定列表：
 
@@ -53,7 +53,7 @@ cd "/Users/jiajunliu/Documents/New project/investment-monitor"
 python3 --version
 ```
 
-项目无第三方运行时依赖。SEC 要求自动化客户端声明应用名称与真实联系邮箱。一次性创建本地环境文件：
+项目依赖由 `pyproject.toml` 管理（JPX 旧式 XLS 使用 `xlrd`）。SEC 要求自动化客户端声明应用名称与真实联系邮箱。一次性创建本地环境文件：
 
 ```bash
 cp .env.example .env
@@ -286,12 +286,12 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_ch | filings | none | EQS News JSON by Swiss ISIN (key-free, unofficial public WP API; may change without notice; **partial Swiss coverage** — live 2026-08-10 Roche/UBS return records, Nestlé/Novartis return empty lists; NOT a SIX Exchange Regulation / FINMA official feed). SIX official channels have no stable free JSON (official-notices page is a React SPA; `api.six-group.com` routes undocumented; SIX equity-issuer news is the paid Exfeed product) — CH-4 re-verified 2026-08-10, no second disclosure source. Needs ISIN from the CH universe cache or a typed Swiss ISIN. |
-| ch_universe | breadth cache | none | **Boundary stub (CH-2 spike B2)**: no stable key-free SIX securities directory exists (`six-group.com/market-data/shares/*` are React SPAs; share-explorer detail pages expose name/ticker/ISIN in meta tags but no board; `api.six-group.com` routes are undocumented 404s; SIX market-data APIs and the equity-issuer-news Exfeed product are paid). `load_ch_universe` / `ch_universe_name_map` / `search_ch_universe` read a local cache if one ever exists; `refresh_ch_universe` raises `ChUniverseError` instead of faking an SMI-only universe. Never enters the feed. |
+| eqs_ch | filings | none | EQS News JSON by Swiss ISIN (key-free, unofficial public WP API; may change without notice; **partial Swiss coverage** — live 2026-08-10 Roche/UBS return records, Nestlé/Novartis return empty lists; NOT a SIX Exchange Regulation / FINMA official feed). SIX Exchange Regulation/FINMA 的完整发行人公告主链仍未接入；SIX equity-issuer-news Exfeed 是付费产品。Needs ISIN from the CH universe cache or a typed Swiss ISIN. |
+| ch_universe | breadth cache | none | **Official partial**：匿名读取 SIX Share Explorer／ETF Explorer 使用的 `https://www.six-group.com/fqs/ref.json`。股票分别完整分页 `PortalSegment=EQ*TitleSegment=SA`（Swiss Shares）与 `...=AA`（Foreign Shares），ETF 分页 `ProductLine=ET*PortalSegment=FU`；逐页对账 `pageNumber/pageSize/totalRows/colNames`，以 `ValorId` 保留交易线，保存 ticker、ISIN、板块、证券类型、币种和官方详情 URL。2026-08-24 live：SA 224 行（223 个股份/参与证书、1 个认购权）、AA 36、ETF 2,285；认购权单独标为 `subscription_right`，不会用于公司 ticker 映射。Sponsored Foreign Shares、其他瑞士场所和退市历史不在范围内，故国家 universe 为 partial；缓存仅作内部元数据使用，不声称 SIX 商业 Reference Data 授权或再分发权。 |
 | yahoo_ch | news | none | Yahoo Finance CH public RSS (`region=CH`, `lang=de-CH` + `en-US` merged; identical titles stay single-language); `.SW` at request time; may be loosely related and break without notice |
 | google_news_ch | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=de&gl=CH&ceid=CH:de`; `de-CH`/`fr-CH`/`en` variants redirect, so the live-locked German-Swiss edition is used); may be loosely related and break without notice |
 
-`market=ch` 公司使用规范根 ticker（`NESN` / `NESN.SW` / `NESN-SWX` 均存为 `NESN`；交易所后缀 `.SW` / `.SWX` / `.S` 在添加时剥离，瑞士 ISIN 原样保留）并保持 unmapped。Finnhub **仅 US**，不对 CH 查询。News 来自 `yahoo_ch` / `google_news_ch`。
+`market=ch` 公司使用规范根 ticker（`NESN` / `NESN.SW` / `NESN-SWX` 均存为 `NESN`；交易所后缀 `.SW` / `.SWX` / `.S` 在添加时剥离，瑞士 ISIN 原样保留）。缓存温热时从 `ch_universe_name_map()` 回填名称、board、ISIN 和产品类型；重复 mnemonic 指向不同交易线时不猜测映射。Finnhub **仅 US**，不对 CH 查询。News 来自 `yahoo_ch` / `google_news_ch`。
 
 CH feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ch` / `google_news_ch` news 跨源按 ticker + Zurich day（`Europe/Zurich`）+ normalized title 配对。`eqs_ch` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Zurich day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
 
@@ -658,15 +658,16 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   `market=STO` 下 Main Market 412、First North 332 条，分页对账和官方股票字段
   校验均已接。universe 从历史 stub 提升为 official partial；NGM、Spotlight、
   其他场所和退市历史仍不在范围内。披露 `nasdaq_se_filings` 保持 live。
-- **CH**：universe 保持 `stub`（SIX 页面与 `api.six-group.com` 均 404）；
-  披露 `eqs_ch` 保持 partial。EODHD/OpenFIGI 候选可转 partial，但永远
-  `source_tier=third_party`，不得覆盖官方字段。
+- **CH**：后续定位到 SIX Share/ETF Explorer 自身使用的公开 FQS JSON，已接
+  Swiss Shares、Foreign Shares 和 ETF 的完整分页与交易线身份校验，universe
+  从历史 stub 提升为 official partial；Sponsored shares、其他瑞士场所与退市
+  历史仍缺。披露 `eqs_ch` 继续保持 partial，不把目录冒充公告。
 - **ETF 七国**：UK 官方 FIRDS 已按 CFI 分类 ETF（`uk_universe_etf_count`），
   缓存含 ETF 行时 coverage 显示 `partial`（FIRDS 只有 ISIN、无零售 ticker，
-  故不标 live）；HK/JP/TW/AU/PL/ES 本轮未发现可自动化的官方 ETF
-  CSV/XLSX/API（HKEX/LSE/ASX 为 SPA 或前端导出，JPX/BME 404，GPW 连接
-  不稳），coverage 诚实保持 `unknown`，一旦第三方候选层有行自动转
-  `partial`。DE 黄金样本（官方 Xetra 含 ETF/ETN/ETC）不回退，测试锁死。
+  故不标 live）；JP 后续已接 JPX 官方 ETF 页面和月度全量 XLS，CH 已接 SIX
+  ETF Explorer，因此这两个交易所范围的 ETF universe 为 live。HK/TW/AU/PL/ES
+  仍保持 `unknown` 或在第三方候选存在时为 `partial`。DE 官方 Xetra
+  ETF/ETN/ETC 不回退。ETF disclosure 与目录分离，仍无来源的市场不得升级。
 - **CXE/TRQ**：`docs/phase4-cxe-trq-venue.md` 收口——两市场只有
   `google_news_*` 新闻源，无任何披露 connector；catalog `catalog_role`
   为 `venue_only`，永不进 28 国分母。
@@ -702,8 +703,10 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   `company_tickers_exchange.json`（约 10k 行，必须带 User-Agent）；这是
   SEC 注册边界内的 breadth-only 目录，coverage 标 `partial`，不冒充完整
   交易所目录。
-- **JP**：JPX 上市公司页未暴露静态 xlsx/xls 直链（Z0 复验），无稳定免
-  key 官方目录 → universe 保持 `unavailable`；TDnet/EDINET 披露保持 live。
+- **JP**：后续确认 JPX 官方页面公开固定月度全量文件 `data_e.xls`。现在每日
+  条件轮询该文件、用 SHA-256 避免无变化重写，并严格分类 TSE 股票、ETF/ETN、
+  REIT/上市基金及 Equity Contribution Securities；Cboe Japan、Japannext 与
+  月末后变更未覆盖，所以 universe 为 official partial。TDnet/EDINET 披露保持 live。
 - **公开 ETF 目录**：未发现新的免 key 官方静态文件（LSE/HKEX/ASX SPA、
   JPX/BME 404、GPW 不稳）；七国 ETF 状态维持 unknown，第三方候选行出现
   才转 partial。不申请 EODHD/新 key。
@@ -799,10 +802,20 @@ WEB_EXTERNAL_SCHEME=http
 |---|---|---|---|
 | tdnet_public_web | filings | none | Official JPX TDnet public list; fail-closed completeness checks |
 | edinet | filings | `EDINET_API_KEY` | Official EDINET API v2 metadata (see below) |
+| jp_universe | breadth cache | none | JPX 官方固定 `data_e.xls`，前月末 TSE 全量上市证券；每日轮询 ETag/Last-Modified/哈希，解析 Prime/Standard/Growth/PRO 股票、Foreign shares、ETF/ETN、REIT/上市基金和 Equity Contribution Securities。月内变更及 PTS 不在范围内，因此为 partial；永不进入 feed。 |
+| jp_etf_universe | breadth cache | none | JPX 官方当前 ETF Listed Issues HTML；ETF 专项补充与交叉核验，不替代月度股票目录，也不代表 ETF 公告覆盖。 |
 | yahoo_jp | news | none | Yahoo Finance JP public RSS; `.T` suffix at request time only |
 | google_news_jp | news | none | Key-free Google News RSS search (`hl=ja&gl=JP&ceid=JP:ja`); may be loosely related and break without notice |
 
-`market=jp` 公司以未映射方式添加（本地证券代码，如 `7203`）。Finnhub **仅 US**。News 软去重（仅展示）：`yahoo_jp` / `google_news_jp` 跨源按 ticker + Tokyo day + normalized title 配对。TDnet/EDINET filings 暂无跨源 soft-dedupe 键。
+`market=jp` 公司使用本地证券代码（如 `7203`；字母代码也保留），缓存温热时由 `jp_universe_name_map()` 回填公司/基金名称、TSE board 与产品类型。Finnhub **仅 US**。News 软去重（仅展示）：`yahoo_jp` / `google_news_jp` 跨源按 ticker + Tokyo day + normalized title 配对。TDnet/EDINET filings 暂无跨源 soft-dedupe 键。
+
+CH/JP universe 可由外部系统每日执行一次：
+
+```bash
+investment-monitor-refresh-universes --market ch --market jp
+```
+
+CH 每次完整分页刷新；JP 每日检查官方月度文件，服务器返回 304 或内容 SHA-256 未变化时不会重写缓存。任一市场出现 403/429、非 JSON、坏 XLS、分页或总数漂移时命令失败并保留旧缓存。
 
 ## 官方 EDINET 连接器
 

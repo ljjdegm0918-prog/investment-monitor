@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "fqs.json#17x",
+  "delayMinutes": 15,
+  "delayedMillis": 1787548026724,
+  "delayedDateTime": "20260824T07:07:06.724",
+  "pageNumber": 1,
+  "pageSize": 2,
+  "totalRows": 2,
+  "colNames": ["FundLongName", "TradingBaseCurrency", "FundCurrency", "ISIN", "ValorId", "ValorSymbol", "ReplicationMethodDesc", "UnderlyingGeographicalDesc", "LegalStructureCountryDesc", "ManagementFee", "ProductLine", "PortalSegment"],
+  "rowData": [
+    ["AB Euro Corporate Bond Portfolio UCITS ETF - EUR Acc", "CHF", "EUR", "LU3322521785", "LU3322521785CHF4", "EBND", "Unknown", "Europe", "Luxembourg", 0.29, "ET", "FU"],
+    ["AB Euro Corporate Bond Portfolio UCITS ETF - EUR Acc", "USD", "EUR", "LU3322521785", "LU3322521785USD4", "EBND", "Unknown", "Europe", "Luxembourg", 0.29, "ET", "FU"]
+  ]
+}

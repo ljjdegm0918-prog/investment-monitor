@@ -44,7 +44,7 @@ OFFICIAL_EMPTY_TEXT = "に開示された情報はありません。"
 TIME_PATTERN = re.compile(r"(?:^|\s)([0-2]?\d):([0-5]\d)(?:\s|$)")
 COMPANY_CODE_PATTERN = re.compile(r"(?:^|\s)([0-9A-Z]{4,5})(?:\s|$)", re.I)
 TARGET_TICKER_PATTERN = re.compile(
-    r"^(?P<code>[0-9]{4}|[0-9]{3}[A-Z])(?:\.T|:JP)?$",
+    r"^(?P<code>[0-9]{4,5}|[0-9]{3}[A-Z])(?:\.T|:JP)?$",
     re.I,
 )
 DEFAULT_YANOSHIN_LIMIT = 2000

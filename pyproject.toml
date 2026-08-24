@@ -8,11 +8,12 @@ version = "0.1.0"
 description = "A modular foundation for collecting investment information."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = ["xlrd>=2.0,<3"]
 
 [project.scripts]
 investment-monitor = "investment_monitor.cli:main"
 investment-monitor-web = "investment_monitor.web:main"
+investment-monitor-refresh-universes = "investment_monitor.universe.daily_refresh:main"
 edinet = "investment_monitor.sources.edinet.cli:main"
 
 [tool.setuptools.packages.find]

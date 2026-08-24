@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "fqs.json#17x",
+  "delayMinutes": 15,
+  "delayedMillis": 1787548025724,
+  "delayedDateTime": "20260824T07:07:05.724",
+  "pageNumber": 1,
+  "pageSize": 2,
+  "totalRows": 2,
+  "colNames": ["ShortName", "ValorId", "ISIN", "ValorSymbol", "ValorNumber", "SecTypeCode", "SecTypeDesc", "ListingSegmentCode", "ListingSegmentDesc", "TitleSegment", "PortalSegment"],
+  "rowData": [
+    ["3M", "US88579Y1010CHF4", "US88579Y1010", "MMM", 1405105, "RS", "Registered Share", "IR", "International Reporting Standard", "AA", "EQ"],
+    ["ABBOTT LABOR", "US0028241000CHF4", "US0028241000", "ABT", 903037, "RS", "Registered Share", "IR", "International Reporting Standard", "AA", "EQ"]
+  ]
+}

@@ -32,9 +32,9 @@ class Phase4BoundaryTests(unittest.TestCase):
         self.assertIn("nordic/screener/shares", SE_BOUNDARY["evidence"])
 
     def test_ch_boundary_keeps_partial_disclosure(self):
-        self.assertEqual(CH_BOUNDARY["universe"], "stub")
+        self.assertEqual(CH_BOUNDARY["universe"], "partial")
         self.assertEqual(CH_BOUNDARY["disclosure"], "partial")
-        self.assertIn("404", CH_BOUNDARY["evidence"])
+        self.assertIn("fqs/ref.json", CH_BOUNDARY["evidence"])
 
 
 class Phase4CoverageTests(unittest.TestCase):
@@ -61,6 +61,13 @@ class Phase4CoverageTests(unittest.TestCase):
     def test_de_golden_etf_stays_live(self):
         self.assertEqual(self.rows["DE"]["etf_universe"], "live")
         self.assertEqual(self.rows["DE"]["universe"], "live")
+
+    def test_ch_and_jp_official_directories_are_partial_country_universes(self):
+        self.assertEqual(self.rows["CH"]["universe"], "partial")
+        self.assertEqual(self.rows["CH"]["etf_universe"], "live")
+        self.assertEqual(self.rows["JP"]["universe"], "partial")
+        self.assertEqual(self.rows["JP"]["etf_universe"], "live")
+        self.assertEqual(self.rows["JP"]["etf_disclosure"], "unavailable")
 
     def test_etf_candidates_flip_uncovered_markets_to_partial(self):
         with TemporaryDirectory() as tmp:

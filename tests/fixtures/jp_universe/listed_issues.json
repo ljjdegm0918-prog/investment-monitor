@@ -1,0 +1,25 @@
+{
+  "sheet_name": "Sheet1",
+  "headers": [
+    "Effective Date",
+    "Local Code",
+    "Name (English)",
+    "Section/Products",
+    "33 Sector(Code)",
+    "33 Sector(name)",
+    "17 Sector(Code)",
+    "17 Sector(name)",
+    "Size Code (New Index Series)",
+    "Size (New Index Series)"
+  ],
+  "rows": [
+    [20260731, 1301, "KYOKUYO CO.,LTD.", "Prime Market (Domestic)", 50, "Fishery, Agriculture and Forestry", 1, "FOODS", 6, "TOPIX Small 1"],
+    [20260731, "130A", "Veritas In Silico Inc.", "Growth Market(Domestic)", 3250, "Pharmaceutical", 5, "PHARMACEUTICAL", "-", "-"],
+    [20260731, 2001, "Standard Foreign Plc", "Standard Market(Foreign)", 5250, "Information & Communication", 10, "IT & SERVICES, OTHERS", "-", "-"],
+    [20260731, 3001, "Tokyo Pro Co.", "PRO Market", 6050, "Services", 10, "IT & SERVICES, OTHERS", "-", "-"],
+    [20260731, 25935, "Class-A Preferred Stock of ITO EN,LTD.", "Prime Market (Domestic)", 3050, "Foods", 1, "FOODS", 4, "TOPIX Mid400"],
+    [20260731, 1305, "iFreeETF TOPIX", "ETFs/ ETNs", "-", "-", "-", "-", "-", "-"],
+    [20260731, 8951, "Japan REIT Fund", "REIT, Venture Funds, Country Funds and Infrastructure Funds", "-", "-", "-", "-", "-", "-"],
+    [20260731, 8301, "BANK OF JAPAN", "Equity Contribution Securities", "-", "-", "-", "-", "-", "-"]
+  ]
+}

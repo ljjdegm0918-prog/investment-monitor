@@ -109,11 +109,11 @@ class CoverageReportTests(unittest.TestCase):
     def test_zero_sweep_us_jp_boundaries(self):
         self.assertEqual(self.rows["US"]["universe"], "partial")
         self.assertEqual(self.rows["US"]["etf_universe"], "live")
-        self.assertEqual(self.rows["JP"]["universe"], "unavailable")
+        self.assertEqual(self.rows["JP"]["universe"], "partial")
         self.assertEqual(self.rows["JP"]["etf_universe"], "live")
         self.assertIn("Nasdaq Trader", self.rows["US"]["notes"])
         self.assertIn("OTC/Pink", self.rows["US"]["notes"])
-        self.assertIn("Listed Issues", self.rows["JP"]["notes"])
+        self.assertIn("listed-issues XLS", self.rows["JP"]["notes"])
 
 
 if __name__ == "__main__":
