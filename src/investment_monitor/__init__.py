@@ -338,6 +338,13 @@ from .sources.eqs_ch import (
     EqsChError,
     EqsChRequestError,
 )
+from .sources.six_official_notices import (
+    SixOfficialNoticesClient,
+    SixOfficialNoticesConnector,
+    SixOfficialNoticesDataError,
+    SixOfficialNoticesError,
+    SixOfficialNoticesRequestError,
+)
 from .sources.ch_news import (
     GoogleChNewsClient,
     GoogleChNewsConnector,
@@ -831,6 +838,16 @@ __all__ = [
     "EqsNlDataError",
     "EqsNlError",
     "EqsNlRequestError",
+    "EqsChClient",
+    "EqsChConnector",
+    "EqsChDataError",
+    "EqsChError",
+    "EqsChRequestError",
+    "SixOfficialNoticesClient",
+    "SixOfficialNoticesConnector",
+    "SixOfficialNoticesDataError",
+    "SixOfficialNoticesError",
+    "SixOfficialNoticesRequestError",
     "AfmNlClient",
     "AfmNlConnector",
     "AfmNlDataError",

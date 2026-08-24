@@ -456,14 +456,14 @@ sources:
     label: Google News (EUX)
     source_type: news
     enabled: true          # key-free Google News RSS search (product name from EUX universe, else Eurex product code; hl=de, gl=DE); may be loosely related / break without notice
-  # Switzerland second disclosure - deliberately not wired (CH-4):
-  # SIX official notices are a React SPA without a public JSON list,
-  # api.six-group.com routes are undocumented, and SIX equity-issuer news
-  # is the paid Exfeed product. FINMA has no per-issuer announcement feed.
+  # Switzerland official event notices. The public SIX/SER page exposes a
+  # key-free total-count JSON list plus per-notice detail JSON and an RSS feed.
+  # The connector scans the market list but resolves details only for an exact
+  # ISIN in the official CH universe, excluding unrelated structured products.
   - name: six_official_notices
-    label: SIX Official Notices (not wired)
+    label: SIX Exchange Regulation Official Notices
     source_type: filings
-    enabled: false
+    enabled: true
   # Poland disclosure: official GPW ESPI/EBI reports page
   # (www.gpw.pl/komunikaty), key-free HTML list with ISIN filtering
   # (PL-4 re-spike 2026-08-10 found it reachable; the PL-1 A3 boundary was

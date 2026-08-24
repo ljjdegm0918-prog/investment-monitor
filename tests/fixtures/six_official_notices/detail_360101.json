@@ -1,0 +1,19 @@
+{
+  "status": "Ok",
+  "totalCount": 1,
+  "itemList": [
+    {
+      "number": 301001,
+      "isin": "CH0038863350",
+      "text": "Dividend ex-date: 17 August 2026. Payment date: 19 August 2026.",
+      "contact": "Nestlé S.A.",
+      "noticeId": 360101,
+      "noticeType": "A",
+      "date": 20260814,
+      "valorNumber": 3886335,
+      "contactPerson": "Issuer Services",
+      "title": "Dividend payment",
+      "contactPhone": "+41 00 000 00 00"
+    }
+  ]
+}

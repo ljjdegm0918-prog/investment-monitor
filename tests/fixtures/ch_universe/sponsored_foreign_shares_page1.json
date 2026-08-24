@@ -1,0 +1,14 @@
+{
+  "protocolVersion": "fqs.json#17x",
+  "delayMinutes": 15,
+  "delayedMillis": 1787548026224,
+  "delayedDateTime": "20260824T07:07:06.224",
+  "pageNumber": 1,
+  "pageSize": 2,
+  "totalRows": 2,
+  "colNames": ["ShortName", "ValorId", "ISIN", "ValorSymbol", "ValorNumber", "SecTypeCode", "SecTypeDesc", "ListingSegmentCode", "ListingSegmentDesc", "TitleSegment", "PortalSegment", "TradingBaseCurrency", "FirstTradingDate"],
+  "rowData": [
+    ["ABBVIE INC", "US00287Y1091CHF4", "US00287Y1091", "ABBV", 20145667, "SS", "Sponsored Foreign Shares", "SP", "SIX Sponsored Segment", "SP", "EQ", "CHF", 20251201],
+    ["ABBVIE INC", "US00287Y1091USD4", "US00287Y1091", "ABBV", 20145667, "SS", "Sponsored Foreign Shares", "SP", "SIX Sponsored Segment", "SP", "EQ", "USD", 20251201]
+  ]
+}

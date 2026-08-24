@@ -18,7 +18,12 @@ from investment_monitor import (
     refresh_ch_universe,
     search_ch_universe,
 )
-from investment_monitor.universe.ch_universe import ETF_COLUMNS, SHARE_COLUMNS, SixFqsClient
+from investment_monitor.universe.ch_universe import (
+    ETF_COLUMNS,
+    SHARE_COLUMNS,
+    SPONSORED_SHARE_COLUMNS,
+    SixFqsClient,
+)
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ch_universe"
@@ -51,6 +56,7 @@ def _scope_timings():
     values = {
         "swiss_shares": 1787548024724,
         "foreign_shares": 1787548025724,
+        "sponsored_foreign_shares": 1787548026224,
         "etfs": 1787548026724,
     }
     from datetime import datetime, timezone
@@ -74,6 +80,7 @@ def _fixture_opener(request, **_kwargs):
     name = {
         "PortalSegment=EQ*TitleSegment=SA": "swiss_shares_page1.json",
         "PortalSegment=EQ*TitleSegment=AA": "foreign_shares_page1.json",
+        "PortalSegment=EQ*TitleSegment=SP": "sponsored_foreign_shares_page1.json",
         "ProductLine=ET*PortalSegment=FU": "etfs_page1.json",
     }[where]
     return _Response(json.dumps(_fixture(name)).encode())
@@ -90,10 +97,15 @@ class ChUniverseTests(unittest.TestCase):
         self.assertEqual({key: len(value) for key, value in scopes.items()}, {
             "swiss_shares": 2,
             "foreign_shares": 2,
+            "sponsored_foreign_shares": 2,
             "etfs": 2,
         })
         self.assertEqual(scopes["swiss_shares"][0]["TitleSegment"], "SA")
         self.assertEqual(scopes["foreign_shares"][0]["TitleSegment"], "AA")
+        self.assertEqual(
+            scopes["sponsored_foreign_shares"][0]["TradingBaseCurrency"],
+            "CHF",
+        )
         self.assertEqual(scopes["etfs"][0]["ProductLine"], "ET")
 
     def test_refresh_classifies_trading_lines_and_writes_atomically(self) -> None:
@@ -110,15 +122,20 @@ class ChUniverseTests(unittest.TestCase):
                 refreshed_at="2026-08-24T00:00:00+00:00",
                 minimum_swiss_shares=1,
                 minimum_foreign_shares=1,
+                minimum_sponsored_foreign_shares=1,
                 minimum_etfs=1,
                 page_size=2,
             )
             loaded = load_ch_universe(cache)
             name_map = ch_universe_name_map(cache)
             etfs = search_ch_universe("LU3322521785", cache)
+            sponsored = search_ch_universe("ABBV", cache)
 
-        self.assertEqual(payload["counts"]["total"], 6)
-        self.assertEqual(payload["counts_by_type"], {"equity": 4, "etf": 2})
+        self.assertEqual(payload["counts"]["total"], 8)
+        self.assertEqual(
+            payload["counts_by_type"],
+            {"equity": 4, "sponsored_foreign_share": 2, "etf": 2},
+        )
         self.assertEqual(payload["source_effective_date"], "2026-08-24")
         self.assertEqual(
             payload["source_effective_at"],
@@ -128,11 +145,19 @@ class ChUniverseTests(unittest.TestCase):
         self.assertEqual(payload["excluded_counts"]["unknown_security_type"], 0)
         self.assertEqual(loaded["coverage"], "official_partial_six_exchange_metadata")
         self.assertEqual(name_map["ABBN"]["isin"], "CH0012221716")
+        self.assertEqual(name_map["ABBV"]["isin"], "US00287Y1091")
         self.assertNotIn("EBND", name_map)
-        self.assertEqual(payload["counts"]["ambiguous_tickers"], 1)
+        self.assertEqual(payload["counts"]["ambiguous_tickers"], 2)
         self.assertEqual(len(etfs), 2)
         self.assertEqual({item["trading_currency"] for item in etfs}, {"CHF", "USD"})
         self.assertTrue(all(item["instrument_type"] == "etf" for item in etfs))
+        self.assertEqual(len(sponsored), 2)
+        self.assertEqual(
+            {item["trading_currency"] for item in sponsored}, {"CHF", "USD"}
+        )
+        self.assertTrue(
+            all(item["primary_listing_outside_switzerland"] for item in sponsored)
+        )
 
     def test_rights_are_not_misclassified_as_equity_and_unknown_types_fail(self) -> None:
         swiss = _records("swiss_shares_page1.json", SHARE_COLUMNS)
@@ -173,6 +198,10 @@ class ChUniverseTests(unittest.TestCase):
                 return {
                     "swiss_shares": swiss,
                     "foreign_shares": _records("foreign_shares_page1.json", SHARE_COLUMNS),
+                    "sponsored_foreign_shares": _records(
+                        "sponsored_foreign_shares_page1.json",
+                        SPONSORED_SHARE_COLUMNS,
+                    ),
                     "etfs": _records("etfs_page1.json", ETF_COLUMNS),
                 }
 
@@ -183,6 +212,7 @@ class ChUniverseTests(unittest.TestCase):
                 client=Client(),
                 minimum_swiss_shares=1,
                 minimum_foreign_shares=1,
+                minimum_sponsored_foreign_shares=1,
                 minimum_etfs=1,
             )
             name_map = ch_universe_name_map(cache)
@@ -200,6 +230,7 @@ class ChUniverseTests(unittest.TestCase):
                 client=Client(),
                 minimum_swiss_shares=1,
                 minimum_foreign_shares=1,
+                minimum_sponsored_foreign_shares=1,
                 minimum_etfs=1,
             )
 

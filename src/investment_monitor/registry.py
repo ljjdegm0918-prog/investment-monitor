@@ -110,6 +110,7 @@ from .sources.be_news import (
     YahooBeNewsConnector,
 )
 from .sources.eqs_ch import EqsChConnector
+from .sources.six_official_notices import SixOfficialNoticesConnector
 from .sources.ch_news import (
     GoogleChNewsConnector,
     YahooChNewsConnector,
@@ -465,6 +466,10 @@ def create_default_registry() -> SourceRegistry:
     registry.register(YahooBeNewsConnector.name, YahooBeNewsConnector)
     registry.register(GoogleBeNewsConnector.name, GoogleBeNewsConnector)
     registry.register(EqsChConnector.name, EqsChConnector)
+    registry.register(
+        SixOfficialNoticesConnector.name,
+        SixOfficialNoticesConnector,
+    )
     registry.register(YahooChNewsConnector.name, YahooChNewsConnector)
     registry.register(GoogleChNewsConnector.name, GoogleChNewsConnector)
     registry.register(YahooPlNewsConnector.name, YahooPlNewsConnector)

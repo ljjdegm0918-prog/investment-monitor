@@ -286,14 +286,15 @@ ES feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED
 
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
-| eqs_ch | filings | none | EQS News JSON by Swiss ISIN (key-free, unofficial public WP API; may change without notice; **partial Swiss coverage** — live 2026-08-10 Roche/UBS return records, Nestlé/Novartis return empty lists; NOT a SIX Exchange Regulation / FINMA official feed). SIX Exchange Regulation/FINMA 的完整发行人公告主链仍未接入；SIX equity-issuer-news Exfeed 是付费产品。Needs ISIN from the CH universe cache or a typed Swiss ISIN. |
-| ch_universe | breadth cache | none | **Official partial**：匿名读取 SIX Share Explorer／ETF Explorer 使用的 `https://www.six-group.com/fqs/ref.json`。股票分别完整分页 `PortalSegment=EQ*TitleSegment=SA`（Swiss Shares）与 `...=AA`（Foreign Shares），ETF 分页 `ProductLine=ET*PortalSegment=FU`；逐页对账 `pageNumber/pageSize/totalRows/colNames`，以 `ValorId` 保留交易线，保存 ticker、ISIN、板块、证券类型、币种和官方详情 URL。2026-08-24 live：SA 224 行（223 个股份/参与证书、1 个认购权）、AA 36、ETF 2,285；认购权单独标为 `subscription_right`，不会用于公司 ticker 映射。Sponsored Foreign Shares、其他瑞士场所和退市历史不在范围内，故国家 universe 为 partial；缓存仅作内部元数据使用，不声称 SIX 商业 Reference Data 授权或再分发权。 |
+| six_official_notices | filings | none | **Official partial**：使用 SIX Exchange Regulation 公开的总数分页 JSON `.../sheldon/official_notices/v2/find.json` 和逐条详情 JSON；官方页同时发布 RSS。按日期扫描全市场列表，只对 CH universe 中精确 ISIN 命中的行拉取详情，保存 noticeId、连续公告编号、Valor、Europe/Zurich 时间、官方原文与真实采集 URL；403、HTML/Loading、空包、总数漂移、跨页重复和分页上限均失败关闭。该源覆盖公司事件、资本变化、分红等 Official Notices，但不等于全部 ad-hoc、财报和 Exfeed Equity Issuer News。 |
+| eqs_ch | filings | none | EQS News JSON by Swiss ISIN (key-free, unofficial public WP API; may change without notice; **partial Swiss coverage** — live 2026-08-10 Roche/UBS return records, Nestlé/Novartis return empty lists; NOT a SIX Exchange Regulation / FINMA official feed). 继续作为财报/新闻稿补充；SIX equity-issuer-news Exfeed 付费产品未使用。Needs ISIN from the CH universe cache or a typed Swiss ISIN. |
+| ch_universe | breadth cache | none | **Official partial**：匿名读取 SIX Share Explorer／ETF Explorer／Sponsored Foreign Shares 页面使用的 `https://www.six-group.com/fqs/ref.json`。完整分页 `TitleSegment=SA`（Swiss Shares）、`AA`（Foreign Shares）、`SP`（Sponsored Foreign Shares）和 `ProductLine=ET*PortalSegment=FU`（ETF），逐页对账 `pageNumber/pageSize/totalRows/colNames`。2026-08-24 live：SA 224、AA 36、SP 551 个交易币种线、ETF 2,285；SP 以 `sponsored_foreign_share` 单独分类并保存币种/首日，同一 ISIN 的 CHF/USD 线可安全回填发行人身份但不替用户选择交易币种。BATECH/CHIXCH/TRQXCH/VIRTX 是路由/MTF 场所，不复制成发行人目录；退市历史仍缺，故国家 universe 为 partial。缓存仅作内部元数据使用，不声称 SIX 商业 Reference Data 授权或再分发权。 |
 | yahoo_ch | news | none | Yahoo Finance CH public RSS (`region=CH`, `lang=de-CH` + `en-US` merged; identical titles stay single-language); `.SW` at request time; may be loosely related and break without notice |
 | google_news_ch | news | none | Key-free Google News RSS search (`q={symbol}`, `hl=de&gl=CH&ceid=CH:de`; `de-CH`/`fr-CH`/`en` variants redirect, so the live-locked German-Swiss edition is used); may be loosely related and break without notice |
 
 `market=ch` 公司使用规范根 ticker（`NESN` / `NESN.SW` / `NESN-SWX` 均存为 `NESN`；交易所后缀 `.SW` / `.SWX` / `.S` 在添加时剥离，瑞士 ISIN 原样保留）。缓存温热时从 `ch_universe_name_map()` 回填名称、board、ISIN 和产品类型；重复 mnemonic 指向不同交易线时不猜测映射。Finnhub **仅 US**，不对 CH 查询。News 来自 `yahoo_ch` / `google_news_ch`。
 
-CH feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ch` / `google_news_ch` news 跨源按 ticker + Zurich day（`Europe/Zurich`）+ normalized title 配对。`eqs_ch` filings 按稳定 EQS news id 配对，或同源标题回退（ticker + Zurich day + normalized title）；仅接入一个披露源时无跨源 filing 配对。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
+CH feed 软去重（仅展示，保留所有行；与其他市场共用 `KR_FEED_SOFT_DEDUPE` 开关，默认开启）：`yahoo_ch` / `google_news_ch` news 跨源按 ticker + Zurich day（`Europe/Zurich`）+ normalized title 配对。`six_official_notices` 按 SIX noticeId、`eqs_ch` 按稳定 EQS news id 配对；无 ID 时均使用同源标题回退。每行保留在 feed 中并标注 "Also seen on —"；总数与分页大小永不缩减。
 
 ### 波兰数据源（PL）
 
@@ -658,10 +659,11 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
   `market=STO` 下 Main Market 412、First North 332 条，分页对账和官方股票字段
   校验均已接。universe 从历史 stub 提升为 official partial；NGM、Spotlight、
   其他场所和退市历史仍不在范围内。披露 `nasdaq_se_filings` 保持 live。
-- **CH**：后续定位到 SIX Share/ETF Explorer 自身使用的公开 FQS JSON，已接
-  Swiss Shares、Foreign Shares 和 ETF 的完整分页与交易线身份校验，universe
-  从历史 stub 提升为 official partial；Sponsored shares、其他瑞士场所与退市
-  历史仍缺。披露 `eqs_ch` 继续保持 partial，不把目录冒充公告。
+- **CH**：SIX FQS 日更范围已扩到 Swiss Shares、Foreign Shares、Sponsored
+  Foreign Shares 和 ETF，所有范围都做完整分页与交易线身份校验；同时接入
+  SIX Exchange Regulation Official Notices 的公开列表/详情 JSON，以 ISIN 精确
+  匹配公司事件、资本变化和分红公告。路由 MTF 不复制发行人目录，退市历史和
+  完整 ad-hoc/财报等价覆盖仍缺，所以总体保持 partial，`eqs_ch` 继续作补充。
 - **ETF 七国**：UK 官方 FIRDS 已按 CFI 分类 ETF（`uk_universe_etf_count`），
   缓存含 ETF 行时 coverage 显示 `partial`（FIRDS 只有 ISIN、无零售 ticker，
   故不标 live）；JP 后续已接 JPX 官方 ETF 页面和月度全量 XLS，CH 已接 SIX

@@ -1,14 +1,17 @@
 """Official partial SIX Swiss Exchange share and ETF universe.
 
 SIX's public Share Explorer and ETF Explorer both read the key-free
-``/fqs/ref.json`` endpoint.  This module follows those public UI requests,
-reconciles every page against ``totalRows``, and stores metadata only.  It is
+``/fqs/ref.json`` endpoint.  SIX's public Sponsored Foreign Shares directory
+uses the same endpoint with ``TitleSegment=SP``.  This module follows those
+public UI requests, reconciles every page against ``totalRows``, and stores metadata only.  It is
 not the commercial SIX Reference Data product and the cache is not licensed
 for redistribution.
 
-The equity scope includes SIX ``Swiss Shares`` and ``Foreign Shares``.  It
-deliberately excludes Sponsored Foreign Shares and securities listed only on
-other Swiss venues.  The country-level universe therefore remains partial.
+The equity scope includes SIX ``Swiss Shares``, ``Foreign Shares`` and
+``Sponsored Foreign Shares``.  Sponsored securities are retained as a
+separate type because their primary listing is outside Switzerland.  Routing
+MTFs and historical/delisted securities are still outside this issuer master,
+so the country-level universe remains partial.
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ _SHARE_INSTRUMENT_TYPES = {
     "BS": "equity",
     "PC": "participation_certificate",
     "RI": "subscription_right",
+    "SS": "sponsored_foreign_share",
 }
 
 SHARE_COLUMNS = (
@@ -56,6 +60,11 @@ SHARE_COLUMNS = (
     "ListingSegmentDesc",
     "TitleSegment",
     "PortalSegment",
+)
+SPONSORED_SHARE_COLUMNS = (
+    *SHARE_COLUMNS,
+    "TradingBaseCurrency",
+    "FirstTradingDate",
 )
 ETF_COLUMNS = (
     "FundLongName",
@@ -77,7 +86,8 @@ PHASE4_BOUNDARY = {
     "disclosure": "partial",
     "evidence": (
         "SIX public fqs/ref.json used by Share Explorer and ETF Explorer; "
-        "Swiss Shares (SA), Foreign Shares (AA), and ETF (ET/FU) scopes"
+        "Swiss Shares (SA), Foreign Shares (AA), Sponsored Foreign Shares "
+        "(SP), and ETF (ET/FU) scopes"
     ),
 }
 
@@ -129,7 +139,7 @@ class SixFqsClient:
         page_size: int = DEFAULT_PAGE_SIZE,
         max_pages: int = DEFAULT_MAX_PAGES,
     ) -> Mapping[str, Sequence[Mapping[str, Any]]]:
-        """Fetch all three required scopes; one failed scope fails the run."""
+        """Fetch all four required scopes; one failed scope fails the run."""
         scopes: Dict[str, Sequence[Mapping[str, Any]]] = {}
         timings: Dict[str, Mapping[str, Any]] = {}
         for scope, columns, where, order_by, expected in (
@@ -146,6 +156,13 @@ class SixFqsClient:
                 "PortalSegment=EQ*TitleSegment=AA",
                 "ShortName",
                 {"PortalSegment": "EQ", "TitleSegment": "AA"},
+            ),
+            (
+                "sponsored_foreign_shares",
+                SPONSORED_SHARE_COLUMNS,
+                "PortalSegment=EQ*TitleSegment=SP",
+                "ShortName",
+                {"PortalSegment": "EQ", "TitleSegment": "SP"},
             ),
             (
                 "etfs",
@@ -322,11 +339,12 @@ def refresh_ch_universe(
     refreshed_at: Optional[str] = None,
     minimum_swiss_shares: int = 200,
     minimum_foreign_shares: int = 20,
+    minimum_sponsored_foreign_shares: int = 250,
     minimum_etfs: int = 1000,
     page_size: int = DEFAULT_PAGE_SIZE,
     max_pages: int = DEFAULT_MAX_PAGES,
 ) -> Mapping[str, Any]:
-    """Refresh Swiss/foreign shares and ETFs as one atomic SIX snapshot."""
+    """Refresh SIX shares, sponsored foreign shares and ETFs atomically."""
     try:
         active_client = client or SixFqsClient.from_environment()
         scopes = active_client.fetch_all(
@@ -337,7 +355,12 @@ def refresh_ch_universe(
         raise
     except Exception as error:
         raise ChUniverseError(f"SIX universe refresh failed: {error}") from error
-    expected_scopes = {"swiss_shares", "foreign_shares", "etfs"}
+    expected_scopes = {
+        "swiss_shares",
+        "foreign_shares",
+        "sponsored_foreign_shares",
+        "etfs",
+    }
     if set(scopes) != expected_scopes:
         raise ChUniverseError("SIX universe did not return all required scopes")
     source_timing = _aggregate_source_timing(
@@ -349,12 +372,23 @@ def refresh_ch_universe(
         raise ChUniverseError("SIX Swiss Shares scope is suspiciously small")
     if counts["foreign_shares"] < minimum_foreign_shares:
         raise ChUniverseError("SIX Foreign Shares scope is suspiciously small")
+    if (
+        counts["sponsored_foreign_shares"]
+        < minimum_sponsored_foreign_shares
+    ):
+        raise ChUniverseError(
+            "SIX Sponsored Foreign Shares scope is suspiciously small"
+        )
     if counts["etfs"] < minimum_etfs:
         raise ChUniverseError("SIX ETF scope is suspiciously small")
 
     items: List[Mapping[str, Any]] = []
     seen_valor_ids: set[str] = set()
-    for scope in ("swiss_shares", "foreign_shares"):
+    for scope in (
+        "swiss_shares",
+        "foreign_shares",
+        "sponsored_foreign_shares",
+    ):
         for row in scopes[scope]:
             item = _share_item(row)
             _claim_valor_id(item, seen_valor_ids)
@@ -385,12 +419,12 @@ def refresh_ch_universe(
             "included": [
                 "SIX Swiss Shares (SA)",
                 "SIX Foreign Shares (AA)",
+                "SIX Sponsored Foreign Shares (SP) as foreign-primary trading lines",
                 "SIX ETFs (ET/FU)",
                 "SIX subscription rights retained as a separate non-equity type",
             ],
             "not_covered": [
-                "Sponsored Foreign Shares (SP)",
-                "other Swiss trading venues",
+                "routing-only Swiss MTF order books as separate issuer masters",
                 "historical and delisted securities",
                 "ETF issuer disclosures",
             ],
@@ -450,11 +484,29 @@ def ch_universe_name_map(
             key = normalize_ch_ticker(alias)
             if key:
                 candidates.setdefault(key, []).append(identity)
-    return {
-        key: identities[0]
-        for key, identities in candidates.items()
-        if len({identity["official_id"] for identity in identities}) == 1
-    }
+    resolved: Dict[str, Mapping[str, str]] = {}
+    for key, identities in candidates.items():
+        if len({identity["official_id"] for identity in identities}) == 1:
+            resolved[key] = identities[0]
+            continue
+        # Sponsored shares commonly have CHF and USD trading lines with
+        # distinct ValorIds but one issuer, symbol and ISIN.  Resolving that
+        # issuer identity is safe; the trading-line ambiguity remains visible
+        # in the cache and no currency-specific line is selected for trading.
+        signatures = {
+            (
+                identity["name"],
+                identity["isin"],
+                identity["instrument_type"],
+            )
+            for identity in identities
+        }
+        if (
+            len(signatures) == 1
+            and identities[0]["instrument_type"] == "sponsored_foreign_share"
+        ):
+            resolved[key] = identities[0]
+    return resolved
 
 
 def search_ch_universe(
@@ -497,7 +549,7 @@ def _share_item(row: Mapping[str, Any]) -> Mapping[str, Any]:
         or not ticker
         or not _ISIN.fullmatch(isin)
         or not valor_id
-        or title_segment not in {"SA", "AA"}
+        or title_segment not in {"SA", "AA", "SP"}
         or str(row.get("PortalSegment") or "") != "EQ"
         or not listing_code
         or not listing_desc
@@ -510,6 +562,22 @@ def _share_item(row: Mapping[str, Any]) -> Mapping[str, Any]:
         raise ChUniverseError(
             f"SIX share row has unknown SecTypeCode {security_type_code!r}"
         ) from error
+    trading_currency = str(row.get("TradingBaseCurrency") or "").strip().upper()
+    first_trading_date = str(row.get("FirstTradingDate") or "").strip()
+    if title_segment == "SP":
+        if (
+            security_type_code != "SS"
+            or listing_code != "SP"
+            or not re.fullmatch(r"[A-Z]{3}", trading_currency)
+            or not re.fullmatch(r"\d{8}", first_trading_date)
+        ):
+            raise ChUniverseError(
+                "SIX sponsored-share row is missing its official segment metadata"
+            )
+    elif security_type_code == "SS":
+        raise ChUniverseError(
+            "SIX Sponsored Foreign Share appeared outside TitleSegment=SP"
+        )
     return {
         "ticker": ticker,
         "name": name,
@@ -523,7 +591,14 @@ def _share_item(row: Mapping[str, Any]) -> Mapping[str, Any]:
         "security_type_code": security_type_code,
         "security_type": security_type,
         "instrument_type": instrument_type,
-        "source": "six_share_explorer",
+        "trading_currency": trading_currency or None,
+        "first_trading_date": first_trading_date or None,
+        "primary_listing_outside_switzerland": title_segment == "SP",
+        "source": (
+            "six_sponsored_foreign_shares"
+            if title_segment == "SP"
+            else "six_share_explorer"
+        ),
         "source_url": str(row.get("retrieval_url") or FQS_URL),
         "official_detail_url": (
             "https://www.six-group.com/en/market-data/shares/share-explorer/"
@@ -663,6 +738,7 @@ __all__ = [
     "ChUniverseError",
     "FQS_URL",
     "PHASE4_BOUNDARY",
+    "SPONSORED_SHARE_COLUMNS",
     "SixFqsClient",
     "ch_universe_name_map",
     "load_ch_universe",

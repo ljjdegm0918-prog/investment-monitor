@@ -55,10 +55,11 @@ sources on ticker + Madrid day + normalized title. For SG, no disclosure
 connector is wired (SGX A3 spike), so regulatory filings never get a key
 and are never annotated; SG news (yahoo_sg / google_news_sg) pairs across
 sources on ticker + Singapore day + normalized title.
-For CH, the only wired disclosure source is eqs_ch, which pairs on its
-stable EQS news id, or on a source-scoped title fallback (ticker + Zurich
-day + normalized title); CH news (yahoo_ch / google_news_ch) pairs across
-sources on ticker + Zurich day + normalized title.
+For CH, SIX official notices pair on their exchange notice id and eqs_ch
+pairs on its stable EQS news id; both keep a source-scoped title fallback
+(ticker + Zurich day + normalized title). CH news (yahoo_ch /
+google_news_ch) pairs across sources on ticker + Zurich day + normalized
+title.
 For BE, the only wired disclosure source is fsma_stori, which pairs on its
 stable FSMA STORI document id (``requiredReportingTopicId``), or on a
 source-scoped title fallback (ticker + Brussels day + normalized title);
@@ -205,6 +206,7 @@ FILING_SOURCE_PRIORITY = {
     "cnmv_hr": 14,
     "bme_relevant_facts": 15,
     "fsma_stori": 16,
+    "six_official_notices": 16,
     "eqs_ch": 17,
     "gpw_espi": 18,
     "bse_india_announcements": 20,
@@ -347,6 +349,7 @@ SOURCE_DISPLAY_LABELS = {
     "yahoo_be": "Yahoo Finance BE",
     "google_news_be": "Google News (BE)",
     "eqs_ch": "EQS News (CH)",
+    "six_official_notices": "SIX Official Notices",
     "yahoo_ch": "Yahoo Finance CH",
     "google_news_ch": "Google News (CH)",
     "gpw_espi": "GPW ESPI/EBI",
@@ -637,18 +640,12 @@ def _es_filing_key(item: Mapping[str, Any]) -> Optional[str]:
 
 
 def _ch_filing_key(item: Mapping[str, Any]) -> Optional[str]:
-    """CH filings pair on the stable EQS news id, or a title fallback.
-
-    ``eqs_ch`` is the only wired CH disclosure source; its news id
-    (``external_id``) is the primary identity. Without one, the fallback is
-    source-scoped (source + ticker + Zurich day + normalized title), so a
-    hypothetical second CH disclosure source is never cross-annotated by
-    title.
-    """
+    """CH filings use source-authoritative IDs and source-scoped fallbacks."""
     source = str(item.get("source") or "")
     document_id = str(item.get("external_id") or "").strip()
     if document_id:
-        return f"ch:filing:eqs:{document_id}"
+        family = "six" if source == "six_official_notices" else "eqs"
+        return f"ch:filing:{family}:{document_id}"
     title = normalize_title(item.get("title"))
     day = _local_day(item, ZURICH)
     if title and day:

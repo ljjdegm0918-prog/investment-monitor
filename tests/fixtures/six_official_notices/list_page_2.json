@@ -1,0 +1,15 @@
+{
+  "status": "Ok",
+  "totalCount": 3,
+  "itemList": [
+    {
+      "noticeId": 360099,
+      "date": 20260813,
+      "publishTime": 163045,
+      "noticeType": "DE",
+      "contact": "Roche Holding Ltd",
+      "title": "Cancellation of registered shares",
+      "isin": "CH0012032048"
+    }
+  ]
+}

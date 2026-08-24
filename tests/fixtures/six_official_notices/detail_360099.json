@@ -1,0 +1,19 @@
+{
+  "status": "Ok",
+  "totalCount": 1,
+  "itemList": [
+    {
+      "number": 300999,
+      "isin": "CH0012032048",
+      "text": "Cancellation becomes effective on 14 August 2026.",
+      "contact": "Roche Holding Ltd",
+      "noticeId": 360099,
+      "noticeType": "DE",
+      "date": 20260813,
+      "valorNumber": 1203204,
+      "contactPerson": null,
+      "title": "Cancellation of registered shares",
+      "contactPhone": null
+    }
+  ]
+}

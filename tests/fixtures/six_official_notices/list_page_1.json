@@ -1,0 +1,24 @@
+{
+  "status": "Ok",
+  "totalCount": 3,
+  "itemList": [
+    {
+      "noticeId": 360101,
+      "date": 20260814,
+      "publishTime": 73005,
+      "noticeType": "A",
+      "contact": "Nestlé S.A.",
+      "title": "Dividend payment",
+      "isin": "CH0038863350"
+    },
+    {
+      "noticeId": 360100,
+      "date": 20260814,
+      "publishTime": 70001,
+      "noticeType": "A",
+      "contact": "Example Structured Products AG",
+      "title": "Rule based parameter adjustment",
+      "isin": "CH1517326539"
+    }
+  ]
+}

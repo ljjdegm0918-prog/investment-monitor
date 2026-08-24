@@ -135,6 +135,19 @@ class ChDedupeKeyTests(unittest.TestCase):
         )
         self.assertNotEqual(dedupe_key(first), dedupe_key(second))
 
+    def test_six_notice_uses_its_exchange_notice_id(self) -> None:
+        item = feed_item(
+            "six_official_notices",
+            "six-notice:360101",
+            source_type="regulatory_filing",
+            title="Dividend payment",
+        )
+
+        self.assertEqual(
+            dedupe_key(item),
+            "ch:filing:six:six-notice:360101",
+        )
+
     def test_us_market_still_has_no_key(self) -> None:
         item = feed_item("sec", "sec-1", market="us")
 
