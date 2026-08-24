@@ -2196,6 +2196,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> None:
     parsed = build_parser().parse_args(arguments)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     application = WebApplication(parsed.project_root)
+    application._sessions.ensure_seed_logins()
     InvestmentMonitorHandler.application = application
     server = ThreadingHTTPServer((parsed.host, parsed.port), InvestmentMonitorHandler)
     scheduler: Optional[DailyCollectionScheduler] = None

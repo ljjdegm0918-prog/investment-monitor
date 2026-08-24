@@ -39,6 +39,22 @@ Web 界面为英文，包含三个固定列表：
 
 仓库中仍保留用于自动化可扩展性测试的 mock 连接器。它们未在 `config/settings.yaml` 中启用，生成的 mock 数据也不会进入生产 Web 信息流。未来的真实 community 连接器将使用独立的 `source` 名称与 `source_type="community"`，不会被标注为 SEC。
 
+## 测试登录账号
+
+启动 Web（`investment-monitor-web`）时，若库里还没有下列用户名，会自动创建这五个账号。这是私密仓库的应用登录测试口令，不是云主机、nginx Basic 或采集 API key。
+
+| 用户名 | 角色 | 密码 | 说明 |
+|---|---|---|---|
+| 1 | 管理员 | `Rk8nM2wQ7pLx` | 可改实例密钥、调用 `/api/admin/users` 建号 |
+| 2 | 普通用户 | `Hj4cT9bV3sNw` | 持仓/列表/已读/Research 仅自己可见 |
+| 3 | 普通用户 | `Pq6fD1yK8mZr` | 同上 |
+| 4 | 普通用户 | `Wb3gL7xC5nHs` | 同上 |
+| 5 | 普通用户 | `Yt2sF8qN4vJm` | 同上 |
+
+- 爬虫仍按全站关注并集只采集一次；公司档案和公告共享。
+- `legacy-local` 旧数据不属于这五个号；登录后列表是空的。
+- 已存在的同名用户不会被改密。已有可登录账号后，Web 会启用 Session 登录墙。
+
 ## 新手入门
 
 打开 Terminal 并进入项目：

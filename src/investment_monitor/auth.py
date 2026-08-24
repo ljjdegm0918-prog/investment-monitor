@@ -37,6 +37,15 @@ LOGGER = logging.getLogger(__name__)
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
 ROLES = frozenset({ROLE_ADMIN, ROLE_USER})
+# Private-repo test logins created on web startup. Passwords are documented
+# in README.md / README_ZH.md; do not copy cloud/nginx/API secrets here.
+SEED_LOGINS: tuple[tuple[str, str, str, str], ...] = (
+    ("1", "Rk8nM2wQ7pLx", "用户1", ROLE_ADMIN),
+    ("2", "Hj4cT9bV3sNw", "用户2", ROLE_USER),
+    ("3", "Pq6fD1yK8mZr", "用户3", ROLE_USER),
+    ("4", "Wb3gL7xC5nHs", "用户4", ROLE_USER),
+    ("5", "Yt2sF8qN4vJm", "用户5", ROLE_USER),
+)
 ACCOUNT_STATUSES = frozenset({"active", "disabled"})
 SESSION_COOKIE_NAME = "im_session"
 SESSION_TTL = timedelta(days=7)
@@ -449,6 +458,32 @@ class SessionGate:
             account["id"],
         )
         return "created"
+
+    def ensure_seed_logins(self) -> Dict[str, List[str]]:
+        """Idempotently create the private-repo test accounts 1–5.
+
+        Missing usernames are created through ``create_account`` (empty lists,
+        never copied from ``legacy-local``). Existing usernames are skipped
+        without rotating passwords. Called from ``web.main()`` only so tests
+        that construct ``WebApplication`` keep an empty loginable set.
+        """
+        created: List[str] = []
+        skipped: List[str] = []
+        for username, password, display_name, role in SEED_LOGINS:
+            try:
+                self.create_account(username, password, display_name, role)
+            except AccountError as error:
+                if "already exists" in str(error):
+                    skipped.append(username)
+                    continue
+                raise
+            created.append(username)
+        if created:
+            LOGGER.info(
+                "Seeded login accounts: %s",
+                ", ".join(created),
+            )
+        return {"created": created, "skipped": skipped}
 
     def attach_legacy_login(self, username: str, password: str) -> Dict[str, Any]:
         """Opt-in CLI primitive: make the legacy row loginable.
