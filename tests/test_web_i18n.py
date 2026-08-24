@@ -75,6 +75,16 @@ class WebI18nStaticTests(unittest.TestCase):
         self.assertNotIn(">Print / Save PDF<", js)
         self.assertNotIn(">Generate reports<", js)
 
+    def test_coverage_board_is_stock_focused_and_uses_product_labels(self) -> None:
+        js = self._app_js()
+        self.assertNotIn('"manage.coverage_etf"', js)
+        self.assertNotIn('"manage.coverage_etf_disclosure"', js)
+        self.assertNotIn("coverageBadge(row.etf_universe)", js)
+        self.assertNotIn("coverageBadge(row.etf_disclosure)", js)
+        for label in ("Not covered", "Not assessed", "未覆盖", "尚未评估"):
+            self.assertIn(label, js)
+        self.assertIn("MESSAGES[lang]?.[labelKey]", js)
+
 
 class WebI18nRuntimeTests(unittest.TestCase):
     def test_language_priority_and_fallback(self) -> None:
