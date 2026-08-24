@@ -105,3 +105,14 @@ updated_at TEXT NOT NULL
 ## 8. 后续 PR
 
 数据库基础合并后，再独立实现认证层：Argon2id 密码哈希、管理员创建账号、Secure/HttpOnly/SameSite Session Cookie、登录限流、密码修改后撤销 Session、管理员权限和审计日志。认证 PR 必须从可信 Session 产生 principal，再创建 user-scoped repository，不能透传浏览器提交的 user_id。
+
+## 9. 认证层落地说明（feat/session-login-instance-keys）
+
+按第 8 节完成，语义与数据基础一致：单进程、单端口 8765、同一 SQLite、一条爬虫。
+
+- 登录：用户名/密码（Argon2id，argon2-cffi）→ 服务端生成 ≥32 字节随机 token，Cookie `im_session`（HttpOnly、SameSite=Lax、Path=/、Max-Age 7 天，仅 `WEB_EXTERNAL_SCHEME=https` 加 Secure）；DB 只存 `sha256(token)`。HTML 无 Session 302 `/login`，API 401 `{code: session_required}`；放行 `/static/*`、`/favicon.ico`、`GET /login`、`POST /api/login`。同 IP 15 分钟 10 次失败 → 429。登录失败只给通用错误；username 小写规范化。
+- principal → `WebRepository.for_user(user_id)`：每个请求只信可信 Session 解析出的 user_id，禁止从 query/body/localStorage/自定义头读取；采集调度器仍用全用户关注并集（`active_companies()`）+ 实例密钥，同公司全站只采一次。
+- 账号：`role=admin|user`，`status=legacy|active|disabled`；legacy 不能登录、旧数据不自动迁移。首个管理员由 `INITIAL_ADMIN_USERNAME`/`INITIAL_ADMIN_PASSWORD` 创建（仅当库里没有任何可登录用户）；`POST /api/admin/users` 建号（响应不含哈希）；`POST /api/account/password` 改密后撤销该用户全部 Session；admin 可禁用其他用户。
+- 可选 CLI：`investment-monitor attach-legacy-login --username <name>`，把登录字段写进 legacy-local 同一行；用户名已存在或已绑定则拒绝；默认路径不调用。
+- 实例级密钥：沿用现有设置页槽位与环境变量名，仅 admin 可读写（普通用户 `/api/settings` 403）；采集与 Research 只用实例密钥，缺 key 跳过，不回落到仓库残留值。
+- 兼容策略：库里没有任何可登录账号时保持遗留本地模式（与 WEB_AUTH_TOKEN 未设置则不鉴权的约定一致），首个账号建立后登录墙生效。

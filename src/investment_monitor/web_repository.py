@@ -507,6 +507,7 @@ class WebRepository:
             ensure_information_item_schema(connection)
             self._ensure_companies_multi_market(connection)
             self._migrate_multi_user_foundation(connection)
+            self._migrate_session_login(connection)
             # Research migration relies on the deterministic legacy user above.
             ensure_research_schema(connection)
             self._user_id = self._resolve_principal(connection)
@@ -643,6 +644,60 @@ class WebRepository:
             (version, "multi-user-data-foundation-v1", now),
         )
         connection.execute("PRAGMA foreign_keys = ON")
+
+    def _migrate_session_login(self, connection: sqlite3.Connection) -> None:
+        """Add login fields to users and the sessions table (idempotent).
+
+        Builds on the 002 multi-user foundation without rewriting it: the
+        legacy row simply gains NULL login columns and stays non-loginable
+        until an explicit attach step. Sessions store only sha256(token).
+        """
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL
+            )"""
+        )
+        version = "003_session_login"
+        if connection.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?", (version,)
+        ).fetchone():
+            return
+        columns = self._table_columns(connection, "users")
+        if "username" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        if "password_hash" not in columns:
+            connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+        if "role" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' "
+                "CHECK(role IN ('admin','user'))"
+            )
+        if "password_changed_at" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN password_changed_at TEXT"
+            )
+        # Partial unique index: NULL usernames (legacy / not loginable) never
+        # collide, while two accounts can never share a normalized username.
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username "
+            "ON users(username) WHERE username IS NOT NULL"
+        )
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS sessions (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT
+            )"""
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)"
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations(version, checksum, applied_at) VALUES (?, ?, ?)",
+            (version, "session-login-v1", _utc_now()),
+        )
 
     def import_universe(self, entries: Iterable[UniverseEntry]) -> bool:
         """Import the CSV once; later web memberships remain authoritative."""
