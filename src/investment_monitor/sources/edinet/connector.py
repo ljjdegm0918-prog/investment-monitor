@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sqlite3
 import threading
 import time
@@ -38,6 +39,7 @@ RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 # only exists so a hostile or broken upstream cannot exhaust memory or disk.
 EDINET_MAX_RESPONSE_BYTES = 50 * 1024 * 1024
 EDINET_READ_CHUNK_BYTES = 64 * 1024
+_DOC_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 ROLE_FIELDS = (
     ("filer", "edinetCode"), ("issuer", "issuerEdinetCode"),
     ("subject", "subjectEdinetCode"), ("subsidiary", "subsidiaryEdinetCode"),
@@ -56,6 +58,16 @@ class EDINETRequestError(EDINETError):
 
 class EDINETDataError(EDINETError):
     """Official response did not satisfy the documented shape."""
+
+
+def _validated_doc_id(doc_id: str) -> str:
+    """Reject path components that could escape the download directory."""
+    cleaned = str(doc_id or "").strip()
+    if not _DOC_ID_PATTERN.fullmatch(cleaned):
+        raise ValueError(
+            "doc_id must contain only letters, digits, underscores, or hyphens"
+        )
+    return cleaned
 
 
 def _read_limited_response(response: Any) -> bytes:
@@ -214,9 +226,10 @@ class EDINETClient:
         return self._get_json("/documents.json", {"date": file_date.isoformat(), "type": 2})
 
     def download_document(self, doc_id: str, download_type: int) -> Tuple[bytes, str]:
-        if not doc_id.strip() or download_type not in {1, 2, 3, 4, 5}:
+        if download_type not in {1, 2, 3, 4, 5}:
             raise ValueError("doc_id and download type 1..5 are required")
-        return self._request(f"/documents/{doc_id.strip()}", {"type": download_type})
+        cleaned = _validated_doc_id(doc_id)
+        return self._request(f"/documents/{cleaned}", {"type": download_type})
 
     def _get_json(self, path: str, parameters: Mapping[str, Any]) -> Mapping[str, Any]:
         body, _ = self._request(path, parameters)
@@ -659,14 +672,15 @@ class EDINETConnector:
 
     def download_document(self, doc_id: str, types: Sequence[int] = (1, 2), *,
                           file_date: Optional[date] = None) -> Tuple[DownloadResult, ...]:
-        document = self.get_document(doc_id)
+        cleaned = _validated_doc_id(doc_id)
+        document = self.get_document(cleaned)
         day = file_date or (document.file_date if document else None)
         if day is None:
             raise ValueError("file_date is required for an unindexed document")
         def download_one(download_type: int) -> DownloadResult:
-            body, content_type = self.client.download_document(doc_id, int(download_type))
+            body, content_type = self.client.download_document(cleaned, int(download_type))
             extension = ".pdf" if int(download_type) == 2 else ".zip"
-            destination = self.download_root / "edinet" / day.isoformat() / doc_id / f"type-{download_type}" / ("document" + extension)
+            destination = self.download_root / "edinet" / day.isoformat() / cleaned / f"type-{download_type}" / ("document" + extension)
             destination.parent.mkdir(parents=True, exist_ok=True)
             digest = sha256(body).hexdigest()
             zip_valid = None if extension == ".pdf" else zipfile.is_zipfile(BytesIO(body))
@@ -674,7 +688,7 @@ class EDINETConnector:
             if status == "stored":
                 temporary = destination.with_suffix(destination.suffix + ".tmp")
                 temporary.write_bytes(body); temporary.replace(destination)
-            result = DownloadResult(doc_id, int(download_type), destination, len(body), digest, zip_valid, status)
+            result = DownloadResult(cleaned, int(download_type), destination, len(body), digest, zip_valid, status)
             self.store.record_download(result, content_type, self._now().astimezone(timezone.utc))
             return result
         normalized_types = tuple(dict.fromkeys(int(value) for value in types))

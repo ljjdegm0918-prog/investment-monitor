@@ -213,6 +213,72 @@ class WebSecurityTests(unittest.TestCase):
         application._backfill_semaphore.release()
         application._backfill_semaphore.release()
 
+    def test_parse_request_content_length_rejects_bad_values(self) -> None:
+        from investment_monitor.web import (
+            InvalidContentLength,
+            RequestBodyTooLarge,
+            parse_request_content_length,
+        )
+
+        self.assertEqual(parse_request_content_length(None), 0)
+        self.assertEqual(parse_request_content_length("12"), 12)
+        with self.assertRaises(InvalidContentLength):
+            parse_request_content_length("-1")
+        with self.assertRaises(InvalidContentLength):
+            parse_request_content_length("1.5")
+        with self.assertRaises(InvalidContentLength):
+            parse_request_content_length("nope")
+        with self.assertRaises(RequestBodyTooLarge):
+            parse_request_content_length("100", maximum=16)
+        with self.assertRaises(RequestBodyTooLarge):
+            parse_request_content_length(str(32 * 1024 * 1024 + 1))
+
+    def test_handler_rejects_negative_and_huge_content_length(self) -> None:
+        import http.client
+
+        from investment_monitor.web import InvestmentMonitorHandler, ThreadingHTTPServer
+
+        InvestmentMonitorHandler.application = self.application
+        server = ThreadingHTTPServer(("127.0.0.1", 0), InvestmentMonitorHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            port = server.server_port
+            cases = (("-1", 400), (str(32 * 1024 * 1024 + 1), 413))
+            for raw, expected in cases:
+                with self.subTest(content_length=raw):
+                    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+                    conn.putrequest("POST", "/api/login")
+                    conn.putheader("Content-Length", raw)
+                    conn.putheader("Content-Type", "application/json")
+                    conn.putheader("Host", "127.0.0.1")
+                    conn.putheader("Origin", "http://127.0.0.1")
+                    conn.endheaders()
+                    response = conn.getresponse()
+                    self.assertEqual(response.status, expected)
+                    response.read()
+                    conn.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_planted_invalid_extra_env_is_not_applied(self) -> None:
+        import sqlite3
+        from contextlib import closing
+
+        database = self.project_root / "data" / "web.sqlite3"
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+                ("extra_env:%", "planted-value"),
+            )
+            connection.commit()
+        os.environ.pop("%", None)
+        self.application._load_credentials_to_environment()
+        self.assertNotIn("%", os.environ)
+        self.assertEqual(self.application.repository.load_extra_env(), ())
+
     # --- MED-04: security response headers ------------------------------------
 
     def test_security_response_headers_served_on_http(self) -> None:

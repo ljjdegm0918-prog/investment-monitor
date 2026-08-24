@@ -272,6 +272,16 @@ class EDINETConnectorTests(unittest.TestCase):
             with self.assertRaises(EDINETDataError):
                 _read_limited_response(StreamingResponse())
 
+    def test_download_document_rejects_unsafe_doc_id(self):
+        now = datetime(2026, 8, 8, 3, tzinfo=timezone.utc)
+        connector = self.make_connector({}, now)
+        for bad in ("../etc/passwd", "a/b", "foo.bar", "x y", ""):
+            with self.subTest(doc_id=bad):
+                with self.assertRaises(ValueError):
+                    connector.download_document(
+                        bad, types=(1,), file_date=date(2026, 8, 8)
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,6 +31,7 @@ from .auth import (
     LoginError,
     LoginRateLimited,
     SessionGate,
+    rate_limit_client_ip,
 )
 from .config import (
     SourceConfig,
@@ -225,6 +226,9 @@ MAX_TERMINAL_BACKFILL_TASKS = 100
 MAX_CONCURRENT_BACKFILLS = 2
 BACKFILL_TERMINAL_STATUSES = frozenset({"success", "partial", "failure"})
 
+# Match nginx ``client_max_body_size 32m`` so CSV import still fits.
+MAX_REQUEST_BODY_BYTES = 32 * 1024 * 1024
+
 # Security response headers applied to every HTTP response by the handler.
 SECURITY_HEADERS = (
     ("X-Frame-Options", "DENY"),
@@ -236,6 +240,33 @@ SECURITY_HEADERS = (
         "img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'",
     ),
 )
+
+
+class InvalidContentLength(ValueError):
+    """Non-integer or negative Content-Length."""
+
+
+class RequestBodyTooLarge(ValueError):
+    """Content-Length exceeds ``MAX_REQUEST_BODY_BYTES``."""
+
+
+def parse_request_content_length(
+    raw: Optional[str],
+    *,
+    maximum: int = MAX_REQUEST_BODY_BYTES,
+) -> int:
+    """Return a safe body size, or raise before the handler reads ``rfile``."""
+    if raw is None:
+        return 0
+    text = str(raw).strip()
+    if text == "":
+        return 0
+    if not text.isascii() or not text.isdigit():
+        raise InvalidContentLength("invalid Content-Length")
+    length = int(text)
+    if length > maximum:
+        raise RequestBodyTooLarge("request body too large")
+    return length
 
 
 def _web_auth_rejection(
@@ -467,7 +498,10 @@ class WebApplication:
                 rejection, principal = self._session_gate(method, parsed.path, headers)
                 if rejection is not None:
                     return rejection
-            return self._route(method, parsed, query, body, principal, client_ip, headers)
+            resolved_ip = rate_limit_client_ip(client_ip or "unknown", headers)
+            return self._route(
+                method, parsed, query, body, principal, resolved_ip, headers
+            )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
             return self._json({"error": str(error)}, 400)
         except Exception:
@@ -526,6 +560,28 @@ class WebApplication:
             ),
             None,
         )
+
+    def _settings_forbidden(
+        self,
+        principal: Optional[Mapping[str, Any]],
+    ) -> Optional[WebResponse]:
+        """Fail closed unless the caller is admin.
+
+        Legacy empty-DB local mode (no loginable accounts) is the only
+        exception: the session wall is off, so settings stay reachable
+        without a principal. Once any login exists, require ROLE_ADMIN.
+        """
+        if principal is None and not self._sessions.has_login_accounts():
+            return None
+        if principal is None or principal.get("role") != ROLE_ADMIN:
+            return self._json(
+                {
+                    "error": "Administrator access required",
+                    "code": _ADMIN_REQUIRED_CODE,
+                },
+                403,
+            )
+        return None
 
     def _route(
         self,
@@ -713,7 +769,7 @@ class WebApplication:
                 return self._json({"sources": self.repository.connector_statuses()})
             if method == "GET" and parsed.path.startswith("/api/backfill-tasks/"):
                 task_id = parsed.path[len("/api/backfill-tasks/"):]
-                task = self._backfill_task_payload(task_id)
+                task = self._backfill_task_payload(task_id, principal)
                 if task is None:
                     return self._json({"error": "Backfill task not found"}, 404)
                 return self._json(task)
@@ -870,8 +926,14 @@ class WebApplication:
                 }
                 if markets_map:
                     task_id = f"bf-{uuid.uuid4()}"
+                    owner_user_id = (
+                        int(principal["user_id"]) if principal is not None else None
+                    )
                     self._register_backfill_task(
-                        task_id, markets_map, default_market
+                        task_id,
+                        markets_map,
+                        default_market,
+                        owner_user_id=owner_user_id,
                     )
                     threading.Thread(
                         target=self._run_add_company_backfill,
@@ -942,24 +1004,14 @@ class WebApplication:
                         {"error": "Coverage data is unavailable"}, 500
                     )
             if method == "GET" and parsed.path == "/api/settings":
-                if principal is not None and principal.get("role") != ROLE_ADMIN:
-                    return self._json(
-                        {
-                            "error": "Administrator access required",
-                            "code": _ADMIN_REQUIRED_CODE,
-                        },
-                        403,
-                    )
+                forbidden = self._settings_forbidden(principal)
+                if forbidden is not None:
+                    return forbidden
                 return self._json(self._settings_payload())
             if method == "POST" and parsed.path == "/api/settings":
-                if principal is not None and principal.get("role") != ROLE_ADMIN:
-                    return self._json(
-                        {
-                            "error": "Administrator access required",
-                            "code": _ADMIN_REQUIRED_CODE,
-                        },
-                        403,
-                    )
+                forbidden = self._settings_forbidden(principal)
+                if forbidden is not None:
+                    return forbidden
                 payload = _decode_json(body)
                 key = str(payload["key"])
                 value = str(payload.get("value") or "")
@@ -1241,6 +1293,7 @@ class WebApplication:
         task_id: str,
         markets_map: Mapping[str, str],
         default_market: str,
+        owner_user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create the in-memory add-company backfill task in the queued state."""
         task = {
@@ -1254,6 +1307,9 @@ class WebApplication:
             "finished_at": None,
             "error": None,
             "summary": None,
+            "owner_user_id": (
+                int(owner_user_id) if owner_user_id is not None else None
+            ),
         }
         with self._backfill_tasks_lock:
             self._backfill_tasks[task_id] = task
@@ -1286,10 +1342,25 @@ class WebApplication:
             for task_id, _task in terminal_tasks[:excess]:
                 self._backfill_tasks.pop(task_id, None)
 
-    def _backfill_task_payload(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def _backfill_task_payload(
+        self,
+        task_id: str,
+        principal: Optional[Mapping[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         with self._backfill_tasks_lock:
             task = self._backfill_tasks.get(task_id)
-        return dict(task) if task is not None else None
+            if task is None:
+                return None
+            owner = task.get("owner_user_id")
+            if owner is not None:
+                requester = None
+                if principal is not None and principal.get("user_id") is not None:
+                    requester = int(principal["user_id"])
+                if requester != int(owner):
+                    return None
+            public = dict(task)
+        public.pop("owner_user_id", None)
+        return public
 
     def _run_add_company_backfill(
         self,
@@ -2160,15 +2231,35 @@ class InvestmentMonitorHandler(BaseHTTPRequestHandler):
         self._dispatch()
 
     def _dispatch(self) -> None:
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = parse_request_content_length(self.headers.get("Content-Length"))
+        except InvalidContentLength:
+            self._write_response(
+                WebResponse(
+                    400,
+                    json.dumps({"error": "Invalid Content-Length"}).encode("utf-8"),
+                )
+            )
+            return
+        except RequestBodyTooLarge:
+            self._write_response(
+                WebResponse(
+                    413,
+                    json.dumps({"error": "Request body too large"}).encode("utf-8"),
+                )
+            )
+            return
         body = self.rfile.read(length) if length else b""
         response = self.application.handle(
             self.command,
             self.path,
             body,
             headers=self.headers,
-            client_ip=self.client_address[0],
+            client_ip=rate_limit_client_ip(self.client_address[0], self.headers),
         )
+        self._write_response(response)
+
+    def _write_response(self, response: WebResponse) -> None:
         self.send_response(response.status)
         self.send_header("Content-Type", response.content_type)
         self.send_header("Content-Length", str(len(response.body)))

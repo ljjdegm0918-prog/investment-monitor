@@ -1306,6 +1306,22 @@ class WebRepositoryTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=bad_name):
                 self.repository.set_setting(f"extra_env:{bad_name}", "x")
 
+    def test_load_extra_env_skips_planted_invalid_keys(self) -> None:
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+                ("extra_env:%", "planted-value"),
+            )
+            connection.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+                ("extra_env:CUSTOM_TIMEOUT_SECONDS", "ok"),
+            )
+            connection.commit()
+        self.assertEqual(
+            self.repository.load_extra_env(),
+            (("CUSTOM_TIMEOUT_SECONDS", "ok"),),
+        )
+
     def test_feed_page_is_capped_at_one_thousand(self) -> None:
         with self.assertRaises(ValueError):
             FeedFilters(page=1001)

@@ -403,6 +403,118 @@ class SessionLoginTests(unittest.TestCase):
             200,
         )
 
+    def test_rate_limit_client_ip_uses_x_real_ip_only_on_loopback(self):
+        from investment_monitor.auth import rate_limit_client_ip
+
+        self.assertEqual(
+            rate_limit_client_ip("127.0.0.1", {"X-Real-IP": "198.51.100.8"}),
+            "198.51.100.8",
+        )
+        self.assertEqual(
+            rate_limit_client_ip("::1", {"X-Real-IP": "198.51.100.8, 10.0.0.1"}),
+            "198.51.100.8",
+        )
+        self.assertEqual(
+            rate_limit_client_ip(
+                "127.0.0.1", {"X-Forwarded-For": "198.51.100.8"}
+            ),
+            "127.0.0.1",
+        )
+        self.assertEqual(
+            rate_limit_client_ip(
+                "203.0.113.9", {"X-Real-IP": "198.51.100.8"}
+            ),
+            "203.0.113.9",
+        )
+
+    def test_loopback_login_failures_are_keyed_by_x_real_ip(self):
+        self.provision_admin()
+        self.create_member("alice", "alice-pass-123")
+        headers_a = {**LOGIN_HEADERS, "X-Real-IP": "198.51.100.21"}
+        headers_b = {**LOGIN_HEADERS, "X-Real-IP": "198.51.100.22"}
+        body_wrong = json.dumps({"username": "alice", "password": "wrong"}).encode()
+        body_ok = json.dumps(
+            {"username": "alice", "password": "alice-pass-123"}
+        ).encode()
+        for _ in range(10):
+            response = self.application.handle(
+                "POST", "/api/login", body_wrong,
+                headers=headers_a, client_ip="127.0.0.1",
+            )
+            self.assertEqual(response.status, 401)
+        throttled = self.application.handle(
+            "POST", "/api/login", body_ok,
+            headers=headers_a, client_ip="127.0.0.1",
+        )
+        self.assertEqual(throttled.status, 429)
+        self.assertEqual(self.payload(throttled)["code"], "login_rate_limited")
+        other = self.application.handle(
+            "POST", "/api/login", body_ok,
+            headers=headers_b, client_ip="127.0.0.1",
+        )
+        self.assertEqual(other.status, 200)
+
+    def test_non_loopback_peer_ignores_x_real_ip(self):
+        self.provision_admin()
+        self.create_member("alice", "alice-pass-123")
+        spoof_headers = {**LOGIN_HEADERS, "X-Real-IP": "198.51.100.99"}
+        wrong = json.dumps({"username": "alice", "password": "wrong"}).encode()
+        for _ in range(10):
+            response = self.application.handle(
+                "POST", "/api/login", wrong,
+                headers=spoof_headers, client_ip="203.0.113.50",
+            )
+            self.assertEqual(response.status, 401)
+        still_throttled = self.application.handle(
+            "POST", "/api/login",
+            json.dumps({"username": "alice", "password": "alice-pass-123"}).encode(),
+            headers={**LOGIN_HEADERS, "X-Real-IP": "198.51.100.100"},
+            client_ip="203.0.113.50",
+        )
+        self.assertEqual(still_throttled.status, 429)
+        self.assertEqual(
+            self.login("alice", "alice-pass-123", client_ip="203.0.113.51").status,
+            200,
+        )
+
+    def test_empty_password_hash_cannot_login(self):
+        from investment_monitor.auth import verify_password
+
+        placeholder = "timing-equalization-placeholder"
+        self.assertFalse(verify_password("", placeholder))
+        self.assertFalse(verify_password(None, placeholder))  # type: ignore[arg-type]
+        self.provision_admin()
+        self.create_member("alice", "alice-pass-123")
+        database = self.project_root / "data" / "web.sqlite3"
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute(
+                "UPDATE users SET password_hash = '' WHERE username = ?",
+                ("alice",),
+            )
+            connection.commit()
+        self.assertEqual(self.login("alice", placeholder).status, 401)
+        self.assertEqual(self.login("alice", "alice-pass-123").status, 401)
+        with closing(sqlite3.connect(database)) as connection:
+            connection.execute(
+                "UPDATE users SET password_hash = NULL WHERE username = ?",
+                ("alice",),
+            )
+            connection.commit()
+        self.assertEqual(self.login("alice", placeholder).status, 401)
+
+    def test_settings_fail_closed_once_login_accounts_exist(self):
+        # Empty DB keeps legacy local access (no session wall).
+        open_local = self.application.handle("GET", "/api/settings")
+        self.assertEqual(open_local.status, 200)
+        self.provision_admin()
+        unauthenticated = self.application.handle(
+            "GET", "/api/settings", headers=HOST_HEADERS
+        )
+        self.assertEqual(unauthenticated.status, 401)
+        headerless = self.application.handle("GET", "/api/settings")
+        self.assertEqual(headerless.status, 403)
+        self.assertEqual(self.payload(headerless)["code"], "admin_required")
+
     def test_password_change_revokes_existing_sessions(self):
         self.provision_admin()
         self.create_member("alice", "alice-pass-123")
@@ -598,6 +710,37 @@ class SessionLoginTests(unittest.TestCase):
         collected_tickers = tuple(self.collection_calls[0]["tickers"])
         self.assertEqual(collected_tickers.count("AAPL"), 1)
         self.assertIn("MSFT", collected_tickers)
+
+    def test_user_cannot_poll_another_users_backfill_task(self):
+        self.provision_admin()
+        self.create_member("alice", "alice-pass-123")
+        self.create_member("bob", "bob-pass-1234")
+        alice_headers = self.auth_headers("alice", "alice-pass-123")
+        bob_headers = self.auth_headers("bob", "bob-pass-1234")
+        created = self.application.handle(
+            "POST", "/api/companies/batch",
+            json.dumps({"tickers": "AAPL", "lists": ["holdings"]}).encode(),
+            headers={**alice_headers, "Content-Type": "application/json",
+                     "Origin": "http://127.0.0.1:8765"},
+        )
+        self.assertIn(created.status, (200, 201), self.payload(created))
+        task_id = self.payload(created)["backfill_task_id"]
+        self.assertTrue(str(task_id).startswith("bf-"))
+        bob_view = self.application.handle(
+            "GET", f"/api/backfill-tasks/{task_id}", headers=bob_headers
+        )
+        self.assertEqual(bob_view.status, 404)
+        missing = self.application.handle(
+            "GET", "/api/backfill-tasks/bf-does-not-exist", headers=bob_headers
+        )
+        self.assertEqual(missing.status, 404)
+        self.assertEqual(self.payload(bob_view), self.payload(missing))
+        self.assertEqual(self.payload(bob_view)["error"], "Backfill task not found")
+        alice_view = self.application.handle(
+            "GET", f"/api/backfill-tasks/{task_id}", headers=alice_headers
+        )
+        self.assertEqual(alice_view.status, 200)
+        self.assertNotIn("owner_user_id", self.payload(alice_view))
 
     # --- items 11/12: instance-level key vault ----------------------------
 

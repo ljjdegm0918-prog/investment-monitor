@@ -2359,7 +2359,10 @@ class WebRepository:
         return {str(row["key"]): str(row["value"]) for row in rows}
 
     def load_extra_env(self) -> Tuple[Tuple[str, str], ...]:
-        """Return stored custom environment variables as (name, value)."""
+        """Return stored custom environment variables as (name, value).
+
+        Invalid names are skipped so a planted row cannot reach ``os.environ``.
+        """
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -2370,11 +2373,10 @@ class WebRepository:
                 (EXTRA_ENV_PREFIX + "%",),
             ).fetchall()
         return tuple(
-            (
-                str(row["key"])[len(EXTRA_ENV_PREFIX):],
-                str(row["value"]),
-            )
+            (name, str(row["value"]))
             for row in rows
+            for name in (str(row["key"])[len(EXTRA_ENV_PREFIX):],)
+            if self._valid_extra_env_name(name)
         )
 
     def setting_status(self, keys: Sequence[str]) -> Mapping[str, Mapping[str, Any]]:

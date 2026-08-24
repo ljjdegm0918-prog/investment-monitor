@@ -80,13 +80,53 @@ def hash_password(password: str) -> str:
     return _HASHER.hash(str(password))
 
 
+LOOPBACK_PEERS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
+
+
 def verify_password(password_hash: str, password: str) -> bool:
-    """Constant-time Argon2id verification; malformed hashes simply fail."""
-    target = password_hash or _DUMMY_HASH
+    """Constant-time Argon2id verification; empty or malformed hashes fail.
+
+    A missing hash still runs against ``_DUMMY_HASH`` so unknown-user and
+    empty-hash timings stay aligned. Success requires a real stored hash.
+    """
+    stored = str(password_hash or "")
+    has_real_hash = bool(stored)
+    target = stored if has_real_hash else _DUMMY_HASH
     try:
-        return _HASHER.verify(target, str(password))
+        matched = _HASHER.verify(target, str(password))
     except Argon2Error:
-        return False
+        matched = False
+    return bool(matched and has_real_hash)
+
+
+def rate_limit_client_ip(
+    peer: str,
+    headers: Optional[Mapping[str, Any]] = None,
+) -> str:
+    """Key login throttles on the real client, not the reverse proxy.
+
+    Direct connections use the TCP peer. When the peer is loopback (nginx
+    on the same host), only the first hop of ``X-Real-IP`` is used.
+    ``X-Forwarded-For`` is never consulted. Forwarded headers on a
+    non-loopback peer are treated as spoofed and ignored.
+    """
+    resolved_peer = str(peer or "").strip() or "unknown"
+    if resolved_peer not in LOOPBACK_PEERS:
+        return resolved_peer
+    if headers is None:
+        return resolved_peer
+    getter = getattr(headers, "get", None)
+    raw = ""
+    if getter is not None:
+        value = getter("X-Real-IP")
+        if value is None:
+            value = getter("x-real-ip")
+        if value is not None:
+            raw = str(value).strip()
+    if not raw:
+        return resolved_peer
+    first_hop = raw.split(",", 1)[0].strip()
+    return first_hop or resolved_peer
 
 
 def token_hash(token: str) -> str:
