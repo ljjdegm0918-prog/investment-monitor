@@ -57,7 +57,7 @@ class CoverageApiTests(unittest.TestCase):
         self.assertEqual(rows["DE"]["etf_universe"], "live")
         for required in (
             "universe", "disclosure", "news", "etf_universe",
-            "source_tier_summary", "venue_count",
+            "etf_disclosure", "source_tier_summary", "venue_count",
         ):
             self.assertIn(required, rows["US"])
 
