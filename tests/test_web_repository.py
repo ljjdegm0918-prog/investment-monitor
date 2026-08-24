@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from typing import Optional
@@ -117,6 +118,84 @@ class WebRepositoryTests(unittest.TestCase):
             ticker, lists, self.resolver  # type: ignore[arg-type]
         )
         self.assertFalse(result["failed"])
+
+    def test_user_scopes_isolate_lists_memberships_and_read_state(self) -> None:
+        alice = self.repository.create_user("user:alice", "Alice")
+        bob = self.repository.create_user("user:bob", "Bob")
+        alice_repo = self.repository.for_user(int(alice["id"]))
+        bob_repo = self.repository.for_user(int(bob["id"]))
+
+        # The same list name/slug is valid for different owners.
+        self.assertEqual(
+            alice_repo.create_list("Ideas")["slug"],
+            bob_repo.create_list("Ideas")["slug"],
+        )
+        alice_repo.add_companies_batch(
+            "AAPL", ("holdings",), self.resolver  # type: ignore[arg-type]
+        )
+        self.assertEqual([item["ticker"] for item in alice_repo.companies()], ["AAPL"])
+        self.assertEqual(bob_repo.companies(), [])
+        self.assertIn(("AAPL", "us"), self.repository.active_companies())
+
+        self.items.save((make_item("multi-user-aapl"),))
+        item_id = int(alice_repo.query_feed(FeedFilters()).items[0]["id"])
+        alice_repo.set_read((item_id,), True)
+        self.assertTrue(alice_repo.query_feed(FeedFilters()).items[0]["is_read"])
+        self.assertEqual(bob_repo.query_feed(FeedFilters()).items, ())
+        self.assertEqual(bob_repo.set_read((item_id,), True), 0)
+
+    def test_pre_multi_user_database_migrates_to_legacy_owner(self) -> None:
+        legacy_path = Path(self.temporary_directory.name) / "legacy.sqlite3"
+        legacy_items = SQLiteInformationRepository(legacy_path)
+        legacy_items.save((make_item("legacy-item"),))
+        with sqlite3.connect(str(legacy_path)) as connection:
+            item_id = int(connection.execute(
+                "SELECT id FROM information_items WHERE external_id = 'legacy-item'"
+            ).fetchone()[0])
+            connection.executescript("""
+                CREATE TABLE system_lists (
+                    id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL UNIQUE, position INTEGER NOT NULL UNIQUE,
+                    is_fixed INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE companies (
+                    id INTEGER PRIMARY KEY, ticker TEXT NOT NULL,
+                    market TEXT NOT NULL DEFAULT 'us', name TEXT NOT NULL,
+                    exchange TEXT, cik TEXT, mapping_status TEXT NOT NULL,
+                    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                    UNIQUE(ticker, market)
+                );
+                CREATE TABLE company_list_memberships (
+                    company_id INTEGER NOT NULL, list_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL, PRIMARY KEY(company_id, list_id)
+                );
+                CREATE TABLE information_read_state (
+                    item_id INTEGER PRIMARY KEY, is_read INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO system_lists VALUES (1, 'holdings', 'Holdings', 1, 1);
+                INSERT INTO companies VALUES
+                    (1, 'AAPL', 'us', 'Apple Inc.', 'Nasdaq', '0000320193',
+                     'mapped', '2026-01-01', '2026-01-01');
+                INSERT INTO company_list_memberships VALUES (1, 1, '2026-01-01');
+            """)
+            connection.execute(
+                "INSERT INTO information_read_state VALUES (?, 1, '2026-01-01')",
+                (item_id,),
+            )
+
+        migrated = WebRepository(legacy_path)
+        self.assertEqual(migrated.companies()[0]["list_slugs"], ["holdings"])
+        self.assertTrue(migrated.query_feed(FeedFilters()).items[0]["is_read"])
+        with sqlite3.connect(str(legacy_path)) as connection:
+            owner = connection.execute(
+                "SELECT subject FROM users WHERE id = ?", (migrated.user_id,)
+            ).fetchone()
+            self.assertEqual(owner[0], "legacy-local")
+            self.assertEqual(connection.execute(
+                "SELECT COUNT(*) FROM schema_migrations "
+                "WHERE version = '002_multi_user_data_foundation'"
+            ).fetchone()[0], 1)
 
     def test_fixed_lists_and_many_to_many_memberships_are_idempotent(self) -> None:
         self.add_company("aapl", "holdings", "watchlist")
@@ -697,7 +776,9 @@ class WebRepositoryTests(unittest.TestCase):
 
         self.assertEqual(self.repository.remove_all_memberships("AAPL"), 1)
         self.assertEqual(self.items.count(), 1)
-        self.assertEqual(self.repository.companies()[0]["list_slugs"], [])
+        # Public company identity and information stay stored, but a user's
+        # private company view contains only current memberships.
+        self.assertEqual(self.repository.companies(), [])
         self.assertEqual(self.repository.query_feed(FeedFilters()).total, 0)
         self.assertEqual(self.repository.active_tickers(), ())
 

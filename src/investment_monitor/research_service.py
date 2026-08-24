@@ -82,7 +82,9 @@ class ResearchService:
         synchronous: bool = False,
     ) -> None:
         self._web = web_repository
-        self._repo = ResearchRepository(database_path)
+        # WebRepository's principal is server-derived; it is the single owner
+        # boundary propagated to every card/cache/status operation.
+        self._repo = ResearchRepository(database_path, user_id=web_repository.user_id)
         self._settings = settings if settings is not None else ResearchSettings.from_environment()
         self._ai = ai_client if ai_client is not None else ResearchAIClient(self._settings)
         self._synchronous = synchronous

@@ -1,9 +1,24 @@
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    subject TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('legacy', 'active', 'disabled')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS system_lists (
     id INTEGER PRIMARY KEY,
-    slug TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL UNIQUE,
-    position INTEGER NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    position INTEGER NOT NULL,
     is_fixed INTEGER NOT NULL DEFAULT 1 CHECK (is_fixed IN (0, 1))
+    ,UNIQUE (user_id, id)
+    ,UNIQUE (user_id, slug)
+    ,UNIQUE (user_id, name_key)
+    ,UNIQUE (user_id, position)
 );
 
 CREATE TABLE IF NOT EXISTS companies (
@@ -20,18 +35,23 @@ CREATE TABLE IF NOT EXISTS companies (
 );
 
 CREATE TABLE IF NOT EXISTS company_list_memberships (
+    user_id INTEGER NOT NULL,
     company_id INTEGER NOT NULL,
     list_id INTEGER NOT NULL,
     created_at TEXT NOT NULL,
-    PRIMARY KEY (company_id, list_id),
+    PRIMARY KEY (user_id, company_id, list_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
     FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
-    FOREIGN KEY (list_id) REFERENCES system_lists(id) ON DELETE RESTRICT
+    FOREIGN KEY (list_id) REFERENCES system_lists(id) ON DELETE RESTRICT,
+    FOREIGN KEY (user_id, list_id) REFERENCES system_lists(user_id, id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS information_read_state (
-    item_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id INTEGER NOT NULL,
     is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
     updated_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, item_id),
     FOREIGN KEY (item_id) REFERENCES information_items(id) ON DELETE CASCADE
 );
 
@@ -91,6 +111,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL
 );
 
+-- These compatibility indexes must remain valid when this idempotent base
+-- script runs against the pre-multi-user schema. Owner-leading indexes are
+-- created by the versioned foundation migration after its table rebuild.
 CREATE INDEX IF NOT EXISTS idx_memberships_list_company
 ON company_list_memberships(list_id, company_id);
 

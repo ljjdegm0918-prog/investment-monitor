@@ -808,6 +808,22 @@ class ResearchRepositoryTests(unittest.TestCase):
         self.assertEqual(card["ticker_snapshot"], "AAPL")
         self.assertEqual(card["market_snapshot"], "us")
 
+    def test_cards_and_evidence_are_isolated_by_repository_user(self):
+        self.add_company("AAPL", "holdings")
+        company_id = self.repository.companies()[0]["id"]
+        alice = self.repository.create_user("user:research-alice", "Alice")
+        bob = self.repository.create_user("user:research-bob", "Bob")
+        alice_cards = ResearchRepository(self.database_path, user_id=int(alice["id"]))
+        bob_cards = ResearchRepository(self.database_path, user_id=int(bob["id"]))
+        card_id = alice_cards.create_generation(
+            company_id=company_id, language="en", evidence_fingerprint="same",
+            model_provider_fingerprint="provider", model_name="model",
+        )
+        self.assertTrue(alice_cards.has_in_progress(company_id, "en"))
+        self.assertFalse(bob_cards.has_in_progress(company_id, "en"))
+        self.assertIsNone(bob_cards.card_by_id(card_id))
+        self.assertEqual(bob_cards.evidence_snapshot(card_id), [])
+
 
 
 class ResearchServiceTests(unittest.TestCase):
