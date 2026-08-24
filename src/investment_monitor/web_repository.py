@@ -33,6 +33,7 @@ from .sg_coverage import calculate_sg_coverage
 from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 from .research_repository import ensure_research_schema
+from .user_repository import LEGACY_LOCAL_SUBJECT, ensure_legacy_local_user
 
 EASTERN = ZoneInfo("America/New_York")
 SHANGHAI = ZoneInfo("Asia/Shanghai")
@@ -418,6 +419,7 @@ class WebRepository:
         self,
         database_path: Path,
         *,
+        user_id: Optional[int] = None,
         migration_path: Optional[Path] = None,
         allowed_sources: Sequence[str] = PRODUCTION_SOURCES,
         known_sources: Optional[Sequence[SourceConfig]] = None,
@@ -426,6 +428,8 @@ class WebRepository:
         allowed_secret_keys: Sequence[str] = (),
     ) -> None:
         self._database_path = database_path
+        self._requested_user_id = user_id
+        self._user_id: Optional[int] = None
         self._allowed_sources = tuple(allowed_sources)
         self._source_catalog = self._complete_source_catalog(known_sources)
         self._connector_catalog = (
@@ -443,6 +447,54 @@ class WebRepository:
         )
         self.initialize()
 
+    @property
+    def user_id(self) -> int:
+        """Trusted repository principal; never sourced from an HTTP request."""
+        if self._user_id is None:
+            raise RuntimeError("WebRepository has not been initialized")
+        return self._user_id
+
+    def for_user(self, user_id: int) -> "WebRepository":
+        """Create an explicitly user-scoped repository over the same database."""
+        return WebRepository(
+            self._database_path,
+            user_id=user_id,
+            migration_path=self._migration_path,
+            allowed_sources=self._allowed_sources,
+            known_sources=self._connector_catalog,
+            implemented_sources=self._implemented_sources,
+            unavailable_sources=self._unavailable_sources,
+            allowed_secret_keys=tuple(self._allowed_secret_keys),
+        )
+
+    def create_user(self, subject: str, display_name: str) -> Mapping[str, Any]:
+        """Create a non-authenticated identity and its private fixed lists.
+
+        This is intentionally a server-side provisioning primitive; future
+        admin/auth code owns when it may be called.
+        """
+        normalized_subject = subject.strip()
+        normalized_name = display_name.strip()
+        if not normalized_subject or not normalized_name:
+            raise ValueError("subject and display_name are required")
+        now = _utc_now()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """INSERT INTO users (subject, display_name, status, created_at, updated_at)
+                   VALUES (?, ?, 'active', ?, ?)""",
+                (normalized_subject, normalized_name, now, now),
+            )
+            user_id = int(cursor.lastrowid)
+            connection.executemany(
+                """INSERT INTO system_lists
+                    (user_id, slug, name, name_key, position, is_fixed)
+                   VALUES (?, ?, ?, lower(?), ?, 1)""",
+                ((user_id, slug, name, name, position)
+                 for slug, name, position in FIXED_LISTS),
+            )
+        return {"id": user_id, "subject": normalized_subject,
+                "display_name": normalized_name, "status": "active"}
+
     def initialize(self) -> None:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         sql = self._migration_path.read_text(encoding="utf-8")
@@ -453,18 +505,23 @@ class WebRepository:
             connection.execute("PRAGMA foreign_keys = OFF")
             connection.executescript(sql)
             ensure_information_item_schema(connection)
-            ensure_research_schema(connection)
             self._ensure_companies_multi_market(connection)
+            self._migrate_multi_user_foundation(connection)
+            # Research migration relies on the deterministic legacy user above.
+            ensure_research_schema(connection)
+            self._user_id = self._resolve_principal(connection)
             seeded = connection.execute(
                 "SELECT value FROM app_settings WHERE key = 'default_lists_seeded'"
             ).fetchone()
             if not seeded:
                 connection.executemany(
                     """
-                    INSERT OR IGNORE INTO system_lists (slug, name, position, is_fixed)
-                    VALUES (?, ?, ?, 1)
+                    INSERT OR IGNORE INTO system_lists
+                        (user_id, slug, name, name_key, position, is_fixed)
+                    VALUES (?, ?, ?, lower(?), ?, 1)
                     """,
-                    FIXED_LISTS,
+                    ((self.user_id, slug, name, name, position)
+                     for slug, name, position in FIXED_LISTS),
                 )
                 connection.execute(
                     "INSERT INTO app_settings (key, value) "
@@ -477,6 +534,115 @@ class WebRepository:
                 """
             )
             connection.execute("PRAGMA optimize")
+
+    def _resolve_principal(self, connection: sqlite3.Connection) -> int:
+        """Resolve only an existing active/legacy server-side user identity."""
+        if self._requested_user_id is None:
+            return ensure_legacy_local_user(connection)
+        row = connection.execute(
+            "SELECT id FROM users WHERE id = ? AND status IN ('legacy', 'active')",
+            (self._requested_user_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("User not found")
+        return int(row["id"])
+
+    @staticmethod
+    def _table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
+        return {str(row["name"]) for row in connection.execute(
+            f"PRAGMA table_info({table})"
+        ).fetchall()}
+
+    def _migrate_multi_user_foundation(self, connection: sqlite3.Connection) -> None:
+        """Upgrade old local list/read tables atomically, preserving their IDs."""
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                version TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL
+            )"""
+        )
+        version = "002_multi_user_data_foundation"
+        if connection.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?", (version,)
+        ).fetchone():
+            return
+        now = _utc_now()
+        # `001` on an old installation has already created these legacy tables.
+        # Rebuild only when their ownership columns are absent; fresh databases
+        # already have the target layout from the current 001 file.
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            """CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY, subject TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('legacy','active','disabled')),
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+            )"""
+        )
+        legacy_id = ensure_legacy_local_user(connection)
+        if "user_id" not in self._table_columns(connection, "system_lists"):
+            connection.execute("ALTER TABLE system_lists RENAME TO system_lists_legacy")
+            connection.executescript("""
+                CREATE TABLE system_lists (
+                    id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+                    slug TEXT NOT NULL, name TEXT NOT NULL, name_key TEXT NOT NULL,
+                    position INTEGER NOT NULL, is_fixed INTEGER NOT NULL DEFAULT 1 CHECK(is_fixed IN (0,1)),
+                    UNIQUE(user_id, id), UNIQUE(user_id, slug), UNIQUE(user_id, name_key), UNIQUE(user_id, position)
+                );
+            """)
+            connection.execute(
+                """INSERT INTO system_lists (id, user_id, slug, name, name_key, position, is_fixed)
+                   SELECT id, ?, slug, name, lower(trim(name)), position, is_fixed
+                   FROM system_lists_legacy""", (legacy_id,)
+            )
+            connection.execute("DROP TABLE system_lists_legacy")
+        if "user_id" not in self._table_columns(connection, "company_list_memberships"):
+            connection.execute("ALTER TABLE company_list_memberships RENAME TO memberships_legacy")
+            connection.executescript("""
+                CREATE TABLE company_list_memberships (
+                    user_id INTEGER NOT NULL, company_id INTEGER NOT NULL, list_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL, PRIMARY KEY(user_id, company_id, list_id),
+                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT,
+                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+                    FOREIGN KEY(list_id) REFERENCES system_lists(id) ON DELETE RESTRICT,
+                    FOREIGN KEY(user_id, list_id) REFERENCES system_lists(user_id, id) ON DELETE RESTRICT
+                );
+            """)
+            connection.execute(
+                """INSERT INTO company_list_memberships (user_id, company_id, list_id, created_at)
+                   SELECT ?, company_id, list_id, created_at FROM memberships_legacy""",
+                (legacy_id,),
+            )
+            connection.execute("DROP TABLE memberships_legacy")
+        if "user_id" not in self._table_columns(connection, "information_read_state"):
+            connection.execute("ALTER TABLE information_read_state RENAME TO read_state_legacy")
+            connection.executescript("""
+                CREATE TABLE information_read_state (
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    item_id INTEGER NOT NULL, is_read INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+                    updated_at TEXT NOT NULL, PRIMARY KEY(user_id, item_id),
+                    FOREIGN KEY(item_id) REFERENCES information_items(id) ON DELETE CASCADE
+                );
+            """)
+            connection.execute(
+                """INSERT INTO information_read_state (user_id, item_id, is_read, updated_at)
+                   SELECT ?, item_id, is_read, updated_at FROM read_state_legacy""",
+                (legacy_id,),
+            )
+            connection.execute("DROP TABLE read_state_legacy")
+        connection.executescript("""
+            CREATE INDEX IF NOT EXISTS idx_memberships_user_list_company
+                ON company_list_memberships(user_id, list_id, company_id);
+            CREATE INDEX IF NOT EXISTS idx_read_state_user_read_item
+                ON information_read_state(user_id, is_read, item_id);
+        """)
+        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise RuntimeError("multi-user migration foreign key validation failed")
+        connection.execute(
+            "INSERT INTO schema_migrations(version, checksum, applied_at) VALUES (?, ?, ?)",
+            (version, "multi-user-data-foundation-v1", now),
+        )
+        connection.execute("PRAGMA foreign_keys = ON")
 
     def import_universe(self, entries: Iterable[UniverseEntry]) -> bool:
         """Import the CSV once; later web memberships remain authoritative."""
@@ -533,7 +699,7 @@ class WebRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT id, slug, name, position, is_fixed "
-                "FROM system_lists ORDER BY position, id"
+                "FROM system_lists WHERE user_id = ? ORDER BY position, id", (self.user_id,)
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -542,24 +708,25 @@ class WebRepository:
         base_slug = _slugify(normalized_name)
         with self._connect() as connection:
             if connection.execute(
-                "SELECT 1 FROM system_lists WHERE name = ? COLLATE NOCASE",
-                (normalized_name,),
+                "SELECT 1 FROM system_lists WHERE user_id = ? AND name_key = ?",
+                (self.user_id, normalized_name.casefold()),
             ).fetchone():
                 raise ValueError("A list with this name already exists")
             position = int(connection.execute(
-                "SELECT COALESCE(MAX(position), 0) + 1 AS position FROM system_lists"
+                "SELECT COALESCE(MAX(position), 0) + 1 AS position FROM system_lists WHERE user_id = ?",
+                (self.user_id,)
             ).fetchone()["position"])
             slug = base_slug
             suffix = 2
             while connection.execute(
-                "SELECT 1 FROM system_lists WHERE slug = ?", (slug,)
+                "SELECT 1 FROM system_lists WHERE user_id = ? AND slug = ?", (self.user_id, slug)
             ).fetchone():
                 slug = f"{base_slug}-{suffix}"
                 suffix += 1
             cursor = connection.execute(
-                "INSERT INTO system_lists (slug, name, position, is_fixed) "
-                "VALUES (?, ?, ?, 0)",
-                (slug, normalized_name, position),
+                "INSERT INTO system_lists (user_id, slug, name, name_key, position, is_fixed) "
+                "VALUES (?, ?, ?, ?, ?, 0)",
+                (self.user_id, slug, normalized_name, normalized_name.casefold(), position),
             )
             list_id = int(cursor.lastrowid)
         return {
@@ -574,37 +741,37 @@ class WebRepository:
         normalized_name = _validate_list_name(name)
         with self._connect() as connection:
             if connection.execute(
-                "SELECT 1 FROM system_lists WHERE name = ? COLLATE NOCASE AND slug != ?",
-                (normalized_name, slug),
+                "SELECT 1 FROM system_lists WHERE user_id = ? AND name_key = ? AND slug != ?",
+                (self.user_id, normalized_name.casefold(), slug),
             ).fetchone():
                 raise ValueError("A list with this name already exists")
             cursor = connection.execute(
-                "UPDATE system_lists SET name = ? WHERE slug = ?",
-                (normalized_name, slug),
+                "UPDATE system_lists SET name = ?, name_key = ? WHERE user_id = ? AND slug = ?",
+                (normalized_name, normalized_name.casefold(), self.user_id, slug),
             )
             if cursor.rowcount == 0:
                 raise ValueError("List not found")
             row = connection.execute(
                 "SELECT id, slug, name, position, is_fixed FROM system_lists "
-                "WHERE slug = ?", (slug,),
+                "WHERE user_id = ? AND slug = ?", (self.user_id, slug),
             ).fetchone()
         return dict(row)
 
     def delete_list(self, slug: str) -> Mapping[str, Any]:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id, slug, name FROM system_lists WHERE slug = ?", (slug,)
+                "SELECT id, slug, name FROM system_lists WHERE user_id = ? AND slug = ?", (self.user_id, slug)
             ).fetchone()
             if row is None:
                 raise ValueError("List not found")
             membership_count = int(connection.execute(
-                "SELECT COUNT(*) AS count FROM company_list_memberships WHERE list_id = ?",
-                (row["id"],),
+                "SELECT COUNT(*) AS count FROM company_list_memberships WHERE user_id = ? AND list_id = ?",
+                (self.user_id, row["id"]),
             ).fetchone()["count"])
             connection.execute(
-                "DELETE FROM company_list_memberships WHERE list_id = ?", (row["id"],)
+                "DELETE FROM company_list_memberships WHERE user_id = ? AND list_id = ?", (self.user_id, row["id"])
             )
-            connection.execute("DELETE FROM system_lists WHERE id = ?", (row["id"],))
+            connection.execute("DELETE FROM system_lists WHERE user_id = ? AND id = ?", (self.user_id, row["id"]))
         return {
             "slug": row["slug"],
             "name": row["name"],
@@ -612,7 +779,7 @@ class WebRepository:
         }
 
     def companies(self, list_slug: Optional[str] = None) -> List[Mapping[str, Any]]:
-        parameters: List[Any] = []
+        parameters: List[Any] = [self.user_id]
         list_condition = ""
         if list_slug:
             list_condition = "HAVING SUM(CASE WHEN l.slug = ? THEN 1 ELSE 0 END) > 0"
@@ -624,8 +791,10 @@ class WebRepository:
                        c.mapping_status,
                        GROUP_CONCAT(l.slug, ',') AS list_slugs
                 FROM companies c
-                LEFT JOIN company_list_memberships m ON m.company_id = c.id
-                LEFT JOIN system_lists l ON l.id = m.list_id
+                JOIN company_list_memberships m
+                  ON m.company_id = c.id AND m.user_id = ?
+                JOIN system_lists l
+                  ON l.id = m.list_id AND l.user_id = m.user_id
                 GROUP BY c.id
                 {list_condition}
                 ORDER BY c.ticker, c.market
@@ -643,12 +812,12 @@ class WebRepository:
                        c.mapping_status,
                        GROUP_CONCAT(l.slug, ',') AS list_slugs
                 FROM companies c
-                LEFT JOIN company_list_memberships m ON m.company_id = c.id
+                LEFT JOIN company_list_memberships m ON m.company_id = c.id AND m.user_id = ?
                 LEFT JOIN system_lists l ON l.id = m.list_id
                 WHERE c.id = ?
                 GROUP BY c.id
                 """,
-                (company_id,),
+                (self.user_id, company_id),
             ).fetchone()
         return _company_dict(row) if row else None
 
@@ -661,10 +830,11 @@ class WebRepository:
                 FROM company_list_memberships m
                 JOIN system_lists l ON l.id = m.list_id
                 WHERE m.company_id = ?
+                  AND m.user_id = ?
                   AND l.slug IN ('holdings', 'planned', 'watchlist')
                 LIMIT 1
                 """,
-                (company_id,),
+                (company_id, self.user_id),
             ).fetchone()
         return row is not None
 
@@ -680,7 +850,7 @@ class WebRepository:
         appear. Callers validate the slug before invoking this method.
         """
         having = ""
-        parameters: List[str] = []
+        parameters: List[Any] = [self.user_id]
         if list_slug and list_slug != "all":
             having = "HAVING SUM(CASE WHEN l.slug = ? THEN 1 ELSE 0 END) > 0"
             parameters.append(list_slug)
@@ -693,7 +863,8 @@ class WebRepository:
                 FROM companies c
                 JOIN company_list_memberships m ON m.company_id = c.id
                 JOIN system_lists l ON l.id = m.list_id
-                WHERE l.slug IN ('holdings', 'planned', 'watchlist')
+                WHERE l.user_id = ?
+                  AND l.slug IN ('holdings', 'planned', 'watchlist')
                 GROUP BY c.id
                 {having}
                 ORDER BY c.ticker, c.market
@@ -715,7 +886,7 @@ class WebRepository:
                        c.mapping_status,
                        GROUP_CONCAT(l.slug, ',') AS list_slugs
                 FROM companies c
-                LEFT JOIN company_list_memberships m ON m.company_id = c.id
+                LEFT JOIN company_list_memberships m ON m.company_id = c.id AND m.user_id = ?
                 LEFT JOIN system_lists l ON l.id = m.list_id
                 WHERE c.ticker LIKE ? COLLATE NOCASE
                    OR c.name LIKE ? COLLATE NOCASE
@@ -725,7 +896,7 @@ class WebRepository:
                          c.name, c.ticker
                 LIMIT ?
                 """,
-                (like, like, like, term, max(1, min(limit, 50))),
+                (self.user_id, like, like, like, term, max(1, min(limit, 50))),
             ).fetchall()
         return [{
             **_company_dict(row),
@@ -1052,9 +1223,10 @@ class WebRepository:
                     SELECT id FROM companies
                     WHERE ticker = ? AND market = ?
                 )
-                  AND list_id = (SELECT id FROM system_lists WHERE slug = ?)
+                  AND user_id = ?
+                  AND list_id = (SELECT id FROM system_lists WHERE user_id = ? AND slug = ?)
                 """,
-                (ticker.upper(), market, list_slug),
+                (ticker.upper(), market, self.user_id, self.user_id, list_slug),
             )
         return cursor.rowcount > 0
 
@@ -1071,8 +1243,9 @@ class WebRepository:
                     SELECT id FROM companies
                     WHERE ticker = ? AND market = ?
                 )
+                  AND user_id = ?
                 """,
-                (ticker.upper(), market),
+                (ticker.upper(), market, self.user_id),
             )
         return cursor.rowcount
 
@@ -1095,7 +1268,7 @@ class WebRepository:
             f"{self._feed_from_join()} "
             f"WHERE {base_conditions} {where_sql}"
         )
-        base_parameters = list(self._allowed_sources) + parameters
+        base_parameters = [self.user_id, self.user_id, *self._allowed_sources] + parameters
         with self._connect() as connection:
             total = int(
                 connection.execute(count_sql, base_parameters).fetchone()["total"]
@@ -1150,7 +1323,7 @@ class WebRepository:
             f"GROUP BY i.id, c.id "
             f"ORDER BY {self._feed_order_by()}"
         )
-        base_parameters = list(self._allowed_sources) + parameters
+        base_parameters = [self.user_id, self.user_id, *self._allowed_sources] + parameters
         with self._connect() as connection:
             rows = connection.execute(sql, base_parameters).fetchall()
         items = tuple(self._feed_item(row) for row in rows)
@@ -1207,7 +1380,7 @@ class WebRepository:
             company_count = int(
                 connection.execute(
                     "SELECT COUNT(DISTINCT company_id) AS count "
-                    "FROM company_list_memberships"
+                    "FROM company_list_memberships WHERE user_id = ?", (self.user_id,)
                 ).fetchone()["count"]
             )
             unread_total = self._count_unread(
@@ -1217,7 +1390,7 @@ class WebRepository:
                 end_utc=end_utc,
             )
             list_rows = connection.execute(
-                "SELECT slug, name FROM system_lists ORDER BY position"
+                "SELECT slug, name FROM system_lists WHERE user_id = ? ORDER BY position", (self.user_id,)
             ).fetchall()
             list_counts = {
                 row["slug"]: self._count_unread(
@@ -1246,20 +1419,25 @@ class WebRepository:
             valid_ids = {
                 int(row["id"])
                 for row in connection.execute(
-                    "SELECT id FROM information_items "
-                    f"WHERE id IN ({','.join('?' for _ in unique_ids)})",
-                    unique_ids,
+                    "SELECT DISTINCT i.id FROM information_items i "
+                    "JOIN information_item_tickers it ON it.item_id = i.id "
+                    "JOIN companies c ON c.ticker = it.ticker "
+                    "  AND (c.market = it.market OR it.market = 'unknown') "
+                    "JOIN company_list_memberships m "
+                    "  ON m.company_id = c.id AND m.user_id = ? "
+                    f"WHERE i.id IN ({','.join('?' for _ in unique_ids)})",
+                    (self.user_id, *unique_ids),
                 ).fetchall()
             }
             connection.executemany(
                 """
-                INSERT INTO information_read_state (item_id, is_read, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(item_id) DO UPDATE SET
+                INSERT INTO information_read_state (user_id, item_id, is_read, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, item_id) DO UPDATE SET
                     is_read = excluded.is_read,
                     updated_at = excluded.updated_at
                 """,
-                ((item_id, int(is_read), now) for item_id in valid_ids),
+                ((self.user_id, item_id, int(is_read), now) for item_id in valid_ids),
             )
         return len(valid_ids)
 
@@ -2180,11 +2358,12 @@ class WebRepository:
                     JOIN system_lists scoped_list
                         ON scoped_list.id = scoped_membership.list_id
                     WHERE scoped_membership.company_id = c.id
+                      AND scoped_membership.user_id = ?
                       AND scoped_list.slug = ?
                 )
                 """
             )
-            parameters.append(filters.list_slug)
+            parameters.extend((self.user_id, filters.list_slug))
         if filters.ticker:
             conditions.append("c.ticker = ?")
             parameters.append(filters.ticker.upper())
@@ -2331,7 +2510,7 @@ class WebRepository:
         end_utc: Optional[datetime] = None,
     ) -> int:
         source_placeholders = ",".join("?" for _ in self._allowed_sources)
-        parameters: List[Any] = list(self._allowed_sources)
+        parameters: List[Any] = [self.user_id, self.user_id, *self._allowed_sources]
         list_sql = ""
         if list_slug:
             list_sql = "AND l.slug = ?"
@@ -2353,9 +2532,9 @@ class WebRepository:
             JOIN information_item_tickers it ON it.item_id = i.id
             JOIN companies c ON c.ticker = it.ticker
               AND (c.market = it.market OR it.market = 'unknown')
-            JOIN company_list_memberships m ON m.company_id = c.id
+            JOIN company_list_memberships m ON m.company_id = c.id AND m.user_id = ?
             JOIN system_lists l ON l.id = m.list_id
-            LEFT JOIN information_read_state r ON r.item_id = i.id
+            LEFT JOIN information_read_state r ON r.item_id = i.id AND r.user_id = ?
             WHERE i.source IN ({source_placeholders})
               AND COALESCE(json_extract(i.raw_metadata, '$.generated'), 0) != 1
               AND COALESCE(r.is_read, 0) = 0
@@ -2394,9 +2573,9 @@ class WebRepository:
             "JOIN information_item_tickers it ON it.item_id = i.id "
             "JOIN companies c ON c.ticker = it.ticker "
             "  AND (c.market = it.market OR it.market = 'unknown') "
-            "JOIN company_list_memberships m ON m.company_id = c.id "
+            "JOIN company_list_memberships m ON m.company_id = c.id AND m.user_id = ? "
             "JOIN system_lists l ON l.id = m.list_id "
-            "LEFT JOIN information_read_state r ON r.item_id = i.id"
+            "LEFT JOIN information_read_state r ON r.item_id = i.id AND r.user_id = ?"
         )
 
     def _feed_base_conditions(self, source_placeholders: str) -> str:
@@ -2563,8 +2742,8 @@ class WebRepository:
             raise RuntimeError("Company upsert did not return a row.")
         return int(row["id"])
 
-    @staticmethod
     def _add_membership(
+        self,
         connection: sqlite3.Connection,
         company_id: int,
         list_slug: str,
@@ -2572,10 +2751,10 @@ class WebRepository:
     ) -> bool:
         cursor = connection.execute(
             """
-            INSERT OR IGNORE INTO company_list_memberships (company_id, list_id, created_at)
-            SELECT ?, id, ? FROM system_lists WHERE slug = ?
+            INSERT OR IGNORE INTO company_list_memberships (user_id, company_id, list_id, created_at)
+            SELECT ?, ?, id, ? FROM system_lists WHERE user_id = ? AND slug = ?
             """,
-            (company_id, now, list_slug),
+            (self.user_id, company_id, now, self.user_id, list_slug),
         )
         return cursor.rowcount > 0
 

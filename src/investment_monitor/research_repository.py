@@ -23,6 +23,7 @@ from .research import (
     ResearchScope,
     information_type_of,
 )
+from .user_repository import ensure_legacy_local_user
 
 CARD_STATUS_GENERATING = "generating"
 CARD_STATUS_COMPLETED = "completed"
@@ -58,8 +59,18 @@ def ensure_research_schema(connection: sqlite3.Connection) -> None:
     """Create the research card tables and indexes idempotently."""
     connection.executescript(
         """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            subject TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('legacy', 'active', 'disabled')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS research_cards (
             id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
             company_id INTEGER NOT NULL,
             language TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -96,20 +107,25 @@ def ensure_research_schema(connection: sqlite3.Connection) -> None:
                 ON DELETE CASCADE
         );
 
-        CREATE INDEX IF NOT EXISTS idx_research_cards_company_language
-            ON research_cards(company_id, language, generated_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_research_cards_fingerprint
-            ON research_cards(evidence_fingerprint);
         CREATE INDEX IF NOT EXISTS idx_research_card_evidence_item
             ON research_card_evidence(information_item_id);
         """
     )
     _migrate_research_card_scope(connection)
     _migrate_research_card_identity_snapshot(connection)
+    _migrate_research_card_owner(connection)
     connection.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_research_cards_scope
-            ON research_cards(company_id, language, start_date, end_date, list_scope)
+            ON research_cards(user_id, company_id, language, start_date, end_date, list_scope)
+        """
+    )
+    connection.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_research_cards_company_language
+            ON research_cards(user_id, company_id, language, generated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_research_cards_fingerprint
+            ON research_cards(user_id, evidence_fingerprint);
         """
     )
 
@@ -130,7 +146,7 @@ def _migrate_research_card_identity_snapshot(connection: sqlite3.Connection) -> 
     }
     for column in ("company_name_snapshot", "ticker_snapshot", "market_snapshot"):
         if column not in columns:
-            connection.execute(
+            cursor = connection.execute(
                 f"ALTER TABLE research_cards ADD COLUMN {column} TEXT"
             )
 
@@ -154,13 +170,48 @@ def _migrate_research_card_scope(connection: sqlite3.Connection) -> None:
             )
 
 
+def _migrate_research_card_owner(connection: sqlite3.Connection) -> None:
+    """Assign pre-multi-user cards to the deterministic local owner."""
+    columns = {str(row[1]) for row in connection.execute(
+        "PRAGMA table_info(research_cards)"
+    )}
+    if "user_id" not in columns:
+        connection.execute("ALTER TABLE research_cards ADD COLUMN user_id INTEGER")
+    legacy_id = ensure_legacy_local_user(connection)
+    connection.execute(
+        "UPDATE research_cards SET user_id = ? WHERE user_id IS NULL", (legacy_id,)
+    )
+
+
 class ResearchRepository:
     """Durable storage for research cards, kept separate from connector code."""
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, *, user_id: Optional[int] = None) -> None:
         self._database_path = database_path
+        self._requested_user_id = user_id
+        self._user_id: Optional[int] = None
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as connection:
+            ensure_research_schema(connection)
+            self._user_id = self._resolve_user_id(connection)
         self.recover_interrupted()
+
+    @property
+    def user_id(self) -> int:
+        if self._user_id is None:
+            raise RuntimeError("ResearchRepository has not been initialized")
+        return self._user_id
+
+    def _resolve_user_id(self, connection: sqlite3.Connection) -> int:
+        if self._requested_user_id is None:
+            return ensure_legacy_local_user(connection)
+        row = connection.execute(
+            "SELECT id FROM users WHERE id = ? AND status IN ('legacy', 'active')",
+            (self._requested_user_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("User not found")
+        return int(row["id"])
 
     def create_generation(
         self,
@@ -187,16 +238,16 @@ class ResearchRepository:
             cursor = connection.execute(
                 """
                 INSERT INTO research_cards (
-                    company_id, language, status, model_provider_fingerprint,
+                    user_id, company_id, language, status, model_provider_fingerprint,
                     model_name, prompt_version, schema_version,
                     evidence_rule_version, evidence_fingerprint, content_json,
                     generated_at, created_at, updated_at, error_code,
                     start_date, end_date, list_scope,
                     company_name_snapshot, ticker_snapshot, market_snapshot
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    company_id,
+                    self.user_id, company_id,
                     language,
                     CARD_STATUS_GENERATING,
                     model_provider_fingerprint,
@@ -230,15 +281,17 @@ class ResearchRepository:
         now = _utc_now()
         generated = generated_at or now
         with self._connect() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE research_cards
                 SET status = ?, content_json = ?, generated_at = ?,
                     updated_at = ?, error_code = NULL
-                WHERE id = ?
+                WHERE id = ? AND user_id = ?
                 """,
-                (CARD_STATUS_COMPLETED, content_json, generated, now, card_id),
+                (CARD_STATUS_COMPLETED, content_json, generated, now, card_id, self.user_id),
             )
+            if cursor.rowcount == 0:
+                raise ValueError("Research card not found")
             connection.executemany(
                 """
                 INSERT INTO research_card_evidence (
@@ -274,9 +327,9 @@ class ResearchRepository:
                 """
                 UPDATE research_cards
                 SET status = ?, updated_at = ?, error_code = ?
-                WHERE id = ?
+                WHERE id = ? AND user_id = ?
                 """,
-                (CARD_STATUS_FAILED, _utc_now(), error_code, card_id),
+                (CARD_STATUS_FAILED, _utc_now(), error_code, card_id, self.user_id),
             )
 
     def has_in_progress(
@@ -290,11 +343,11 @@ class ResearchRepository:
             row = connection.execute(
                 f"""
                 SELECT 1 FROM research_cards
-                WHERE company_id = ? AND language = ? AND status = ?
+                WHERE user_id = ? AND company_id = ? AND language = ? AND status = ?
                 {scope_sql}
                 LIMIT 1
                 """,
-                (company_id, language, CARD_STATUS_GENERATING, *scope_parameters),
+                (self.user_id, company_id, language, CARD_STATUS_GENERATING, *scope_parameters),
             ).fetchone()
         return row is not None
 
@@ -305,9 +358,9 @@ class ResearchRepository:
                 """
                 UPDATE research_cards
                 SET status = ?, updated_at = ?, error_code = 'generation_interrupted'
-                WHERE status = ?
+                WHERE status = ? AND user_id = ?
                 """,
-                (CARD_STATUS_FAILED, _utc_now(), CARD_STATUS_GENERATING),
+                (CARD_STATUS_FAILED, _utc_now(), CARD_STATUS_GENERATING, self.user_id),
             )
             return cursor.rowcount
 
@@ -323,12 +376,12 @@ class ResearchRepository:
             row = connection.execute(
                 f"""
                 SELECT * FROM research_cards
-                WHERE company_id = ? AND language = ?
+                WHERE user_id = ? AND company_id = ? AND language = ?
                 {scope_sql}
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (company_id, language, *scope_parameters),
+                (self.user_id, company_id, language, *scope_parameters),
             ).fetchone()
         return dict(row) if row else None
 
@@ -344,12 +397,12 @@ class ResearchRepository:
             row = connection.execute(
                 f"""
                 SELECT * FROM research_cards
-                WHERE company_id = ? AND language = ? AND status = ?
+                WHERE user_id = ? AND company_id = ? AND language = ? AND status = ?
                 {scope_sql}
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (company_id, language, CARD_STATUS_COMPLETED, *scope_parameters),
+                (self.user_id, company_id, language, CARD_STATUS_COMPLETED, *scope_parameters),
             ).fetchone()
         return dict(row) if row else None
 
@@ -357,8 +410,8 @@ class ResearchRepository:
         """Return one card with its evidence snapshot, or None."""
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM research_cards WHERE id = ?",
-                (card_id,),
+                "SELECT * FROM research_cards WHERE id = ? AND user_id = ?",
+                (card_id, self.user_id),
             ).fetchone()
             if row is None:
                 return None
@@ -378,11 +431,12 @@ class ResearchRepository:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT * FROM research_card_evidence
-                WHERE research_card_id = ?
+                SELECT e.* FROM research_card_evidence e
+                JOIN research_cards c ON c.id = e.research_card_id
+                WHERE e.research_card_id = ? AND c.user_id = ?
                 ORDER BY position
                 """,
-                (card_id,),
+                (card_id, self.user_id),
             ).fetchall()
         return [dict(row) for row in rows]
 
