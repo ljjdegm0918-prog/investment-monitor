@@ -30,7 +30,7 @@ const MESSAGES = {
     "daily.update_counts": "Update counts",
     "daily.no_updates": "No updates for this day.",
     "common.also_seen_on": "Also seen on",
-    "common.unavailable": "Unavailable",
+    "common.unavailable": "—",
     "common.update_one": "update",
     "common.update_many": "updates",
     "common.request_failed": "Request failed",
@@ -90,12 +90,16 @@ const MESSAGES = {
     "manage.coverage_country": "Country",
     "manage.coverage_market": "Market",
     "manage.coverage_universe": "Stock universe",
-    "manage.coverage_etf": "ETF universe",
-    "manage.coverage_etf_disclosure": "ETF disclosure",
     "manage.coverage_disclosure": "Disclosure",
     "manage.coverage_news": "News",
     "manage.coverage_tier": "Source tier",
     "manage.coverage_venues": "Venues",
+    "coverage.live": "Covered",
+    "coverage.partial": "Partial coverage",
+    "coverage.stub": "Boundary only",
+    "coverage.unavailable": "Not covered",
+    "coverage.unknown": "Not assessed",
+    "coverage.suspended": "Suspended",
     "manage.companies_count": "{count} companies",
     "manage.rename": "Rename",
     "manage.delete": "Delete",
@@ -274,7 +278,7 @@ const MESSAGES = {
     "daily.update_counts": "更新计数",
     "daily.no_updates": "当天没有更新。",
     "common.also_seen_on": "也见于",
-    "common.unavailable": "不可用",
+    "common.unavailable": "—",
     "common.update_one": "更新",
     "common.update_many": "更新",
     "common.request_failed": "请求失败",
@@ -333,13 +337,17 @@ const MESSAGES = {
     "manage.coverage_loading": "正在加载覆盖…",
     "manage.coverage_country": "国家",
     "manage.coverage_market": "市场",
-    "manage.coverage_universe": "股票宇宙",
-    "manage.coverage_etf": "ETF 宇宙",
-    "manage.coverage_etf_disclosure": "ETF 披露",
+    "manage.coverage_universe": "股票范围",
     "manage.coverage_disclosure": "披露",
     "manage.coverage_news": "新闻",
     "manage.coverage_tier": "来源层级",
     "manage.coverage_venues": "场所数",
+    "coverage.live": "已覆盖",
+    "coverage.partial": "部分覆盖",
+    "coverage.stub": "仅边界信息",
+    "coverage.unavailable": "未覆盖",
+    "coverage.unknown": "尚未评估",
+    "coverage.suspended": "已暂停",
     "manage.companies_count": "{count} 家公司",
     "manage.rename": "重命名",
     "manage.delete": "删除",
@@ -1150,7 +1158,9 @@ async function refreshManagement() {
 
 function coverageBadge(status) {
   const safe = String(status || "unavailable").toLowerCase();
-  return `<span class="coverage-badge coverage-${escAttr(safe)}">${esc(status || "unavailable")}</span>`;
+  const labelKey = `coverage.${safe}`;
+  const label = MESSAGES[lang]?.[labelKey] ? t(labelKey) : (status || t("coverage.unavailable"));
+  return `<span class="coverage-badge coverage-${escAttr(safe)}">${esc(label)}</span>`;
 }
 
 function renderCoverage(payload) {
@@ -1160,7 +1170,7 @@ function renderCoverage(payload) {
     <div class="coverage-table-wrap"><table class="coverage-table">
       <thead><tr>
         <th>${t("manage.coverage_country")}</th><th>${t("manage.coverage_market")}</th>
-        <th>${t("manage.coverage_universe")}</th><th>${t("manage.coverage_etf")}</th><th>${t("manage.coverage_etf_disclosure")}</th>
+        <th>${t("manage.coverage_universe")}</th>
         <th>${t("manage.coverage_disclosure")}</th><th>${t("manage.coverage_news")}</th>
         <th>${t("manage.coverage_tier")}</th><th>${t("manage.coverage_venues")}</th>
       </tr></thead>
@@ -1168,8 +1178,6 @@ function renderCoverage(payload) {
         <td>${esc(row.country_name || row.country_code)}</td>
         <td>${esc(row.market_code || "—")}</td>
         <td>${coverageBadge(row.universe)}</td>
-        <td>${coverageBadge(row.etf_universe)}</td>
-        <td>${coverageBadge(row.etf_disclosure)}</td>
         <td>${coverageBadge(row.disclosure)}</td>
         <td>${coverageBadge(row.news)}</td>
         <td>${esc(row.source_tier_summary || "—")}</td>
