@@ -193,14 +193,10 @@ def _validate_response(
             raise ContentRelevanceError(
                 "invalid relevance response: result must be an object"
             )
-        item_id = result.get("id")
+        item_id = _coerce_item_id(result.get("id"))
         decision = result.get("decision")
         role = result.get("role")
         reason = result.get("reason")
-        if not isinstance(item_id, str):
-            raise ContentRelevanceError(
-                "invalid relevance response: result fields must be strings"
-            )
         if not isinstance(decision, str):
             raise ContentRelevanceError(
                 "invalid relevance response: result fields must be strings"
@@ -237,6 +233,21 @@ def _validate_response(
     if set(by_id) != expected_ids:
         raise ContentRelevanceError("invalid relevance response: missing or unknown item id")
     return [by_id[str(index)] for index in range(expected_count)]
+
+
+def _coerce_item_id(value: object) -> str:
+    """Accept JSON strings or integers for item ids; reject bools and empties."""
+    if isinstance(value, bool) or value is None:
+        raise ContentRelevanceError(
+            "invalid relevance response: result fields must be strings"
+        )
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    raise ContentRelevanceError(
+        "invalid relevance response: result fields must be strings"
+    )
 
 
 def _with_relevance(

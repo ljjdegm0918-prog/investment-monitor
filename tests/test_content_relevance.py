@@ -61,6 +61,18 @@ class ContentRelevanceFilterTests(unittest.TestCase):
         self.assertIn("incidental", client.calls[0][0])
         self.assertIn("primary_affected", client.calls[0][0])
 
+    def test_numeric_item_ids_are_accepted(self):
+        client = FakeClient({"results": [
+            {"id": 0, "decision": "include", "role": "primary_subject", "reason": "Acme is the announced company."},
+            {"id": 1, "decision": "exclude", "role": "incidental", "reason": "Acme is only mentioned."},
+        ]})
+
+        result = ContentRelevanceFilter(client=client).filter(
+            [item("subject"), item("incidental")]
+        )
+
+        self.assertEqual([record.external_id for record in result], ["subject"])
+
     def test_excludes_list_comparison_ambiguous_and_insufficient_context(self):
         roles = ["list", "comparison", "ambiguous", "insufficient_context"]
         client = FakeClient({"results": [
