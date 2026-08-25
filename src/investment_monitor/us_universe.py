@@ -75,7 +75,7 @@ def load_us_universe(
     counts = payload.get("counts")
     if not isinstance(items, list) or not isinstance(counts, Mapping):
         return None
-    if counts.get("total") != len(items) or not payload.get("source_effective_date"):
+    if counts.get("total") != len(items):
         return None
     seen: set[str] = set()
     for item in items:
@@ -258,12 +258,12 @@ def refresh_us_universe(
         raise UsUniverseError(f"FINRA OTC Security Master failed: {error}") from error
     if len(otc_rows) < minimum_otc_securities:
         raise UsUniverseError("FINRA OTC Security Master is suspiciously small")
+    finra_exchange_overlaps_skipped = 0
     for raw in otc_rows:
         ticker = str(raw.get("ticker") or "").strip().upper()
         if ticker in entries:
-            raise UsUniverseError(
-                f"FINRA OTC symbol overlaps an exchange-listed symbol: {ticker}"
-            )
+            finra_exchange_overlaps_skipped += 1
+            continue
         issue_type = str(raw.get("issue_type") or "").strip()
         entries[ticker] = {
             "ticker": ticker,
@@ -364,6 +364,7 @@ def refresh_us_universe(
             "sec_otc_cik_enriched": otc_enriched,
             "sec_market_conflicts_skipped": sec_market_conflicts_skipped,
             "sec_otc_not_active_finra": sec_otc_not_active_finra,
+            "finra_exchange_overlaps_skipped": finra_exchange_overlaps_skipped,
         },
         "otc_counts_by_type": otc_counts_by_type,
         "items": sorted(entries.values(), key=lambda item: item["ticker"]),

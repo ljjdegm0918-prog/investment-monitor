@@ -167,11 +167,6 @@ class FinraOtcClient:
         partitions = self.partitions(DAILY_LIST_DATASET, "calendarDay")
         if not partitions:
             raise FinraOtcDataError("FINRA OTC Daily List has no partitions")
-        earliest = date.fromisoformat(min(partitions))
-        if start_date < earliest:
-            raise FinraOtcDataError(
-                "requested FINRA OTC Daily List history predates available partitions"
-            )
         selected = tuple(
             value
             for value in partitions

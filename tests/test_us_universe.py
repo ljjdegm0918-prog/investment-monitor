@@ -46,9 +46,23 @@ class _FakeResponse:
 
 
 class _RouteOpener:
-    def __init__(self, routes):
+    def __init__(self, routes, finra_rows=None):
         self.routes = routes
         self.requests = []
+        self.finra_rows = finra_rows or [
+            {
+                "issueSymbolIdentifier": "AABB",
+                "securityDescription": "Asia Broadband Inc Common Stock",
+                "issueType": "Common Stock",
+                "asOfDate": "2026-08-24",
+            },
+            {
+                "issueSymbolIdentifier": "AACAY",
+                "securityDescription": "AAC Technologies Unsponsored ADR",
+                "issueType": "American Depositary Receipts - Unsponsored",
+                "asOfDate": "2026-08-24",
+            },
+        ]
 
     def __call__(self, request, timeout=None):
         self.requests.append(request)
@@ -60,20 +74,7 @@ class _RouteOpener:
                 "availablePartitions": [{"partitions": ["2026-08-24"]}],
             }).encode("utf-8"))
         if request.full_url.endswith("/data/group/otcMarket/name/otcSecurityMaster"):
-            rows = [
-                {
-                    "issueSymbolIdentifier": "AABB",
-                    "securityDescription": "Asia Broadband Inc Common Stock",
-                    "issueType": "Common Stock",
-                    "asOfDate": "2026-08-24",
-                },
-                {
-                    "issueSymbolIdentifier": "AACAY",
-                    "securityDescription": "AAC Technologies Unsponsored ADR",
-                    "issueType": "American Depositary Receipts - Unsponsored",
-                    "asOfDate": "2026-08-24",
-                },
-            ]
+            rows = self.finra_rows
             body = json.loads(request.data.decode("utf-8"))
             offset = int(body["offset"])
             limit = int(body["limit"])
@@ -131,6 +132,7 @@ class UsUniverseTests(unittest.TestCase):
             "sec_cik_enriched": 4, "sec_otc_cik_enriched": 1,
             "sec_market_conflicts_skipped": 0,
             "sec_otc_not_active_finra": 0,
+            "finra_exchange_overlaps_skipped": 0,
         })
         self.assertEqual(items["QQQ"]["instrument_type"], "etf")
         self.assertEqual(items["QQQ"]["exchange"], "Nasdaq")
@@ -187,6 +189,36 @@ class UsUniverseTests(unittest.TestCase):
         aabb = next(item for item in result["items"] if item["ticker"] == "AABB")
         self.assertEqual(aabb["cik"], "")
         self.assertEqual(result["counts"]["sec_market_conflicts_skipped"], 1)
+
+    def test_finra_overlap_with_exchange_listed_symbol_is_skipped(self):
+        opener = _RouteOpener(
+            _routes(),
+            finra_rows=[
+                {
+                    "issueSymbolIdentifier": "AAPL",
+                    "securityDescription": "Should not replace Nasdaq Apple",
+                    "issueType": "Common Stock",
+                    "asOfDate": "2026-08-24",
+                },
+                {
+                    "issueSymbolIdentifier": "AABB",
+                    "securityDescription": "Asia Broadband Inc Common Stock",
+                    "issueType": "Common Stock",
+                    "asOfDate": "2026-08-24",
+                },
+            ],
+        )
+        with TemporaryDirectory() as tmp:
+            result = refresh_us_universe(
+                path=Path(tmp) / "us.json",
+                opener=opener,
+                minimum_otc_securities=1,
+            )
+        items = {item["ticker"]: item for item in result["items"]}
+        self.assertEqual(items["AAPL"]["exchange"], "Nasdaq")
+        self.assertFalse(items["AAPL"].get("otc"))
+        self.assertEqual(items["AABB"]["exchange"], "FINRA OTC")
+        self.assertEqual(result["counts"]["finra_exchange_overlaps_skipped"], 1)
 
     def test_missing_required_directory_field_fails_closed(self):
         routes = _routes()
@@ -294,6 +326,20 @@ class UsUniverseTests(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertIsNone(load_us_universe(path))
+
+    def test_legacy_cache_without_source_effective_date_still_loads(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "us.json"
+            path.write_text(
+                json.dumps({
+                    "items": [{"ticker": "AAPL", "name": "Apple Inc."}],
+                    "counts": {"total": 1, "stocks": 1, "etfs": 0},
+                }),
+                encoding="utf-8",
+            )
+            payload = load_us_universe(path)
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload["items"][0]["ticker"], "AAPL")
 
 
 if __name__ == "__main__":

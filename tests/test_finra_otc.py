@@ -34,9 +34,10 @@ class _Response:
 
 
 class _Opener:
-    def __init__(self, *, drift=False, repeat=False):
+    def __init__(self, *, drift=False, repeat=False, daily_partitions=None):
         self.drift = drift
         self.repeat = repeat
+        self.daily_partitions = daily_partitions
         self.requests = []
         self.security_rows = json.loads(
             (FIXTURES / "security_rows.json").read_text(encoding="utf-8")
@@ -49,6 +50,8 @@ class _Opener:
         self.requests.append(request)
         url = request.full_url
         if "/partitions/" in url:
+            if url.endswith("otcDailyList") and self.daily_partitions is not None:
+                return _Response(self.daily_partitions)
             name = "daily_partitions.json" if url.endswith("otcDailyList") else "security_partitions.json"
             return _Response(json.loads((FIXTURES / name).read_text(encoding="utf-8")))
         body = json.loads(request.data.decode("utf-8"))
@@ -147,6 +150,18 @@ class FinraOtcTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "universe cache is unavailable"):
             connector.collect(request)
         self.assertEqual(connector.last_collection_status, "unavailable")
+
+    def test_daily_list_clamps_lookback_to_available_partitions(self):
+        opener = _Opener(daily_partitions={
+            "datasetGroup": "otcMarket",
+            "datasetName": "otcDailyList",
+            "partitionFields": ["calendarDay"],
+            "availablePartitions": [{"partitions": ["2026-08-24"]}],
+        })
+        client = self.client(opener)
+        records = client.fetch_daily_list(date(2026, 7, 25), date(2026, 8, 24))
+        self.assertEqual(len(records), 3)
+        self.assertEqual(client.last_partition_dates, ("2026-08-24",))
 
 
 if __name__ == "__main__":
