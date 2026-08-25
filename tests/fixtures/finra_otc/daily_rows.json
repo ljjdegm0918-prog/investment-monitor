@@ -1,0 +1,5 @@
+[
+  {"calendarDay":"2026-08-24","dailyListDatetime":"2026-08-24 16:15:00.000","dailyListReasonDescription":"Cash Dividend","newSymbolCode":"LRBI","newSecurityDescription":"Example Bancorp Common Stock","exDate":"2026-08-28","cashAmountText":"0.12","recordDate":"2026-08-28","paymentDate":"2026-09-04","subjectCorporateActionCode":"DIV"},
+  {"calendarDay":"2026-08-24","dailyListDatetime":"2026-08-24 15:30:00.000","dailyListReasonDescription":"Symbol and Name Change","oldSymbolCode":"OLDX","newSymbolCode":"NEWX","oldSecurityDescription":"Old Example Corp","newSecurityDescription":"New Example Corp","subjectCorporateActionCode":"NAME"},
+  {"calendarDay":"2026-08-24","dailyListDatetime":"2026-08-24 14:00:00.000","dailyListReasonDescription":"Addition","newSymbolCode":"FRESY","newSecurityDescription":"Fresh Example ADR","subjectCorporateActionCode":"ADD"}
+]

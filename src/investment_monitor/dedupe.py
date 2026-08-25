@@ -193,6 +193,7 @@ FILING_SOURCE_PRIORITY = {
     "companies_house": 2,
     "kind": 3,
     "sec": 4,
+    "finra_otc_daily_list": 3,
     "hkexnews": 5,
     "hkex_di": 6,
     "twse_material": 7,
@@ -350,6 +351,7 @@ SOURCE_DISPLAY_LABELS = {
     "google_news_be": "Google News (BE)",
     "eqs_ch": "EQS News (CH)",
     "six_official_notices": "SIX Official Notices",
+    "finra_otc_daily_list": "FINRA OTC Daily List",
     "yahoo_ch": "Yahoo Finance CH",
     "google_news_ch": "Google News (CH)",
     "gpw_espi": "GPW ESPI/EBI",
@@ -521,7 +523,12 @@ def normalize_title(value: Any) -> str:
 
 def _filing_key(item: Mapping[str, Any], market: str) -> Optional[str]:
     if market == "us":
-        # SEC-only filings; no cross-source filing pairing on the US feed.
+        if str(item.get("source") or "") == "finra_otc_daily_list":
+            document_id = str(item.get("external_id") or "").strip()
+            if document_id:
+                return f"us:filing:finra:{document_id}"
+        # SEC accession filings are not title-paired with FINRA corporate
+        # actions; each authority keeps its own identity.
         return None
     if market == "jp":
         # TDnet/EDINET pairing is source-scoped elsewhere; no cross-source

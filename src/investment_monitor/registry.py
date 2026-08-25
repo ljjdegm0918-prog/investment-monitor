@@ -24,6 +24,7 @@ from .sources.kr_news.google.connector import GoogleKrNewsConnector
 from .sources.kr_news.yahoo.connector import YahooKrNewsConnector
 from .sources.news import FinnhubNewsConnector
 from .sources.sec import SECConnector
+from .sources.finra_otc_daily_list import FinraOtcDailyListConnector
 from .sources.uk_news import YahooNewsConnector
 from .sources.uk_news.google.connector import GoogleUkNewsConnector
 from .sources.ca_news import (
@@ -189,7 +190,7 @@ from .sources.eurex_circulars import EurexCircularsConnector
 ConnectorFactory = Callable[[], SourceConnector]
 
 SOURCE_MARKETS = {
-    "sec": "us", "news": "us",
+    "sec": "us", "finra_otc_daily_list": "us", "news": "us",
     "dart": "kr", "kind": "kr", "naver_news": "kr",
     "hankyung": "kr", "thebell": "kr",
     "yahoo_kr": "kr", "google_news_kr": "kr",
@@ -352,6 +353,10 @@ def create_default_registry() -> SourceRegistry:
         SECConnector.from_environment,
         secret_fields=SECConnector.secret_fields,
         configuration_error=SECConnector.configuration_error,
+    )
+    registry.register(
+        FinraOtcDailyListConnector.name,
+        FinraOtcDailyListConnector,
     )
     registry.register(
         DARTConnector.name,

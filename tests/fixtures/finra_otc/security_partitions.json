@@ -1,0 +1,6 @@
+{
+  "datasetGroup": "otcMarket",
+  "datasetName": "otcSecurityMaster",
+  "partitionFields": ["asOfDate"],
+  "availablePartitions": [{"partitions": ["2026-08-24"]}]
+}

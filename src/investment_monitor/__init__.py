@@ -575,6 +575,13 @@ from .us_universe import (
     search_us_universe,
     us_universe_name_map,
 )
+from .universe.finra_otc import (
+    FinraOtcClient,
+    FinraOtcDataError,
+    FinraOtcError,
+    FinraOtcRequestError,
+)
+from .sources.finra_otc_daily_list import FinraOtcDailyListConnector
 from .universe.aq_universe import (
     AqUniverseError,
     load_aq_universe,
@@ -910,6 +917,11 @@ __all__ = [
     "refresh_us_universe",
     "search_us_universe",
     "us_universe_name_map",
+    "FinraOtcClient",
+    "FinraOtcDataError",
+    "FinraOtcError",
+    "FinraOtcRequestError",
+    "FinraOtcDailyListConnector",
     "build_official_name_maps",
     "collect_eodhd_symbols",
     "empty_payload",

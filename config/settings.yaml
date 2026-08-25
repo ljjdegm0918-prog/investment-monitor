@@ -4,6 +4,10 @@ sources:
     label: SEC EDGAR
     source_type: filings   # config type; stored items use 'regulatory_filing'
     enabled: true
+  - name: finra_otc_daily_list
+    label: FINRA OTC Daily List
+    source_type: filings
+    enabled: true          # key-free official additions/deletions/symbol changes/dividends/splits and other OTC corporate actions
   - name: dart
     label: OpenDART
     source_type: filings

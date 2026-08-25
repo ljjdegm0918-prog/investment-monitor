@@ -41,7 +41,7 @@ DISCLOSURE_UNAVAILABLE = frozenset({"ru"})
 
 # Phase 4 显式锁边说明：这些文字进 coverage notes 与 README，防止误标 live。
 MARKET_NOTES = {
-    "US": "Nasdaq Trader official nasdaqlisted/otherlisted directories provide exchange-listed stock and ETF breadth; SEC company_tickers_exchange adds CIKs only; OTC/Pink completeness remains unproven, so the country universe stays partial",
+    "US": "Nasdaq Trader provides exchange-listed stock/ETF breadth; FINRA public OTC Security Master adds the active OTC Equity Security directory and FINRA Daily List adds corporate actions; SEC enriches exact OTC identities with CIKs. OTCQX/OTCQB/Pink tier membership and inactive history remain uncovered, so the country universe stays partial",
     "JP": "JPX official free month-end listed-issues XLS now provides TSE equities and listed products, polled daily and classified separately; the current JPX ETF page remains a supplemental ETF directory. Cboe Japan, Japannext and changes after month-end are outside this partial universe, while TDnet/EDINET disclosure stays live",
     "CA": "Official-source boundary with free multi-source coverage: TMX TSX/TSXV universe, reviewed CSE export/issuer overlays, issuer-owned IR feeds, explicit Canadian cross-listing EDGAR fallback, and partial CEO.ca discovery mirror; no SEDAR+ bulk scraping and no claim of complete regulatory coverage",
     "SG": "Free partial boundary: reviewed issuer IR feeds, SEC EDGAR for explicit cross-listings, and known public SGX announcement detail links; SGXNET market-wide discovery remains unavailable because its SPA list service has undocumented runtime authorization, and MAS OPERA search requires CAPTCHA",

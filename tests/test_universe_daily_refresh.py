@@ -1,4 +1,4 @@
-"""Scheduler-friendly CH/JP universe refresh entry point tests."""
+"""Scheduler-friendly CH/JP/US universe refresh entry point tests."""
 
 import unittest
 
@@ -21,12 +21,17 @@ class DailyUniverseRefreshTests(unittest.TestCase):
             return run
 
         result = run_daily_refresh(
-            ("ch", "jp"),
-            refreshers={"ch": refresher("ch"), "jp": refresher("jp")},
+            ("ch", "jp", "us"),
+            refreshers={
+                "ch": refresher("ch"),
+                "jp": refresher("jp"),
+                "us": refresher("us"),
+            },
         )
-        self.assertEqual(calls, ["ch", "jp"])
+        self.assertEqual(calls, ["ch", "jp", "us"])
         self.assertEqual(result["jp"]["counts"], {"total": 10})
         self.assertEqual(result["ch"]["source_effective_date"], "2026-08-23")
+        self.assertEqual(result["us"]["coverage"], "us-partial")
 
     def test_failure_is_not_silently_downgraded(self) -> None:
         def broken():

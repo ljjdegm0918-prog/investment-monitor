@@ -12,7 +12,7 @@ Investment Monitor 是一个以列表为中心的本地金融信息监控工作�
 
 | 地区 | 国家 / 参考场所 | 证券目录 | 公司披露 | 仍缺少的核心国家轨道 |
 |---|---:|---|---|---|
-| 美洲 | 3 / 31 | 2 partial、1 stub | 2 live、1 partial | 加拿大 SEDAR+ 完整性/NEO；墨西哥官方证券目录；美国 OTC/Pink |
+| 美洲 | 3 / 31 | 2 partial、1 stub | 2 live、1 partial | 加拿大 SEDAR+ 完整性/NEO；墨西哥官方证券目录；美国 OTC 分层与历史 |
 | 欧洲 | 19 / 44 | 13 live、5 partial、1 stub | 12 live、6 partial、1 unavailable | IL 官方证券主数据；CH/SE/HU 已接官方边界目录但不含其他场所/退市历史；AT/NL 等法定披露仍非全文件；RU 仅只读 |
 | 亚洲 | 6 / 12 | 2 live、4 partial、0 unavailable | 5 live、1 partial | 日本 TSE 月末目录仍缺当月变更/PTS；SGXNET 全市场发现；香港/台湾完整证券目录 |
 
@@ -118,6 +118,8 @@ News 数据源为 Finnhub 公司新闻。在 `.env` 中设置 `FINNHUB_API_KEY`�
 | Source | Type | Key | Boundaries |
 |---|---|---|---|
 | sec | filings | none (EDGAR) | Official SEC company filings |
+| finra_otc_daily_list | filings | none | FINRA 官方公开 OTC Daily List：按日期全量分页读取新增、删除、代码/名称变更、分红、拆股、破产等公司行动；仅对 US universe 中已验证为 OTC 的 ticker 入库，不代替 SEC/财报披露。 |
+| us_universe / FINRA OTC Security Master | breadth cache | none | Nasdaq Trader 继续覆盖交易所上市证券；FINRA `otcSecurityMaster` 每日分区补活跃 OTC Equity Security，严格对账 `record-total` 分页并由 SEC 精确 OTC ticker 补 CIK。未含 OTCQX/OTCQB/Pink tier、非活跃历史，因此国家 universe 仍为 partial。 |
 | news / Finnhub | news | `FINNHUB_API_KEY` | US company news |
 | yahoo_us | news | none | Yahoo Finance US public RSS; may be loosely related and break without notice |
 | google_news_us | news | none | Key-free Google News RSS search (`hl=en-US&gl=US&ceid=US:en`); may be loosely related and break without notice |
@@ -127,7 +129,7 @@ News 数据源为 Finnhub 公司新闻。在 `.env` 中设置 `FINNHUB_API_KEY`�
 | x_community | community | `X_BEARER_TOKEN` | X (formerly Twitter) US social post stream. **LIVE (requires `X_BEARER_TOKEN`):** uses official X API v2 `GET /2/tweets/search/recent` with cashtag `$TICKER` + day window, returning structured post items (`id` / `created_at` / `text` / deeplink, plus `community_id` when present). No key-free discovery path exists: `x.com` search/Communities/profile timelines are client-rendered SPA shells behind a login wall for urllib; Nitter mirrors are dead/bot-walled; key-free oEmbed/syndication need a known tweet id and cannot search by ticker. Without a token the source stays Not connected. Category: social post stream (not forum/article). |
 | vic | community | none | Value Investors Club (US) investment-idea club. **Honest stub (Stub·STOP):** no stable public login-free ticker+day surface (spike 2026-08-11; `tests/fixtures/vic/SPIKE.md`): `/feed` `/rss` `/api/ideas` `/sitemap.xml` return HTML shells (not RSS/JSON); `/ideas?symbol=TICKER` does not filter (identical idea-href set for MSFT/AAPL/bare `/ideas`); homepage free signup only unlocks **45-day delayed** guest ideas; membership/login and HTML catalog scrape out of scope. `collect()` returns `[]`. Category if ever LIVE: club investment-idea write-ups (not forum/article RSS). |
 
-US feed Community 软去重：Seeking Alpha 用 `content_id`（或同源 scoped 标题回退）；Substack 用稳定 post id（`external_id` = `substack-{guid}`）或同源 scoped 标题回退（ticker + New York day + normalized title）。Yellowbrick / X / VIC 为 stub，`collect()` 无行，不产生去重键。News 软去重（仅展示）：`yahoo_us` / `google_news_us` / Finnhub（`news`，market=us）按 ticker + New York day + normalized title 配对；SEC filings 永不跨源标注。
+US feed Community 软去重：Seeking Alpha 用 `content_id`（或同源 scoped 标题回退）；Substack 用稳定 post id（`external_id` = `substack-{guid}`）或同源 scoped 标题回退（ticker + New York day + normalized title）。Yellowbrick / X / VIC 为 stub，`collect()` 无行，不产生去重键。News 软去重（仅展示）：`yahoo_us` / `google_news_us` / Finnhub（`news`，market=us）按 ticker + New York day + normalized title 配对；SEC accession 与 FINRA Daily List 各按本机构原生身份保留，不用标题强行合并。
 
 ### 韩国数据源（KR）
 
@@ -830,7 +832,7 @@ WEB_EXTERNAL_SCHEME=http
 CH/JP universe 可由外部系统每日执行一次：
 
 ```bash
-investment-monitor-refresh-universes --market ch --market jp
+investment-monitor-refresh-universes --market ch --market jp --market us
 ```
 
 CH 每次完整分页刷新；JP 每日检查官方月度文件，服务器返回 304 或内容 SHA-256 未变化时不会重写缓存。任一市场出现 403/429、非 JSON、坏 XLS、分页或总数漂移时命令失败并保留旧缓存。
