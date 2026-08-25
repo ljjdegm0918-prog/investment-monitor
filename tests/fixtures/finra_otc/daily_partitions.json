@@ -1,0 +1,9 @@
+{
+  "datasetGroup": "otcMarket",
+  "datasetName": "otcDailyList",
+  "partitionFields": ["calendarDay"],
+  "availablePartitions": [
+    {"partitions": ["2026-08-21"]},
+    {"partitions": ["2026-08-24"]}
+  ]
+}

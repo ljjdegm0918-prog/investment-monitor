@@ -112,6 +112,7 @@ from .universe.global_equity_reference import (
 )
 from .universe.exchange_catalog import catalog_summary
 from .universe.coverage_report import coverage_report
+from .us_universe import us_universe_name_map
 from .pipeline import CollectionEvent
 from .registry import (
     SourceRegistry,
@@ -1751,6 +1752,14 @@ class WebApplication:
                     "can take several minutes"
                 )
             return name_fallback
+        if market == MARKET_US:
+            name_fallback = us_universe_name_map()
+            if not name_fallback:
+                LOGGER.warning(
+                    "us_universe cache is cold on add-company; synchronous "
+                    "FINRA/Nasdaq refresh skipped. Run the daily universe refresher."
+                )
+            return name_fallback or None
         if market == MARKET_CA:
             name_fallback = ca_universe_name_map()
             if not name_fallback:

@@ -8,6 +8,7 @@ from typing import Any, Callable, Mapping, Optional, Sequence
 
 from .ch_universe import refresh_ch_universe
 from .jp_universe import refresh_jp_universe
+from ..us_universe import refresh_us_universe
 
 Refresher = Callable[[], Mapping[str, Any]]
 
@@ -29,13 +30,13 @@ class DailyRefreshError(RuntimeError):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="investment-monitor-refresh-universes",
-        description="Refresh the official CH and/or JP universe caches once.",
+        description="Refresh the official CH, JP and/or US universe caches once.",
     )
     parser.add_argument(
         "--market",
         action="append",
-        choices=("ch", "jp"),
-        help="Market to refresh; repeat for both. Defaults to ch and jp.",
+        choices=("ch", "jp", "us"),
+        help="Market to refresh; repeat as needed. Defaults to ch, jp and us.",
     )
     return parser
 
@@ -49,6 +50,7 @@ def run_daily_refresh(
     available: Mapping[str, Refresher] = refreshers or {
         "ch": refresh_ch_universe,
         "jp": refresh_jp_universe,
+        "us": refresh_us_universe,
     }
     unsupported = [market for market in markets if market not in available]
     if unsupported:
@@ -75,7 +77,7 @@ def run_daily_refresh(
 
 def main(arguments: Optional[Sequence[str]] = None) -> None:
     parsed = build_parser().parse_args(arguments)
-    markets = tuple(dict.fromkeys(parsed.market or ("ch", "jp")))
+    markets = tuple(dict.fromkeys(parsed.market or ("ch", "jp", "us")))
     print(json.dumps(run_daily_refresh(markets), ensure_ascii=False, sort_keys=True))
 
 

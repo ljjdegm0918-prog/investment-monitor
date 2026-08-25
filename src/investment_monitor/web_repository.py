@@ -55,6 +55,7 @@ REGISTERED_STUB_SOURCES = frozenset({
 })
 SOURCE_LABELS = {
     "sec": "SEC EDGAR",
+    "finra_otc_daily_list": "FINRA OTC Daily List",
     "dart": "OpenDART",
     "kind": "KIND (KRX)",
     "companies_house": "Companies House",
@@ -240,6 +241,7 @@ EXTRA_ENV_BLOCKED_SUBSTRINGS = (
 EXTRA_ENV_BLOCKED_PREFIXES = ("LD_", "PYTHON")
 STANDARD_SOURCE_DEFAULTS = (
     ("sec", "SEC EDGAR", "filings"),
+    ("finra_otc_daily_list", "FINRA OTC Daily List", "filings"),
     ("dart", "OpenDART", "filings"),
     ("kind", "KIND (KRX)", "filings"),
     ("companies_house", "Companies House", "filings"),
@@ -261,6 +263,7 @@ CONTENT_TYPE_LABELS = (
 
 CONNECTOR_REGIONS = {
     "sec": ("United States",),
+    "finra_otc_daily_list": ("United States",),
     "news": ("United States",),
     "dart": ("Korea",),
     "kind": ("Korea",),

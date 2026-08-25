@@ -112,7 +112,8 @@ class CoverageReportTests(unittest.TestCase):
         self.assertEqual(self.rows["JP"]["universe"], "partial")
         self.assertEqual(self.rows["JP"]["etf_universe"], "live")
         self.assertIn("Nasdaq Trader", self.rows["US"]["notes"])
-        self.assertIn("OTC/Pink", self.rows["US"]["notes"])
+        self.assertIn("OTCQX/OTCQB/Pink", self.rows["US"]["notes"])
+        self.assertIn("FINRA", self.rows["US"]["notes"])
         self.assertIn("listed-issues XLS", self.rows["JP"]["notes"])
 
 

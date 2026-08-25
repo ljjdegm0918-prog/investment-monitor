@@ -32,7 +32,7 @@
 |---|---|---:|---:|---:|---:|---:|---|
 | CA 加拿大 | ALPHA, AEQLITN, AEQLITL, CHIXCA, LYNX, OMEGA, CSE, TSE, VENTURE | partial | partial | live | unavailable | unavailable | 官方 TMX TSX/TSXV + CSE 官网全证券 JSON；CSE 官方逐发行人 filing mirror、公司 IR 与双重上市 EDGAR 补漏已接，CEO.ca 仅 Tier 4；SEDAR+ 全国主链与 NEO/ATS 全量仍未完成，评级上限 high。 |
 | MX 墨西哥 | MEXI | stub | live | live | unavailable | unavailable | BMV 官方 Eventos Relevantes 滚动公告已接并严格分页；完整定期财务/XBRL 登录产品未接入。 |
-| US 美国 | ARCA, ARCAEDGE, BATS, CHX, DRCTEDGE, EDGEA, IEX, ISLAND, ISE, KNIGHT, LTSE, MEMX, PEARL, NASDAQ, BEX, PSX, NYSE, NSX, NYSENAT, AMEX, PINK | partial | live | live | live | unavailable | Nasdaq Trader 覆盖交易所上市股票/ETF，SEC 补 CIK；OTC/Pink 完整性未证明，路由 venue 不是独立发行人目录。 |
+| US 美国 | ARCA, ARCAEDGE, BATS, CHX, DRCTEDGE, EDGEA, IEX, ISLAND, ISE, KNIGHT, LTSE, MEMX, PEARL, NASDAQ, BEX, PSX, NYSE, NSX, NYSENAT, AMEX, PINK | partial | live | live | live | unavailable | Nasdaq Trader 覆盖交易所上市股票/ETF；FINRA Security Master 补活跃 OTC 证券，Daily List 补公司行动，SEC 精确 OTC ticker 补 CIK。OTCQX/OTCQB/Pink 分层和非活跃历史仍未覆盖。 |
 | AT 奥地利 | VSE | live | partial | live | unknown | unavailable | Wiener Börse 官方公司目录已接（无 ticker 时用 ISIN，可选审核 overlay）；官方 Ad-hoc News 严格分页与 opaque ID 已接，但滚动档案不等于完整 OAM/全历史。 |
 | BE 比利时 | BATEEN, CHIXEN, ENEXT.BE, TRQXEN | live | live | live | unknown | unavailable | Euronext Brussels 股票 CSV + FSMA STORI；MTF 场所依赖主上市证券映射。 |
 | CH 瑞士 | BATECH, CHIXCH, EBS, TRQXCH, VIRTX | partial | partial | live | live | unavailable | SIX FQS 已覆盖 Swiss Shares、Foreign Shares、Sponsored Foreign Shares 与 ETF，严格分页并保留 ValorId 交易线；SIX Exchange Regulation Official Notices 的公开总数列表/详情 JSON 已按 ISIN 精确接入。BATECH/CHIXCH/TRQXCH/VIRTX 是路由 MTF，不重复建立发行人目录；退市历史和完整 ad-hoc/财报等价覆盖仍缺。 |
@@ -77,7 +77,7 @@ Euronext/Cboe 等跨市场交易场所需要特别理解：项目能识别目录
 
 - 瑞士 `ch_universe` 扩展 SIX FQS 范围：在 SA、AA、ET/FU 基础上新增 SP Sponsored Foreign Shares；2026-08-24 live 为 SP 551 个交易币种线，全部为官方 `SecTypeCode=SS`，保存币种和首日，并与其他范围原子更新。新增 `six_official_notices`：分页读取 SIX/SER 官方列表总数，只对 universe 精确 ISIN 命中项读取详情，保存 noticeId、公告编号、Valor、官方 URL 与采集 URL；结构化产品噪声不进入股票 Filing。
 - 日本新增 `jp_universe`：使用 JPX 官方固定月度 `data_e.xls`，严格校验工作表与 10 列表头，分类股票、ETF/ETN、REIT/上市基金和 Equity Contribution Securities；每日通过条件请求与 SHA-256 检查更新，源无变化时不重写。
-- 新增 `investment-monitor-refresh-universes --market ch --market jp`，可由现有调度系统每天调用；任一来源失败时返回失败并保留旧缓存。
+- 新增/扩展 `investment-monitor-refresh-universes --market ch --market jp --market us`，可由现有调度系统每天调用；US 原子合并 Nasdaq Trader、FINRA 活跃 OTC Security Master 与 SEC CIK enrichment，任一 breadth 主来源失败时返回失败并保留旧缓存。
 - CH/JP ETF universe 已明确为交易所目录覆盖，ETF issuer disclosure 仍保持 unavailable，避免把目录或公司公告误标为基金披露。
 
 - 修正英国披露状态误判：报告此前错误地用 ISO `GB` 覆盖内部市场键 `uk`，导致已有 Companies House/Investegate 被显示为 unavailable；现为 live，并增加回归测试。

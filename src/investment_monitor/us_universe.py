@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""US exchange-listed stock/ETF universe with optional SEC CIK enrichment.
+"""US exchange-listed and active FINRA OTC universe with SEC enrichment.
 
 The authoritative breadth inputs are Nasdaq Trader's key-free Symbol Directory
 files. ``nasdaqlisted.txt`` covers Nasdaq-listed issues and
@@ -8,10 +8,13 @@ Cboe/BATS and IEX. Both publish an explicit ETF flag and a file-creation
 footer. Field definitions:
 https://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs
 
-The SEC company-ticker JSON remains an enrichment source for CIK values; it
-never overwrites the directory's exchange or ETF classification. OTC/Pink
-completeness is not established, so this remains a partial US country
-universe. The cache never flows directly into ``information_items``.
+FINRA's public ``otcSecurityMaster`` adds the active OTC Equity Security
+directory with explicit date partitions and total-count pagination.  The SEC
+company-ticker JSON remains an enrichment source for CIK values and never
+overwrites FINRA/Nasdaq market or security classification.  FINRA does not
+publish OTCQX/OTCQB/Pink tier membership in this dataset and inactive history
+is not part of the active snapshot, so the country universe remains partial.
+The cache never flows directly into ``information_items``.
 """
 
 from __future__ import annotations
@@ -27,6 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 from urllib.request import Request, urlopen
+
+from .universe.finra_otc import FinraOtcClient
 
 LOGGER = logging.getLogger(__name__)
 
@@ -61,9 +66,26 @@ def load_us_universe(
     cache_path = _cache_path(path)
     try:
         with cache_path.open("r", encoding="utf-8") as cache_file:
-            return json.load(cache_file)
+            payload = json.load(cache_file)
     except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(payload, Mapping):
+        return None
+    items = payload.get("items")
+    counts = payload.get("counts")
+    if not isinstance(items, list) or not isinstance(counts, Mapping):
+        return None
+    if counts.get("total") != len(items):
+        return None
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, Mapping):
+            return None
+        ticker = str(item.get("ticker") or "").strip().upper()
+        if not ticker or ticker in seen or not item.get("name"):
+            return None
+        seen.add(ticker)
+    return payload
 
 
 def _fetch_bytes(
@@ -85,7 +107,7 @@ def _fetch_bytes(
         raw = response.read()
         if response.headers.get("Content-Encoding") == "gzip":
             raw = gzip.decompress(raw)
-        return raw
+        return bytes(raw)
 
 
 def _parse_symbol_directory(raw: bytes, *, kind: str) -> Dict[str, Dict[str, Any]]:
@@ -173,6 +195,7 @@ def _sec_enrichment(raw: bytes) -> Dict[str, Dict[str, str]]:
             result[ticker] = {
                 "cik": str(record.get("cik") or ""),
                 "name": str(record.get("name") or ""),
+                "exchange": str(record.get("exchange") or ""),
             }
     return result
 
@@ -184,9 +207,11 @@ def refresh_us_universe(
     url: Optional[str] = None,
     nasdaq_url: Optional[str] = None,
     other_url: Optional[str] = None,
+    finra_client: Optional[FinraOtcClient] = None,
     refreshed_at: Optional[str] = None,
+    minimum_otc_securities: int = 10000,
 ) -> Mapping[str, Any]:
-    """Refresh official exchange-listed issues, then add optional SEC CIKs."""
+    """Refresh exchange-listed and active FINRA OTC issues atomically."""
     cache_path = _cache_path(path)
     open_url = opener or urlopen
     sec_url = url or os.environ.get("US_UNIVERSE_URL", DEFAULT_SEC_URL)
@@ -223,8 +248,46 @@ def refresh_us_universe(
             )
         entries[ticker] = item
 
-    sources = ["nasdaq_trader_nasdaqlisted", "nasdaq_trader_otherlisted"]
+    try:
+        active_finra = finra_client or FinraOtcClient(opener=open_url)
+        otc_as_of, otc_rows = active_finra.fetch_active_security_master()
+    except Exception as error:  # noqa: BLE001 - wrapped for callers
+        if isinstance(error, UsUniverseError):
+            raise
+        LOGGER.warning("us_universe source=finra_otc_security_master failed: %s", error)
+        raise UsUniverseError(f"FINRA OTC Security Master failed: {error}") from error
+    if len(otc_rows) < minimum_otc_securities:
+        raise UsUniverseError("FINRA OTC Security Master is suspiciously small")
+    finra_exchange_overlaps_skipped = 0
+    for raw in otc_rows:
+        ticker = str(raw.get("ticker") or "").strip().upper()
+        if ticker in entries:
+            finra_exchange_overlaps_skipped += 1
+            continue
+        issue_type = str(raw.get("issue_type") or "").strip()
+        entries[ticker] = {
+            "ticker": ticker,
+            "name": str(raw.get("name") or ticker).strip(),
+            "exchange": "FINRA OTC",
+            "exchange_code": "OTC",
+            "cik": "",
+            "instrument_type": _otc_instrument_type(issue_type),
+            "issue_type": issue_type,
+            "otc": True,
+            "as_of_date": otc_as_of,
+            "universe_source": "finra_otc_security_master",
+            "source_tier": "official",
+        }
+
+    sources = [
+        "nasdaq_trader_nasdaqlisted",
+        "nasdaq_trader_otherlisted",
+        "finra_otc_security_master",
+    ]
     enriched = 0
+    otc_enriched = 0
+    sec_market_conflicts_skipped = 0
+    sec_otc_not_active_finra = 0
     try:
         sec_rows = _sec_enrichment(
             _fetch_bytes(sec_url, opener=open_url, accept="application/json")
@@ -237,28 +300,73 @@ def refresh_us_universe(
     for ticker, item in entries.items():
         sec = sec_rows.get(ticker)
         if sec:
+            if item.get("otc") and sec.get("exchange") != "OTC":
+                sec_market_conflicts_skipped += 1
+                continue
             item["cik"] = sec["cik"]
             enriched += 1
+            if item.get("otc"):
+                otc_enriched += 1
 
+    sec_otc_not_active_finra = sum(
+        row.get("exchange") == "OTC" and ticker not in entries
+        for ticker, row in sec_rows.items()
+    )
+
+    exchange_items = [item for item in entries.values() if not item.get("otc")]
+    otc_items = [item for item in entries.values() if item.get("otc")]
     stocks = sum(item["instrument_type"] == "stock" for item in entries.values())
     etfs = sum(item["instrument_type"] == "etf" for item in entries.values())
+    otc_counts_by_type: Dict[str, int] = {}
+    for item in otc_items:
+        kind = str(item["instrument_type"])
+        otc_counts_by_type[kind] = otc_counts_by_type.get(kind, 0) + 1
     payload_out = {
         "updated_at": refreshed_at or datetime.now(timezone.utc).isoformat(),
+        "source_effective_date": otc_as_of,
         "source": sources,
         "source_urls": {
             "nasdaq_listed": nasdaq_source_url,
             "other_listed": other_source_url,
+            "finra_otc_partitions": (
+                "https://api.finra.org/partitions/group/otcMarket/"
+                "name/otcSecurityMaster"
+            ),
+            "finra_otc_data": (
+                "https://api.finra.org/data/group/otcMarket/"
+                "name/otcSecurityMaster"
+            ),
             "sec_enrichment": sec_url,
         },
         "source_tier": "official",
-        "coverage_boundary": "exchange_listed_only_otc_not_proven",
+        "coverage": "official_exchange_and_active_finra_otc_partial",
+        "coverage_boundary": {
+            "included": [
+                "Nasdaq-listed active issues",
+                "NYSE/NYSE American/NYSE Arca/Cboe BZX/IEX active issues",
+                "FINRA active OTC Equity Security Master",
+                "SEC CIK enrichment where exact ticker and OTC market agree",
+            ],
+            "not_covered": [
+                "OTCQX/OTCQB/Pink tier membership",
+                "inactive and historical OTC security master",
+                "OTC securities absent from the active FINRA snapshot",
+            ],
+        },
         "counts": {
             "companies": len(entries),
             "total": len(entries),
             "stocks": stocks,
             "etfs": etfs,
+            "exchange_listed": len(exchange_items),
+            "otc_active": len(otc_items),
             "sec_cik_enriched": enriched,
+            "sec_otc_cik_enriched": otc_enriched,
+            "sec_market_conflicts_skipped": sec_market_conflicts_skipped,
+            "sec_otc_not_active_finra": sec_otc_not_active_finra,
+            "finra_exchange_overlaps_skipped": finra_exchange_overlaps_skipped,
         },
+        "otc_counts_by_type": otc_counts_by_type,
         "items": sorted(entries.values(), key=lambda item: item["ticker"]),
     }
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -271,12 +379,12 @@ def refresh_us_universe(
 
 def us_universe_name_map(
     path: Optional[Path] = None,
-) -> Mapping[str, Mapping[str, str]]:
+) -> Mapping[str, Mapping[str, Any]]:
     """Return normalized ticker identity fields from the cached universe."""
     payload = load_us_universe(path)
     if not payload:
         return {}
-    result: Dict[str, Mapping[str, str]] = {}
+    result: Dict[str, Mapping[str, Any]] = {}
     for item in payload.get("items") or []:
         ticker = str(item.get("ticker") or "").strip().upper()
         if not ticker:
@@ -286,6 +394,9 @@ def us_universe_name_map(
             "exchange": str(item.get("exchange") or ""),
             "cik": str(item.get("cik") or ""),
             "instrument_type": str(item.get("instrument_type") or "stock"),
+            "issue_type": str(item.get("issue_type") or ""),
+            "otc": bool(item.get("otc")),
+            "as_of_date": str(item.get("as_of_date") or ""),
             "universe_source": str(item.get("universe_source") or ""),
         }
     return result
@@ -322,6 +433,27 @@ def _cache_path(path: Optional[Path]) -> Path:
     return Path(
         path or os.environ.get("US_UNIVERSE_CACHE_PATH", DEFAULT_CACHE_PATH)
     )
+
+
+def _otc_instrument_type(issue_type: str) -> str:
+    value = issue_type.casefold()
+    if "exchange traded fund" in value:
+        return "etf"
+    if "depositary" in value or "adr" in value:
+        return "depositary_receipt"
+    if "preferred" in value or "preference" in value:
+        return "preferred_stock"
+    if value == "reit":
+        return "reit"
+    if "warrant" in value:
+        return "warrant"
+    if "right" in value:
+        return "right"
+    if "unit" in value or "limited partnership" in value:
+        return "unit"
+    if value in {"common shares", "common stock", "ordinary shares", "shares of beneficial interest"}:
+        return "stock"
+    return "other_equity"
 
 
 __all__ = [
