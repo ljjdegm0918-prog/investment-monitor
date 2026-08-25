@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable, List, Mapping, Optional, Tuple
 
 from .config import load_environment_file, load_settings, load_universe
+from .content_relevance import content_relevance_filter_from_environment
 from .models import CollectionRequest, InformationItem
 from .pipeline import CollectionEvent, CollectionFailure, CollectionPipeline
 from .registry import SOURCE_MARKETS, SourceRegistry, create_default_registry
@@ -128,6 +129,7 @@ def run_ticker_collection(
         repository=repository,
         initial_backfill=initial_backfill,
         source_markets=SOURCE_MARKETS,
+        item_filter=content_relevance_filter_from_environment(),
     )
     items = pipeline.collect(
         CollectionRequest(
@@ -244,6 +246,7 @@ def run_workflow(
         connectors,
         repository=repository,
         source_markets=SOURCE_MARKETS,
+        item_filter=content_relevance_filter_from_environment(),
     )
     items = pipeline.collect(
         CollectionRequest(

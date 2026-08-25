@@ -54,7 +54,65 @@ class HonestEmptyFailureConnector:
         return []
 
 
+class RejectingItemFilter:
+    def filter(self, items):
+        return []
+
+
+class FailingItemFilter:
+    def filter(self, items):
+        raise RuntimeError("relevance model returned an invalid response")
+
+
 class PersistentPipelineTests(unittest.TestCase):
+    def test_item_filter_runs_before_persistence(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            repository = SQLiteInformationRepository(
+                Path(temporary_directory) / "items.sqlite3"
+            )
+            pipeline = CollectionPipeline(
+                [PartialFailureConnector()],
+                repository=repository,
+                item_filter=RejectingItemFilter(),
+            )
+            items = pipeline.collect(CollectionRequest(
+                tickers=("GOOD",),
+                start_date=date(2026, 7, 1),
+                end_date=date(2026, 7, 31),
+            ))
+            stored_count = repository.count()
+
+        self.assertEqual(items, [])
+        self.assertEqual(stored_count, 0)
+        self.assertEqual(pipeline.last_events[0].records_read, 1)
+        self.assertEqual(pipeline.last_events[0].records_written, 0)
+
+    def test_item_filter_failure_is_fail_closed_and_recorded(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            repository = SQLiteInformationRepository(
+                Path(temporary_directory) / "items.sqlite3"
+            )
+            pipeline = CollectionPipeline(
+                [PartialFailureConnector()],
+                repository=repository,
+                item_filter=FailingItemFilter(),
+            )
+            items = pipeline.collect(CollectionRequest(
+                tickers=("GOOD",),
+                start_date=date(2026, 7, 1),
+                end_date=date(2026, 7, 31),
+            ))
+            stored_count = repository.count()
+
+        self.assertEqual(items, [])
+        self.assertEqual(stored_count, 0)
+        self.assertEqual(len(pipeline.last_failures), 1)
+        self.assertEqual(pipeline.last_events[0].status, "failure")
+        self.assertIn(
+            "invalid response",
+            pipeline.last_events[0].error_message or "",
+        )
+
     def test_empty_with_connector_error_is_recorded_as_failure(self) -> None:
         logger = logging.getLogger("tests.persistent_pipeline.honest_empty")
         pipeline = CollectionPipeline(

@@ -345,6 +345,8 @@ RESEARCH_AI_BASE_URL=https://api.deepseek.com
 RESEARCH_AI_MODEL=deepseek-v4-flash
 RESEARCH_AI_API_KEY=
 RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
+# 新闻/社区入库前，仅保留目标公司为主角或主要受影响方的内容。
+CONTENT_RELEVANCE_AI_ENABLED=false
 RESEARCH_MIN_EVIDENCE_ITEMS=3
 ```
 
@@ -356,6 +358,11 @@ RESEARCH_MIN_EVIDENCE_ITEMS=3
 4. 重启 Web 服务；
 5. 打开 `/research`，确认页面显示模型已配置；
 6. 选择日期范围和列表后，手动点击生成。
+
+如果还需要阻止仅“顺带提及”目标公司的新闻或社区内容入库，将
+`CONTENT_RELEVANCE_AI_ENABLED` 设为 `true`。该开关复用上面的模型、Base URL、
+API key 与超时配置；只影响 `news` 和 `community`，披露类信息不经过此判定。
+模型异常、返回缺项或语义不明确时会失败关闭，不会把未经确认的内容归到公司名下。
 
 安全边界：
 

@@ -806,6 +806,8 @@ RESEARCH_AI_BASE_URL=https://api.deepseek.com
 RESEARCH_AI_MODEL=deepseek-chat
 RESEARCH_AI_API_KEY=
 RESEARCH_AI_REQUEST_TIMEOUT_SECONDS=60
+# 可选：在新闻/社区写入数据库前启用严格的公司主角判定。
+CONTENT_RELEVANCE_AI_ENABLED=false
 RESEARCH_MIN_EVIDENCE_ITEMS=3
 
 # 浏览器在反代入口看到的协议（本地开发 http，HTTPS 反代生产必须设为 https）。
