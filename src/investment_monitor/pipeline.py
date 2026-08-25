@@ -6,13 +6,23 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import logging
 import os
-from typing import Iterable, List, Mapping, Optional, Tuple
+from typing import Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 from .connectors.base import SourceConnector
 from .models import CollectionRequest, InformationItem, MARKET_UNKNOWN
 from .repository import InformationRepository, SaveResult
 
 LOGGER = logging.getLogger(__name__)
+
+
+class CollectedItemFilter(Protocol):
+    """Optional pre-persistence filter for standardized collected items."""
+
+    def filter(
+        self,
+        items: Sequence[InformationItem],
+    ) -> List[InformationItem]:
+        """Return the items that are allowed to be persisted."""
 
 
 @dataclass(frozen=True)
@@ -102,12 +112,14 @@ class CollectionPipeline:
         logger: logging.Logger = LOGGER,
         initial_backfill: bool = False,
         source_markets: Optional[Mapping[str, str]] = None,
+        item_filter: Optional[CollectedItemFilter] = None,
     ) -> None:
         self._connectors = tuple(connectors)
         self._repository = repository
         self._logger = logger
         self._initial_backfill = initial_backfill
         self._source_markets = dict(source_markets or {})
+        self._item_filter = item_filter
         self._last_failures: Tuple[CollectionFailure, ...] = ()
         self._last_save_result = SaveResult()
         self._last_events: Tuple[CollectionEvent, ...] = ()
@@ -148,7 +160,8 @@ class CollectionPipeline:
                         end_date=request.end_date,
                         markets=request.markets,
                     )
-                    collected = connector.collect(source_request)
+                    raw_collected = connector.collect(source_request)
+                    collected = self._filter_collected(raw_collected)
                     source_save = SaveResult()
                     if collected and self._repository is not None:
                         source_save = self._repository.save(collected)
@@ -208,7 +221,7 @@ class CollectionPipeline:
                         finished_at=datetime.now(timezone.utc),
                         status=status,
                         records_read=int(
-                            getattr(connector, "last_records_read", len(collected))
+                            getattr(connector, "last_records_read", len(raw_collected))
                         ),
                         records_written=source_save.inserted + source_save.updated,
                         records_inserted=source_save.inserted,
@@ -330,7 +343,8 @@ class CollectionPipeline:
                     markets={ticker: request.market_for(ticker)},
                 )
                 try:
-                    collected = connector.collect(ticker_request)
+                    raw_collected = connector.collect(ticker_request)
+                    collected = self._filter_collected(raw_collected)
                     per_ticker_save = SaveResult()
                     if collected and self._repository is not None:
                         per_ticker_save = self._repository.save(collected)
@@ -440,7 +454,7 @@ class CollectionPipeline:
                         finished_at=datetime.now(timezone.utc),
                         status=event_status,
                         records_read=int(
-                            getattr(connector, "last_records_read", len(collected))
+                            getattr(connector, "last_records_read", len(raw_collected))
                         ),
                         records_written=per_ticker_save.inserted + per_ticker_save.updated,
                         records_inserted=per_ticker_save.inserted,
@@ -523,6 +537,22 @@ class CollectionPipeline:
         self._last_save_result = save_result
         self._last_events = tuple(events)
         return items
+
+    def _filter_collected(
+        self,
+        items: Sequence[InformationItem],
+    ) -> List[InformationItem]:
+        """Apply the configured pre-persistence gate, if any.
+
+        Exceptions intentionally propagate into the surrounding per-source or
+        per-ticker collection handler.  This makes a relevance-model outage a
+        visible collection failure instead of silently storing unreviewed news
+        or community posts.
+        """
+        collected = list(items)
+        if not collected or self._item_filter is None:
+            return collected
+        return self._item_filter.filter(collected)
 
     @staticmethod
     def _connector_failure_details(
