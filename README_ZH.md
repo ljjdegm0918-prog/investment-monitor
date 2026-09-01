@@ -333,6 +333,12 @@ DART_API_KEY=
 
 是否需要某个 key，以 `.env.example` 的说明和 Lists & sources 页面状态为准。
 
+### 地域性权威新闻 RSS
+
+除 Yahoo Finance 与 Google News 聚合源外，项目还接入第一批 21 个当地主要媒体 RSS，覆盖 US、CA、MX、UK、FR、IT、ES、CH、AT、NO、PT、SE、HU、EE、LV、LT、KR、SG、IL、HK。连接器只读取媒体 feed 元数据和原文链接，不抓正文；每轮每个 feed 只请求一次，再使用本地官方证券目录的公司身份和明确公司名称保守初筛。只有启用 `CONTENT_RELEVANCE_AI_ENABLED` 后，新闻才继续经过公司主角 AI 门槛。
+
+公开 RSS 不自动等同于商业再发布许可；正式商业部署前应逐家复核条款。没有稳定公开接口或许可边界明显不适合的地区不会用脆弱 HTML 或小道媒体填补。完整来源与空白边界见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
+
 ### Research 模型配置
 
 Research 默认关闭。启用后，点击“生成研究卡”会将**你选择公司、日期范围和列表范围内已经入库的公开资料**发送到你自行配置的 OpenAI-compatible 模型服务。

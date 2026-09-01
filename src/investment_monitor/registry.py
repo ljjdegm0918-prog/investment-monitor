@@ -186,6 +186,11 @@ from .sources.no_pt_disclosures import (
 from .sources.nasdaq_baltic_news import NasdaqBalticNewsConnector
 from .sources.nasdaq_se import NasdaqSeFilingsConnector
 from .sources.eurex_circulars import EurexCircularsConnector
+from .sources.regional_press import (
+    REGIONAL_PRESS_PROFILES,
+    RegionalPressConnector,
+)
+from .sources.regional_press.profiles import REGIONAL_PRESS_MARKETS
 
 ConnectorFactory = Callable[[], SourceConnector]
 
@@ -240,6 +245,7 @@ SOURCE_MARKETS = {
     "eurex_circulars": "eux", "google_news_eux": "eux",
     "tdnet_public_web": "jp", "edinet": "jp",
 }
+SOURCE_MARKETS.update(REGIONAL_PRESS_MARKETS)
 
 
 def relevant_sources_for_market(
@@ -536,4 +542,9 @@ def create_default_registry() -> SourceRegistry:
         secret_fields=EDINETConnector.secret_fields,
         configuration_error=EDINETConnector.configuration_error,
     )
+    for profile in REGIONAL_PRESS_PROFILES:
+        registry.register(
+            profile.source,
+            lambda profile=profile: RegionalPressConnector(profile),
+        )
     return registry

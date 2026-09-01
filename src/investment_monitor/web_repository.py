@@ -33,6 +33,10 @@ from .sg_coverage import calculate_sg_coverage
 from .models import ALLOWED_MARKETS, MARKET_AQ, MARKET_AU, MARKET_BE, MARKET_CA, MARKET_CH, MARKET_CXE, MARKET_EMF, MARKET_ES, MARKET_EUX, MARKET_FR, MARKET_DE, MARKET_HK, MARKET_IT, MARKET_NL, MARKET_PL, MARKET_SE, MARKET_SG, MARKET_TRQ, MARKET_TW, MARKET_US
 from .sqlite_repository import ensure_information_item_schema
 from .research_repository import ensure_research_schema
+from .sources.regional_press.profiles import (
+    REGIONAL_PRESS_LABELS,
+    REGIONAL_PRESS_REGIONS,
+)
 from .user_repository import LEGACY_LOCAL_SUBJECT, ensure_legacy_local_user
 
 EASTERN = ZoneInfo("America/New_York")
@@ -129,6 +133,7 @@ SOURCE_LABELS = {
     "research": "Research",
     "edinet": "EDINET",
 }
+SOURCE_LABELS.update(REGIONAL_PRESS_LABELS)
 PROVIDER_LABELS = {
     "yellowbrick": "Yellowbrick Investing (US)",
     "x_community": "X (US)",
@@ -337,6 +342,7 @@ CONNECTOR_REGIONS = {
     "tdnet_public_web": ("Japan",),
     "edinet": ("Japan",),
 }
+CONNECTOR_REGIONS.update(REGIONAL_PRESS_REGIONS)
 
 
 @dataclass(frozen=True)

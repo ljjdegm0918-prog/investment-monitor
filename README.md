@@ -818,6 +818,12 @@ RESEARCH_MIN_EVIDENCE_ITEMS=3
 WEB_EXTERNAL_SCHEME=http
 ```
 
+### 地域性权威新闻 RSS
+
+项目除 Yahoo Finance / Google News 聚合源外，还接入第一批 21 个当地主要媒体官方 RSS，覆盖 20 个国家或地区。连接器每轮只读取一次栏目 feed，使用本地证券目录中的公司身份和明确公司名称保守初筛，只保存 RSS 元数据与原文链接，不抓取文章正文；开启 `CONTENT_RELEVANCE_AI_ENABLED` 后仍须通过公司主角判定才能入库。
+
+没有稳定公开接口、存在明确非商业限制或只是交易场所而非新闻地域的市场不会强行接入。来源清单、许可边界与暂未覆盖地区见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
+
 ### 日本数据源（JP）
 
 | Source | Type | Key | Boundaries |
