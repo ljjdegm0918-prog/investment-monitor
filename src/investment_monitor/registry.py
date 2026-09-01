@@ -187,8 +187,14 @@ from .sources.nasdaq_baltic_news import NasdaqBalticNewsConnector
 from .sources.nasdaq_se import NasdaqSeFilingsConnector
 from .sources.eurex_circulars import EurexCircularsConnector
 from .sources.regional_press import (
+    PUBLISHER_DISCOVERY_PROFILES,
     REGIONAL_PRESS_PROFILES,
+    PublisherDiscoveryClient,
     RegionalPressConnector,
+    RegionalPublisherDiscoveryConnector,
+)
+from .sources.regional_press.discovery_profiles import (
+    PUBLISHER_DISCOVERY_MARKETS,
 )
 from .sources.regional_press.profiles import REGIONAL_PRESS_MARKETS
 
@@ -246,6 +252,7 @@ SOURCE_MARKETS = {
     "tdnet_public_web": "jp", "edinet": "jp",
 }
 SOURCE_MARKETS.update(REGIONAL_PRESS_MARKETS)
+SOURCE_MARKETS.update(PUBLISHER_DISCOVERY_MARKETS)
 
 
 def relevant_sources_for_market(
@@ -546,5 +553,13 @@ def create_default_registry() -> SourceRegistry:
         registry.register(
             profile.source,
             lambda profile=profile: RegionalPressConnector(profile),
+        )
+    publisher_discovery_client = PublisherDiscoveryClient.from_environment()
+    for profile in PUBLISHER_DISCOVERY_PROFILES:
+        registry.register(
+            profile.source,
+            lambda profile=profile, client=publisher_discovery_client: (
+                RegionalPublisherDiscoveryConnector(profile, client=client)
+            ),
         )
     return registry

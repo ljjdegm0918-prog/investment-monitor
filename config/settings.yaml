@@ -606,6 +606,48 @@ sources:
     label: SCMP Business (HK)
     source_type: news
     enabled: true
+  # Authoritative publishers without a suitable direct production feed.
+  # These are discovered through Google News RSS queries restricted to the
+  # named publisher domain. Results are retained only when the RSS <source>
+  # URL belongs to that reviewed domain. They are not represented as direct
+  # publisher APIs, and no publisher article body is fetched. Persistence is
+  # fail-closed unless CONTENT_RELEVANCE_AI_ENABLED=true.
+  - name: caixin_via_google_cn
+    label: Caixin via Google News (CN)
+    source_type: news
+    enabled: true
+  - name: nikkei_via_google_jp
+    label: Nikkei via Google News (JP)
+    source_type: news
+    enabled: true
+  - name: cna_via_google_tw
+    label: CNA Finance via Google News (TW)
+    source_type: news
+    enabled: true
+  - name: afr_via_google_au
+    label: Australian Financial Review via Google News (AU)
+    source_type: news
+    enabled: true
+  - name: business_standard_via_google_in
+    label: Business Standard via Google News (IN)
+    source_type: news
+    enabled: true
+  - name: de_tijd_via_google_be
+    label: De Tijd via Google News (BE)
+    source_type: news
+    enabled: true
+  - name: handelsblatt_via_google_de
+    label: Handelsblatt via Google News (DE)
+    source_type: news
+    enabled: true
+  - name: fd_via_google_nl
+    label: Het Financieele Dagblad via Google News (NL)
+    source_type: news
+    enabled: true
+  - name: puls_biznesu_via_google_pl
+    label: Puls Biznesu via Google News (PL)
+    source_type: news
+    enabled: true
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.

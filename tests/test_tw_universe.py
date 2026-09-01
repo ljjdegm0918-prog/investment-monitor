@@ -94,11 +94,23 @@ class TwUniverseRefreshTests(unittest.TestCase):
         self.assertEqual(loaded, payload)
         self.assertEqual(
             name_map["2330"],
-            {"name": "台灣積體電路製造股份有限公司", "exchange": "TWSE"},
+            {
+                "name": "台灣積體電路製造股份有限公司",
+                "exchange": "TWSE",
+                "name_zh": "台灣積體電路製造股份有限公司",
+                "name_en": "TSMC",
+                "short_name": "台積電",
+            },
         )
         self.assertEqual(
             name_map["1240"],
-            {"name": "茂生農經股份有限公司", "exchange": "TPEx"},
+            {
+                "name": "茂生農經股份有限公司",
+                "exchange": "TPEx",
+                "name_zh": "茂生農經股份有限公司",
+                "name_en": "1240",
+                "short_name": "茂生農經",
+            },
         )
         self.assertEqual(by_ticker[0]["ticker"], "2330")
         self.assertEqual(by_name[0]["ticker"], "1240")

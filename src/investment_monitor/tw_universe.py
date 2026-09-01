@@ -123,6 +123,7 @@ def refresh_tw_universe(
                 "name": str(row.get("name") or ""),
                 "name_zh": str(row.get("name_zh") or ""),
                 "name_en": str(row.get("name_en") or ""),
+                "short_name": str(row.get("short_name") or ""),
                 "industry": str(row.get("industry") or ""),
                 "board": board,
                 "exchange": board,
@@ -176,6 +177,9 @@ def tw_universe_name_map(
                 or ticker
             ),
             "exchange": str(item.get("board") or "TWSE"),
+            "name_zh": str(item.get("name_zh") or ""),
+            "name_en": str(item.get("name_en") or ""),
+            "short_name": str(item.get("short_name") or ""),
         }
     return result
 
@@ -224,6 +228,7 @@ def _parse_twse_rows(rows: Any) -> List[Mapping[str, Any]]:
                 "name": name,
                 "name_zh": name,
                 "name_en": str(row.get("英文簡稱") or "").strip(),
+                "short_name": short,
                 "industry": str(row.get("產業別") or "").strip(),
             }
         )
@@ -249,6 +254,9 @@ def _parse_tpex_rows(rows: Any) -> List[Mapping[str, Any]]:
                 "name": name,
                 "name_zh": name,
                 "name_en": str(row.get("Symbol") or "").strip(),
+                "short_name": str(
+                    row.get("CompanyAbbreviation") or ""
+                ).strip(),
                 "industry": str(
                     row.get("SecuritiesIndustryCode") or ""
                 ).strip(),

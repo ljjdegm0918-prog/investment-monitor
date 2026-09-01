@@ -37,6 +37,10 @@ from .sources.regional_press.profiles import (
     REGIONAL_PRESS_LABELS,
     REGIONAL_PRESS_REGIONS,
 )
+from .sources.regional_press.discovery_profiles import (
+    PUBLISHER_DISCOVERY_LABELS,
+    PUBLISHER_DISCOVERY_REGIONS,
+)
 from .user_repository import LEGACY_LOCAL_SUBJECT, ensure_legacy_local_user
 
 EASTERN = ZoneInfo("America/New_York")
@@ -134,6 +138,7 @@ SOURCE_LABELS = {
     "edinet": "EDINET",
 }
 SOURCE_LABELS.update(REGIONAL_PRESS_LABELS)
+SOURCE_LABELS.update(PUBLISHER_DISCOVERY_LABELS)
 PROVIDER_LABELS = {
     "yellowbrick": "Yellowbrick Investing (US)",
     "x_community": "X (US)",
@@ -343,6 +348,7 @@ CONNECTOR_REGIONS = {
     "edinet": ("Japan",),
 }
 CONNECTOR_REGIONS.update(REGIONAL_PRESS_REGIONS)
+CONNECTOR_REGIONS.update(PUBLISHER_DISCOVERY_REGIONS)
 
 
 @dataclass(frozen=True)

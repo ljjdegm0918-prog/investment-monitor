@@ -4,22 +4,30 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 from investment_monitor import CollectionPipeline, SQLiteInformationRepository
 from investment_monitor.content_relevance import ContentRelevanceFilter
-from investment_monitor.models import CollectionRequest
+from investment_monitor.models import ALLOWED_MARKETS, CollectionRequest
 from investment_monitor.config import load_settings
 from investment_monitor.registry import SOURCE_MARKETS, create_default_registry
 from investment_monitor.web_repository import CONNECTOR_REGIONS, SOURCE_LABELS
 from investment_monitor.sources.regional_press import (
+    PUBLISHER_DISCOVERY_PROFILES,
     REGIONAL_PRESS_PROFILES,
+    PublisherDiscoveryClient,
+    PublisherDiscoveryDataError,
     RegionalPressClient,
     RegionalPressConnector,
     RegionalPressDataError,
     RegionalPressRequestError,
+    RegionalPublisherDiscoveryConnector,
 )
 from investment_monitor.sources.regional_press.client import parse_regional_rss
+from investment_monitor.sources.regional_press.discovery import (
+    parse_publisher_discovery_rss,
+)
 
 
 RSS_FIXTURE = b"""<?xml version="1.0" encoding="UTF-8"?>
@@ -51,6 +59,26 @@ RSS_FIXTURE = b"""<?xml version="1.0" encoding="UTF-8"?>
     </item>
   </channel>
 </rss>
+"""
+
+DISCOVERY_RSS_FIXTURE = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Google News</title>
+  <item>
+    <guid>caixin-approved</guid>
+    <title>Guizhou Moutai reports revenue growth - Caixin Global</title>
+    <link>https://news.google.com/rss/articles/approved</link>
+    <pubDate>Tue, 25 Aug 2026 09:30:00 GMT</pubDate>
+    <description>Snippet deliberately not retained.</description>
+    <source url="https://companies.caixin.com">Caixin Global</source>
+  </item>
+  <item>
+    <guid>wrong-publisher</guid>
+    <title>Guizhou Moutai mentioned by an unrelated publisher</title>
+    <link>https://news.google.com/rss/articles/wrong-publisher</link>
+    <pubDate>Tue, 25 Aug 2026 10:30:00 GMT</pubDate>
+    <source url="https://evil.example">Unknown</source>
+  </item>
+</channel></rss>
 """
 
 
@@ -93,6 +121,21 @@ class FailingClient:
     def fetch_news(self, profile, start_date, end_date):
         self.calls.append((profile.source, start_date, end_date))
         raise self.error
+
+
+class FakeDiscoveryClient:
+    def __init__(self, records):
+        self.records = records
+        self.calls = []
+
+    def fetch_news(self, profile, company_query, start_date, end_date):
+        self.calls.append((
+            profile.source,
+            company_query,
+            start_date,
+            end_date,
+        ))
+        return list(self.records)
 
 
 class IncludingRelevanceClient:
@@ -242,6 +285,219 @@ class RegionalPressClientTests(unittest.TestCase):
             redirected.fetch_news(
                 selected, date(2026, 8, 25), date(2026, 8, 25)
             )
+
+
+class PublisherDiscoveryTests(unittest.TestCase):
+    def test_parser_keeps_only_verified_publisher_source_and_no_summary(self):
+        records = parse_publisher_discovery_rss(
+            DISCOVERY_RSS_FIXTURE,
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            zone=ZoneInfo("Asia/Shanghai"),
+            publisher_domains=("caixin.com",),
+        )
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["external_id"], "caixin-approved")
+        self.assertEqual(records[0]["publisher_name"], "Caixin Global")
+        self.assertEqual(
+            records[0]["publisher_url"],
+            "https://companies.caixin.com",
+        )
+        self.assertIsNone(records[0]["summary"])
+
+    def test_client_builds_site_scoped_query_caches_and_rejects_redirect(self):
+        selected = next(
+            p for p in PUBLISHER_DISCOVERY_PROFILES if p.market == "cn"
+        )
+        calls = []
+
+        def opener(request, timeout):
+            calls.append((request.full_url, timeout))
+            return FakeResponse(DISCOVERY_RSS_FIXTURE)
+
+        client = PublisherDiscoveryClient(
+            opener=opener,
+            sleeper=lambda _seconds: None,
+        )
+        first = client.fetch_news(
+            selected,
+            "Guizhou Moutai",
+            date(2026, 8, 25),
+            date(2026, 8, 25),
+        )
+        second = client.fetch_news(
+            selected,
+            "Guizhou Moutai",
+            date(2026, 8, 25),
+            date(2026, 8, 25),
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(calls), 1)
+        query = parse_qs(urlsplit(calls[0][0]).query)["q"][0]
+        self.assertEqual(query, '"Guizhou Moutai" site:caixin.com')
+
+        redirected = PublisherDiscoveryClient(
+            opener=lambda *_args, **_kwargs: FakeResponse(
+                DISCOVERY_RSS_FIXTURE,
+                response_url="https://evil.example/rss",
+            ),
+        )
+        with self.assertRaises(PublisherDiscoveryDataError):
+            redirected.fetch_news(
+                selected,
+                "Guizhou Moutai",
+                date(2026, 8, 25),
+                date(2026, 8, 25),
+            )
+
+    def test_connector_maps_verified_discovery_without_publisher_body(self):
+        selected = next(
+            p for p in PUBLISHER_DISCOVERY_PROFILES if p.market == "cn"
+        )
+        records = parse_publisher_discovery_rss(
+            DISCOVERY_RSS_FIXTURE,
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            zone=ZoneInfo("Asia/Shanghai"),
+            publisher_domains=selected.publisher_domains,
+        )
+        client = FakeDiscoveryClient(records)
+        connector = RegionalPublisherDiscoveryConnector(
+            selected,
+            client=client,
+            universe={
+                "600519": {"name": "Guizhou Moutai Co., Ltd."},
+            },
+        )
+
+        items = connector.collect(CollectionRequest(
+            tickers=("600519",),
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            markets={"600519": "cn"},
+        ))
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].external_id, "600519:caixin-approved")
+        self.assertEqual(items[0].document_type, "publisher_news_discovery")
+        self.assertIsNone(items[0].summary)
+        self.assertEqual(
+            items[0].raw_metadata["discovery_method"],
+            "publisher_domain_scoped",
+        )
+        self.assertFalse(items[0].raw_metadata["publisher_link_resolved"])
+        self.assertFalse(items[0].raw_metadata["article_body_fetched"])
+        self.assertEqual(client.calls[0][1], "guizhou moutai")
+
+    def test_discovery_profiles_fill_every_non_venue_region(self):
+        direct_markets = {profile.market for profile in REGIONAL_PRESS_PROFILES}
+        discovery_markets = {
+            profile.market for profile in PUBLISHER_DISCOVERY_PROFILES
+        }
+        national_markets = set(ALLOWED_MARKETS) - {
+            "unknown", "aq", "cxe", "trq", "eux", "emf",
+        }
+
+        self.assertEqual(len(PUBLISHER_DISCOVERY_PROFILES), 9)
+        self.assertEqual(direct_markets | discovery_markets, national_markets)
+        self.assertFalse(direct_markets & discovery_markets)
+
+    def test_discovery_pipeline_requires_ai_gate_before_persistence(self):
+        selected = next(
+            p for p in PUBLISHER_DISCOVERY_PROFILES if p.market == "cn"
+        )
+        records = parse_publisher_discovery_rss(
+            DISCOVERY_RSS_FIXTURE,
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            zone=ZoneInfo("Asia/Shanghai"),
+            publisher_domains=selected.publisher_domains,
+        )
+        connector = RegionalPublisherDiscoveryConnector(
+            selected,
+            client=FakeDiscoveryClient(records),
+            universe={
+                "600519": {"name": "Guizhou Moutai Co., Ltd."},
+            },
+        )
+        request = CollectionRequest(
+            tickers=("600519",),
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            markets={"600519": "cn"},
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            repository = SQLiteInformationRepository(
+                Path(temporary_directory) / "discovery.sqlite3"
+            )
+            pipeline = CollectionPipeline(
+                [connector],
+                repository=repository,
+                source_markets={selected.source: "cn"},
+            )
+            items = pipeline.collect(request)
+            stored_count = repository.count()
+
+        self.assertEqual(items, [])
+        self.assertEqual(stored_count, 0)
+        self.assertEqual(len(pipeline.last_failures), 1)
+        self.assertIn(
+            "CONTENT_RELEVANCE_AI_ENABLED=true",
+            pipeline.last_failures[0].message,
+        )
+
+    def test_discovery_pipeline_persists_after_ai_primary_subject_decision(self):
+        selected = next(
+            p for p in PUBLISHER_DISCOVERY_PROFILES if p.market == "cn"
+        )
+        records = parse_publisher_discovery_rss(
+            DISCOVERY_RSS_FIXTURE,
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            zone=ZoneInfo("Asia/Shanghai"),
+            publisher_domains=selected.publisher_domains,
+        )
+        connector = RegionalPublisherDiscoveryConnector(
+            selected,
+            client=FakeDiscoveryClient(records),
+            universe={
+                "600519": {"name": "Guizhou Moutai Co., Ltd."},
+            },
+        )
+        request = CollectionRequest(
+            tickers=("600519",),
+            start_date=date(2026, 8, 25),
+            end_date=date(2026, 8, 25),
+            markets={"600519": "cn"},
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            repository = SQLiteInformationRepository(
+                Path(temporary_directory) / "discovery.sqlite3"
+            )
+            pipeline = CollectionPipeline(
+                [connector],
+                repository=repository,
+                source_markets={selected.source: "cn"},
+                item_filter=ContentRelevanceFilter(
+                    client=IncludingRelevanceClient()
+                ),
+            )
+            items = pipeline.collect(request)
+            stored = repository.query(
+                ticker="600519",
+                source=selected.source,
+            )
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(len(stored), 1)
+        self.assertEqual(
+            stored[0].raw_metadata["content_relevance"]["role"],
+            "primary_subject",
+        )
 
 
 class RegionalPressConnectorTests(unittest.TestCase):
@@ -473,6 +729,13 @@ class RegionalPressConnectorTests(unittest.TestCase):
         registry = create_default_registry()
         enabled = set(load_settings(Path("config/settings.yaml")).enabled_sources)
         for selected in REGIONAL_PRESS_PROFILES:
+            with self.subTest(source=selected.source):
+                self.assertIsNotNone(registry.factory_for(selected.source))
+                self.assertEqual(SOURCE_MARKETS[selected.source], selected.market)
+                self.assertIn(selected.source, enabled)
+                self.assertIn(selected.source, CONNECTOR_REGIONS)
+                self.assertEqual(SOURCE_LABELS[selected.source], selected.label)
+        for selected in PUBLISHER_DISCOVERY_PROFILES:
             with self.subTest(source=selected.source):
                 self.assertIsNotNone(registry.factory_for(selected.source))
                 self.assertEqual(SOURCE_MARKETS[selected.source], selected.market)

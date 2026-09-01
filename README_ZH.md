@@ -335,9 +335,9 @@ DART_API_KEY=
 
 ### 地域性权威新闻 RSS
 
-除 Yahoo Finance 与 Google News 聚合源外，项目还接入第一批 21 个当地主要媒体 RSS，覆盖 US、CA、MX、UK、FR、IT、ES、CH、AT、NO、PT、SE、HU、EE、LV、LT、KR、SG、IL、HK。连接器只读取媒体 feed 元数据和原文链接，不抓正文；每轮每个 feed 只请求一次，再使用本地官方证券目录的公司身份和明确公司名称保守初筛。只有启用 `CONTENT_RELEVANCE_AI_ENABLED` 后，新闻才继续经过公司主角 AI 门槛。
+项目接入 30 个当地主要媒体来源，覆盖全部 29 个国家/地区市场。21 个来源是媒体官方 RSS 直连；CN、JP、TW、AU、IN、BE、DE、NL、PL 的 9 个来源使用“公司名 + 媒体域名”的 Google News RSS，并校验每条 RSS `source` 确实属于指定媒体。两种方式都不抓正文；9 个替代发现源强制要求启用 `CONTENT_RELEVANCE_AI_ENABLED`，没有公司主角 AI 门槛时失败关闭。
 
-公开 RSS 不自动等同于商业再发布许可；正式商业部署前应逐家复核条款。没有稳定公开接口或许可边界明显不适合的地区不会用脆弱 HTML 或小道媒体填补。完整来源与空白边界见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
+公开 RSS 不自动等同于商业再发布许可；正式商业部署前应逐家复核条款。替代发现源明确标为 Google News，不冒充媒体官方 API，也不用脆弱 HTML 或小道媒体填补。完整来源、直连接口缺口与理由见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
 
 ### Research 模型配置
 

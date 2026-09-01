@@ -17,7 +17,14 @@ LOGGER = logging.getLogger(__name__)
 MAX_LOOKBACK_DAYS = 30
 _LEGAL_SUFFIXES = re.compile(
     r"\b(?:incorporated|inc|corporation|corp|company|co|limited|ltd|plc|"
-    r"holdings?|group|sa|se|ag|nv|spa|ab|oyj)\.?$",
+    r"holdings?|group|s\.?a|s\.?e|a\.?g|n\.?v|spa|ab|oyj)\.?$|"
+    r"(?:集团股份有限公司|集團股份有限公司|集团有限公司|集團有限公司|"
+    r"股份有限公司|股份有限会社|有限责任公司|有限責任公司|有限公司|"
+    r"株式会社|株式會社|集团|集團)$",
+    flags=re.IGNORECASE,
+)
+_LEGAL_PREFIXES = re.compile(
+    r"^(?:株式会社|株式會社)\s*",
     flags=re.IGNORECASE,
 )
 
@@ -199,25 +206,31 @@ def _identity_for(
 
 def _company_aliases(
     identity: Mapping[str, str],
+    *,
+    minimum_trimmed_length: int = 4,
 ) -> Tuple[str, ...]:
-    name = str(identity.get("name") or "").strip()
-    values = [name]
-    if name:
+    names = []
+    for field in ("name", "name_zh", "name_en", "short_name"):
+        name = str(identity.get(field) or "").strip()
+        if name and name not in names:
+            names.append(name)
+    values = [(name, 3) for name in names]
+    for name in names:
         trimmed = name
         while True:
+            reduced = _LEGAL_PREFIXES.sub("", trimmed.strip(" ,.-"))
             reduced = _LEGAL_SUFFIXES.sub(
                 "",
-                trimmed.strip(" ,.-"),
+                reduced.strip(" ,.-"),
             ).strip(" ,.-")
             if reduced == trimmed:
                 break
             trimmed = reduced
         if trimmed and trimmed != name:
-            values.append(trimmed)
+            values.append((trimmed, minimum_trimmed_length))
     aliases = []
-    for value in values:
+    for value, minimum_length in values:
         normalized = _normalized_text(value)
-        minimum_length = 3 if value == name else 4
         if len(normalized) < minimum_length or normalized in aliases:
             continue
         aliases.append(normalized)
@@ -270,6 +283,15 @@ def _identity_map(market: str) -> Mapping[str, Mapping[str, str]]:
         if market == "hk":
             from ...hk_universe import hk_universe_name_map
             return _coerce_identity_map(hk_universe_name_map())
+        if market == "jp":
+            from ...universe.jp_universe import jp_universe_name_map
+            return _coerce_identity_map(jp_universe_name_map())
+        if market == "tw":
+            from ...tw_universe import tw_universe_name_map
+            return _coerce_identity_map(tw_universe_name_map())
+        if market == "au":
+            from ...au_universe import au_universe_name_map
+            return _coerce_identity_map(au_universe_name_map())
         if market == "fr":
             from ...universe.fr_universe import fr_universe_name_map
             return _coerce_identity_map(fr_universe_name_map())
@@ -309,6 +331,21 @@ def _identity_map(market: str) -> Mapping[str, Mapping[str, str]]:
         if market == "mx":
             from ...universe.mx_universe import mx_universe_name_map
             return _coerce_identity_map(mx_universe_name_map())
+        if market == "in":
+            from ...universe.in_universe import in_universe_name_map
+            return _coerce_identity_map(in_universe_name_map())
+        if market == "be":
+            from ...universe.be_universe import be_universe_name_map
+            return _coerce_identity_map(be_universe_name_map())
+        if market == "de":
+            from ...universe.de_universe import de_universe_name_map
+            return _coerce_identity_map(de_universe_name_map())
+        if market == "nl":
+            from ...universe.nl_universe import nl_universe_name_map
+            return _coerce_identity_map(nl_universe_name_map())
+        if market == "pl":
+            from ...universe.pl_universe import pl_universe_name_map
+            return _coerce_identity_map(pl_universe_name_map())
     except (OSError, ValueError, RuntimeError) as error:
         LOGGER.warning(
             "regional_press market=%s universe_unavailable error=%s",
