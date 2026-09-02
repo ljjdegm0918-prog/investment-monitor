@@ -3,7 +3,7 @@
 在项目根目录、已 `pip install -e .` 且 venv 有 pytest/tzdata 时：
 
 ```powershell
-cd "C:\Users\seteiro\Documents\Codex\2026-08-05\investment-monitor-p0-ai-holdings-planned\investment-monitor-x"
+Set-Location "C:\path\to\investment-monitor"
 $env:PYTHONPATH="src"
 $start = (Get-Date).AddDays(-7).ToString("yyyy-MM-dd")
 $end = (Get-Date).ToString("yyyy-MM-dd")
