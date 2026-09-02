@@ -49,33 +49,82 @@ duplicate keys. News soft-dedupe (display only): `yahoo_us` / `google_news_us` /
 Finnhub (`news`, market=us) pair on ticker + New York day + normalized title;
 SEC filings are never cross-annotated.
 
-## Beginner setup
+## Local installation and startup
 
-Open Terminal and enter the project:
+Install [Git](https://git-scm.com/) and Python 3.9 or newer first. All paths
+below are relative to the repository, so no author-specific absolute path is
+required.
+
+### 1. Download the project
 
 ```bash
-cd "/Users/jiajunliu/Documents/New project/investment-monitor"
+git clone https://github.com/ljjdegm0918-prog/investment-monitor.git
+cd investment-monitor
 ```
 
-Check Python (3.9 or newer is required):
+If you already downloaded the project, simply open Terminal or PowerShell in
+your own `investment-monitor` directory.
+
+### 2. Create a virtual environment and install
+
+macOS / Linux:
 
 ```bash
 python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-The project has no third-party runtime dependencies. SEC requires automated
-clients to declare an application name and a real contact address. Create the
-local environment file once:
+Windows PowerShell:
+
+```powershell
+py -3 --version
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+The `(.venv)` prefix indicates that the virtual environment is active. After
+opening a new terminal later, enter the repository and run the appropriate
+activation command again.
+
+### 3. Create the local configuration
+
+macOS / Linux:
 
 ```bash
 cp .env.example .env
 ```
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 Open `.env` and replace `your-email@example.com` with a real contact address.
-The web service automatically loads this file without overwriting environment
-variables supplied by a hosting platform. The SEC connector keeps its timeout,
-retry, cache, and maximum-five-requests-per-second controls. If a mapping-cache
-refresh temporarily fails, the last valid local copy is used.
+The file stays local and is ignored by Git; never commit or share API keys from
+it. Dependencies are managed by `pyproject.toml`. The web service automatically
+loads `.env` without overwriting environment variables supplied by a hosting
+platform.
+
+SEC requires automated clients to declare an application name and a real
+contact address. The connector keeps its timeout, retry, cache, and
+maximum-five-requests-per-second controls. If a mapping-cache refresh
+temporarily fails, the last valid local copy is used.
+
+### 4. Start the web interface
+
+```bash
+investment-monitor-web --host 127.0.0.1 --port 8765
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Keep the terminal open
+while using the app and press `Control-C` to stop it. To change the default
+companies before the first startup, continue with the next section.
 
 ## 1. Configure the starting universe
 
@@ -577,8 +626,7 @@ returned in full by any API response.
 Choose an inclusive filing-date range:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m investment_monitor.cli \
+investment-monitor \
   --start-date 2025-07-27 \
   --end-date 2026-08-02
 ```
@@ -601,8 +649,7 @@ external_id)` identity instead of inserting duplicates.
 ## 3. Start the web interface
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m investment_monitor.web \
+investment-monitor-web \
   --host 127.0.0.1 \
   --port 8765
 ```
@@ -827,8 +874,7 @@ SQLite and does not call the SEC connector to render pages.
 ## Run automated tests
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
 The normal suite uses saved SEC fixtures and does not require internet. A

@@ -240,7 +240,7 @@ else:
 在部署目录执行：
 
 ```powershell
-cd "C:\Users\seteiro\Documents\Codex\2026-08-05\investment-monitor-p0-ai-holdings-planned\investment-monitor-x"
+Set-Location "C:\path\to\investment-monitor"
 git rev-parse HEAD
 git log --oneline -7
 ```

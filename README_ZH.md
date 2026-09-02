@@ -213,16 +213,35 @@ PDF 是该张卡的完整、可追溯版本，包含：
 - Node.js 仅用于 JavaScript 语法检查，不是运行服务所必需；
 - 项目运行时以 Python 标准库和 SQLite 为主。
 
-在 PowerShell 中进入仓库根目录：
+### 下载与安装
+
+还没有项目时，先下载仓库：
+
+```bash
+git clone https://github.com/ljjdegm0918-prog/investment-monitor.git
+cd investment-monitor
+```
+
+macOS / Linux：
+
+```bash
+python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+cp .env.example .env
+```
+
+Windows PowerShell：
 
 ```powershell
 Set-Location "C:\path\to\investment-monitor"
-python --version
-```
-
-创建本机配置文件：
-
-```powershell
+py -3 --version
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
 Copy-Item .env.example .env
 ```
 
@@ -230,9 +249,8 @@ Copy-Item .env.example .env
 
 启动本机服务：
 
-```powershell
-$env:PYTHONPATH = "src"
-python -m investment_monitor.web --host 127.0.0.1 --port 8765
+```bash
+investment-monitor-web --host 127.0.0.1 --port 8765
 ```
 
 浏览器打开：

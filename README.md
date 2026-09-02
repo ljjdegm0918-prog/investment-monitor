@@ -55,27 +55,68 @@ Web 界面为英文，包含三个固定列表：
 - `legacy-local` 旧数据不属于这五个号；登录后列表是空的。
 - 已存在的同名用户不会被改密。已有可登录账号后，Web 会启用 Session 登录墙。
 
-## 新手入门
+## 本地安装与启动
 
-打开 Terminal 并进入项目：
+需要先安装 [Git](https://git-scm.com/) 和 Python 3.9 或更高版本。下面的路径都是相对于仓库目录的通用写法，不需要替换成作者电脑上的绝对路径。
+
+### 1. 下载项目
 
 ```bash
-cd "/Users/jiajunliu/Documents/New project/investment-monitor"
+git clone https://github.com/ljjdegm0918-prog/investment-monitor.git
+cd investment-monitor
 ```
 
-检查 Python（需 3.9 或更高版本）：
+如果已经下载了项目，只需在 Terminal 或 PowerShell 中进入自己的 `investment-monitor` 目录。
+
+### 2. 创建虚拟环境并安装
+
+macOS / Linux：
 
 ```bash
 python3 --version
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-项目依赖由 `pyproject.toml` 管理（JPX 旧式 XLS 使用 `xlrd`）。SEC 要求自动化客户端声明应用名称与真实联系邮箱。一次性创建本地环境文件：
+Windows PowerShell：
+
+```powershell
+py -3 --version
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+看到命令行前出现 `(.venv)` 即表示虚拟环境已启用。以后重新打开终端时，只需进入仓库并再次运行对应的激活命令。
+
+### 3. 创建本地配置
+
+macOS / Linux：
 
 ```bash
 cp .env.example .env
 ```
 
-打开 `.env`，将 `your-email@example.com` 替换为真实联系地址。Web 服务会自动加载该文件，且不会覆盖托管平台提供的环境变量。SEC 连接器保留超时、重试、缓存及每秒最多五次请求的限制。若映射缓存刷新暂时失败，将使用最后一次有效的本地副本。
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+打开 `.env`，将 `your-email@example.com` 替换为真实联系地址。`.env` 只保存在本机且已被 Git 忽略，不要提交或分享其中的 API key。项目依赖由 `pyproject.toml` 管理；Web 服务会自动加载 `.env`，且不会覆盖托管平台提供的环境变量。
+
+SEC 要求自动化客户端声明应用名称与真实联系邮箱。SEC 连接器保留超时、重试、缓存及每秒最多五次请求的限制。若映射缓存刷新暂时失败，将使用最后一次有效的本地副本。
+
+### 4. 启动 Web 界面
+
+```bash
+investment-monitor-web --host 127.0.0.1 --port 8765
+```
+
+浏览器打开 [http://127.0.0.1:8765](http://127.0.0.1:8765)。使用期间保持终端窗口开启，按 `Control-C` 停止服务。首次启动前如需修改默认关注公司，请继续阅读下一节。
 
 ## 1. 配置初始标的池
 
@@ -743,8 +784,7 @@ Web Settings 页面为每个已实现的数据源展示 Provider credentials（�
 选择包含起止的申报日期范围：
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m investment_monitor.cli \
+investment-monitor \
   --start-date 2025-07-27 \
   --end-date 2026-08-02
 ```
@@ -763,8 +803,7 @@ collected=... failures=0 stored_total=... report=output/announcements.html
 ## 3. 启动 Web 界面
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m investment_monitor.web \
+investment-monitor-web \
   --host 127.0.0.1 \
   --port 8765
 ```
@@ -909,8 +948,7 @@ src/investment_monitor/sources/sec/
 ## 运行自动化测试
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
-  python3 -m unittest discover -s tests -v
+python -m unittest discover -s tests -v
 ```
 
 常规套件使用保存的 SEC fixtures，无需联网。成功运行以如下结尾：
