@@ -161,7 +161,10 @@ class CollectionPipeline:
                         markets=request.markets,
                     )
                     raw_collected = connector.collect(source_request)
-                    collected = self._filter_collected(raw_collected)
+                    collected = self._filter_collected(
+                        raw_collected,
+                        connector=connector,
+                    )
                     source_save = SaveResult()
                     if collected and self._repository is not None:
                         source_save = self._repository.save(collected)
@@ -344,7 +347,10 @@ class CollectionPipeline:
                 )
                 try:
                     raw_collected = connector.collect(ticker_request)
-                    collected = self._filter_collected(raw_collected)
+                    collected = self._filter_collected(
+                        raw_collected,
+                        connector=connector,
+                    )
                     per_ticker_save = SaveResult()
                     if collected and self._repository is not None:
                         per_ticker_save = self._repository.save(collected)
@@ -541,6 +547,8 @@ class CollectionPipeline:
     def _filter_collected(
         self,
         items: Sequence[InformationItem],
+        *,
+        connector: Optional[SourceConnector] = None,
     ) -> List[InformationItem]:
         """Apply the configured pre-persistence gate, if any.
 
@@ -550,7 +558,14 @@ class CollectionPipeline:
         or community posts.
         """
         collected = list(items)
-        if not collected or self._item_filter is None:
+        if not collected:
+            return collected
+        if self._item_filter is None:
+            if bool(getattr(connector, "requires_item_filter", False)):
+                raise RuntimeError(
+                    f"{getattr(connector, 'name', 'source')} requires "
+                    "CONTENT_RELEVANCE_AI_ENABLED=true"
+                )
             return collected
         return self._item_filter.filter(collected)
 

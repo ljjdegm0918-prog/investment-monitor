@@ -55,6 +55,28 @@ def _source_ticker_targets(
     return tuple(targets)
 
 
+def _hydrate_company_aware_connectors(
+    connectors: Iterable[object],
+    web_repository: WebRepository,
+) -> None:
+    """Give company-aware sources the names already verified in local lists."""
+    identities_by_market: dict[str, dict[str, Mapping[str, str]]] = {}
+    for company in web_repository.companies():
+        ticker = str(company.get("ticker") or "").strip().upper()
+        market = str(company.get("market") or "unknown").strip().lower()
+        name = str(company.get("name") or "").strip()
+        if ticker and name and name.casefold() != ticker.casefold():
+            identities_by_market.setdefault(market, {})[ticker] = {
+                "name": name,
+            }
+    for connector in connectors:
+        merge_universe = getattr(connector, "merge_universe", None)
+        profile = getattr(connector, "profile", None)
+        market = str(getattr(profile, "market", "") or "").strip().lower()
+        if callable(merge_universe) and market:
+            merge_universe(identities_by_market.get(market, {}))
+
+
 def run_configured_collection(
     *,
     universe_path: Path,
@@ -124,6 +146,11 @@ def run_ticker_collection(
             unavailable_source,
         )
     repository = SQLiteInformationRepository(settings.database_path)
+    web_repository = WebRepository(
+        settings.database_path,
+        allowed_sources=settings.enabled_sources,
+    )
+    _hydrate_company_aware_connectors(connectors, web_repository)
     pipeline = CollectionPipeline(
         connectors,
         repository=repository,
@@ -192,10 +219,7 @@ def run_ticker_collection(
         for connector in connectors
         if bool(getattr(connector, "source_wide_collection", False))
     }
-    WebRepository(
-        settings.database_path,
-        allowed_sources=settings.enabled_sources,
-    ).record_collection_events(
+    web_repository.record_collection_events(
         events,
         state_targets=source_wide_state_targets,
     )
@@ -242,6 +266,11 @@ def run_workflow(
             unavailable_source,
         )
     repository = SQLiteInformationRepository(settings.database_path)
+    web_repository = WebRepository(
+        settings.database_path,
+        allowed_sources=settings.enabled_sources,
+    )
+    _hydrate_company_aware_connectors(connectors, web_repository)
     pipeline = CollectionPipeline(
         connectors,
         repository=repository,
@@ -256,9 +285,7 @@ def run_workflow(
             markets={entry.ticker: entry.market for entry in universe},
         )
     )
-    WebRepository(settings.database_path, allowed_sources=settings.enabled_sources).record_collection_events(
-        pipeline.last_events
-    )
+    web_repository.record_collection_events(pipeline.last_events)
     report = generate_html_report(
         repository=repository,
         universe=universe,

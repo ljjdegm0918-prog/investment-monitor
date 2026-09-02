@@ -515,6 +515,139 @@ sources:
     label: Google News (BE)
     source_type: news
     enabled: true          # key-free Google News RSS search (hl=en-BE); may be loosely related / break without notice
+  # Reviewed first-party regional publisher RSS. These feeds are owned by the
+  # named publishers, expose no ticker query, and are therefore fetched once
+  # per run then matched conservatively against official company identities
+  # and unambiguous company names. Bare tickers are never matched in prose. Only
+  # RSS metadata and canonical links are stored; article bodies are never
+  # fetched. Every retained item still passes the shared AI protagonist gate
+  # when CONTENT_RELEVANCE_AI_ENABLED=true.
+  - name: marketwatch_us
+    label: MarketWatch (US)
+    source_type: news
+    enabled: true
+  - name: globe_mail_ca
+    label: The Globe and Mail Business (CA)
+    source_type: news
+    enabled: true
+  - name: el_economista_mx
+    label: El Economista (MX)
+    source_type: news
+    enabled: true
+  - name: bbc_business_uk
+    label: BBC News Business (UK)
+    source_type: news
+    enabled: true
+  - name: lemonde_economie_fr
+    label: Le Monde Économie (FR)
+    source_type: news
+    enabled: true
+  - name: ilsole24ore_finanza_it
+    label: Il Sole 24 Ore Finanza (IT)
+    source_type: news
+    enabled: true
+  - name: cincodias_mercados_es
+    label: Cinco Días Mercados (ES)
+    source_type: news
+    enabled: true
+  - name: nzz_news_ch
+    label: NZZ (CH)
+    source_type: news
+    enabled: true
+  - name: diepresse_news_at
+    label: Die Presse (AT)
+    source_type: news
+    enabled: true
+  - name: e24_finance_no
+    label: E24 Børs og finans (NO)
+    source_type: news
+    enabled: true
+  - name: jornal_negocios_pt
+    label: Jornal de Negócios (PT)
+    source_type: news
+    enabled: true
+  - name: dagens_industri_se
+    label: Dagens industri (SE)
+    source_type: news
+    enabled: true
+  - name: portfolio_hu
+    label: Portfolio.hu (HU)
+    source_type: news
+    enabled: true
+  - name: err_news_ee
+    label: ERR (EE)
+    source_type: news
+    enabled: true
+  - name: lsm_news_lv
+    label: LSM (LV)
+    source_type: news
+    enabled: true
+  - name: lrt_business_lt
+    label: LRT Verslas (LT)
+    source_type: news
+    enabled: true
+  - name: hankyung_finance_kr
+    label: Korea Economic Daily Finance (KR)
+    source_type: news
+    enabled: true
+  - name: business_times_sg
+    label: The Business Times (SG)
+    source_type: news
+    enabled: true
+  - name: globes_news_il
+    label: Globes (IL)
+    source_type: news
+    enabled: true
+  - name: rthk_finance_hk
+    label: RTHK Finance (HK)
+    source_type: news
+    enabled: true
+  - name: scmp_business_hk
+    label: SCMP Business (HK)
+    source_type: news
+    enabled: true
+  # Authoritative publishers without a suitable direct production feed.
+  # These are discovered through Google News RSS queries restricted to the
+  # named publisher domain. Results are retained only when the RSS <source>
+  # URL belongs to that reviewed domain. They are not represented as direct
+  # publisher APIs, and no publisher article body is fetched. Persistence is
+  # fail-closed unless CONTENT_RELEVANCE_AI_ENABLED=true.
+  - name: caixin_via_google_cn
+    label: Caixin via Google News (CN)
+    source_type: news
+    enabled: true
+  - name: nikkei_via_google_jp
+    label: Nikkei via Google News (JP)
+    source_type: news
+    enabled: true
+  - name: cna_via_google_tw
+    label: CNA Finance via Google News (TW)
+    source_type: news
+    enabled: true
+  - name: afr_via_google_au
+    label: Australian Financial Review via Google News (AU)
+    source_type: news
+    enabled: true
+  - name: business_standard_via_google_in
+    label: Business Standard via Google News (IN)
+    source_type: news
+    enabled: true
+  - name: de_tijd_via_google_be
+    label: De Tijd via Google News (BE)
+    source_type: news
+    enabled: true
+  - name: handelsblatt_via_google_de
+    label: Handelsblatt via Google News (DE)
+    source_type: news
+    enabled: true
+  - name: fd_via_google_nl
+    label: Het Financieele Dagblad via Google News (NL)
+    source_type: news
+    enabled: true
+  - name: puls_biznesu_via_google_pl
+    label: Puls Biznesu via Google News (PL)
+    source_type: news
+    enabled: true
   # Germany second disclosure — deliberately not wired (DE-4):
   # Unternehmensregister / BaFin HTML portals have no stable free JSON for
   # issuer filings; EQS News is the only wired DE disclosure source.
