@@ -1,6 +1,6 @@
 # 新闻媒体接口总报告
 
-更新时间：2026-09-02  
+更新时间：2026-09-02
 统计口径：`config/settings.yaml` 中 `source_type: news` 的逻辑来源，并与注册表、市场路由和连接器实现交叉核对。
 
 ## 一、结论摘要
@@ -207,4 +207,3 @@ SEC、交易所公告、监管披露、公司 IR、EQS、NewsWeb、Nasdaq Compan
 - 9 个域名限定媒体定义：`src/investment_monitor/sources/regional_press/discovery_profiles.py`
 - 公司主角 AI 过滤：`src/investment_monitor/content_relevance.py`
 - 地域媒体专项说明：`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`
-
