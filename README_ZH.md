@@ -337,7 +337,7 @@ DART_API_KEY=
 
 项目接入 30 个当地主要媒体来源，覆盖全部 29 个国家/地区市场。21 个来源是媒体官方 RSS 直连；CN、JP、TW、AU、IN、BE、DE、NL、PL 的 9 个来源使用“公司名 + 媒体域名”的 Google News RSS，并校验每条 RSS `source` 确实属于指定媒体。两种方式都不抓正文；9 个替代发现源强制要求启用 `CONTENT_RELEVANCE_AI_ENABLED`，没有公司主角 AI 门槛时失败关闭。
 
-公开 RSS 不自动等同于商业再发布许可；正式商业部署前应逐家复核条款。替代发现源明确标为 Google News，不冒充媒体官方 API，也不用脆弱 HTML 或小道媒体填补。完整来源、直连接口缺口与理由见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
+公开 RSS 不自动等同于商业再发布许可；正式商业部署前应逐家复核条款。替代发现源明确标为 Google News，不冒充媒体官方 API，也不用脆弱 HTML 或小道媒体填补。96 个现有新闻逻辑接口总清单见 [`docs/NEWS_MEDIA_INTERFACE_REPORT_ZH.md`](docs/NEWS_MEDIA_INTERFACE_REPORT_ZH.md)；地域媒体直连接口缺口与理由见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
 
 ### Research 模型配置
 

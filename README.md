@@ -822,7 +822,7 @@ WEB_EXTERNAL_SCHEME=http
 
 项目接入 30 个当地主要媒体来源，覆盖全部 29 个国家/地区市场：其中 21 个是媒体官方 RSS 直连，覆盖 20 个地区；其余 9 个地区通过限定媒体域名并校验 RSS `source` 归属的 Google News 发现源接入。两种方式都只保存最小元数据与链接，不抓取文章正文；9 个替代发现源强制要求 `CONTENT_RELEVANCE_AI_ENABLED=true`，没有 AI 主角门槛时失败关闭。
 
-替代发现源不会冒充媒体官方接口。直接接口缺口、许可边界和每个地区采用的接入方式见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
+替代发现源不会冒充媒体官方接口。96 个现有新闻逻辑接口总清单见 [`docs/NEWS_MEDIA_INTERFACE_REPORT_ZH.md`](docs/NEWS_MEDIA_INTERFACE_REPORT_ZH.md)；直接接口缺口、许可边界和每个地区采用的接入方式见 [`docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md`](docs/REGIONAL_AUTHORITATIVE_NEWS_COVERAGE_ZH.md)。
 
 ### 日本数据源（JP）
 
